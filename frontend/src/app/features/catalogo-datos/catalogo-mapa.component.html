@@ -1,0 +1,110 @@
+<div class="mp-barra">
+  <nav class="mp-ruta" aria-label="Ubicación en el mapa">
+    <button type="button" class="enlace" (click)="volver()" [disabled]="!base">Galaxia</button>
+    <ng-container *ngIf="base"><span aria-hidden="true">›</span><strong>{{ mapa?.origen?.nombre }}</strong><span aria-hidden="true">›</span><strong class="mono">{{ base.bd }}</strong></ng-container>
+  </nav>
+  <label class="mp-filtro">
+    <input type="search" [ngModel]="filtro" (ngModelChange)="buscar($event)" [placeholder]="base ? 'Resaltar tablas de esta base…' : 'Resaltar bases con una tabla o columna…'" aria-label="Resaltar en el mapa" />
+    <button type="button" *ngIf="filtro" (click)="limpiarFiltro()" aria-label="Limpiar">✕</button>
+  </label>
+  <span class="mp-estado" *ngIf="buscando">Buscando…</span>
+  <span class="mp-estado" *ngIf="base && conBusqueda()">{{ totalCoincidenciasTablas }} coincidencia(s)</span>
+  <label class="mp-check" *ngIf="!base && dg && dg.puentes.length"><input type="checkbox" [(ngModel)]="mostrarPuentes" /> Puentes entre bases</label>
+  <label class="mp-check" *ngIf="hayQueriesMapa" title="Muestra dónde se usan las tablas en los queries guardados del equipo"><input type="checkbox" [(ngModel)]="mostrarQueries" /> Queries del equipo <span class="mp-n">{{ totalQueriesMapa }}</span></label>
+  <label class="mp-check" *ngIf="base && hayQueriesMapa && mostrarQueries"><input type="checkbox" [(ngModel)]="soloConQueries" /> Solo tablas con queries</label>
+  <button type="button" class="mp-ver-q" *ngIf="base && hayQueriesMapa" (click)="abrirQueriesBase(base.o, base.bd)">Ver queries de {{ base.bd }}</button>
+  <span class="mp-espacio"></span>
+  <div class="mp-zoom">
+    <button type="button" (click)="pz.zoomCentro(1.25)" aria-label="Acercar" title="Acercar">+</button>
+    <button type="button" (click)="pz.zoomCentro(0.8)" aria-label="Alejar" title="Alejar">−</button>
+    <button type="button" (click)="ajustar()" title="Ver todo">Ajustar</button>
+  </div>
+</div>
+
+<div class="error-state" *ngIf="error">{{ error }}</div>
+
+<div class="mp-lienzo" #lienzo>
+  <svg #svg class="mp-svg" [attr.viewBox]="'0 0 ' + pz.ancho + ' ' + pz.alto" role="img"
+       [attr.aria-label]="base ? 'Mapa de tablas de ' + base.bd : 'Mapa de bases de datos'"
+       (wheel)="pz.rueda($event, svg)" (pointerdown)="pz.bajar($event, svg)" (pointermove)="pz.mover($event, svg)"
+       (pointerup)="pz.soltar()" (pointerleave)="pz.soltar()">
+    <defs>
+      <radialGradient id="mp-brillo"><stop offset="0" stop-color="#fff" stop-opacity="0.55"/><stop offset="1" stop-color="#fff" stop-opacity="0"/></radialGradient>
+    </defs>
+    <g [attr.transform]="pz.transform">
+
+      <!-- ===== Nivel 1: galaxia ===== -->
+      <ng-container *ngIf="!base && dg">
+        <g *ngFor="let c of dg.cumulos" class="cumulo">
+          <circle [attr.cx]="c.x" [attr.cy]="c.y" [attr.r]="c.r" [attr.stroke]="colorDe(c.color)" class="cumulo-aro"></circle>
+          <text [attr.x]="c.x" [attr.y]="c.y - c.r - 24" text-anchor="middle" class="cumulo-nombre" [attr.fill]="colorDe(c.color)">{{ c.nombre }}</text>
+          <text [attr.x]="c.x" [attr.y]="c.y - c.r - 10" text-anchor="middle" class="cumulo-motor">{{ c.motor === 'MSSQL' ? 'SQL Server' : 'MariaDB' }}{{ c.estado === 'cargando' ? ' · leyendo…' : '' }}{{ c.estado === 'error' ? ' · con error' : '' }}</text>
+        </g>
+        <g class="puentes" *ngIf="mostrarPuentes">
+          <g *ngFor="let p of dg.puentes">
+            <line [attr.x1]="p.x1" [attr.y1]="p.y1" [attr.x2]="p.x2" [attr.y2]="p.y2" [attr.stroke-width]="p.grosor" class="puente"></line>
+            <title>{{ p.p.comunes }} columna(s) con el mismo nombre: {{ p.p.ejemplos.join(', ') }} (inferido, no es una llave foránea)</title>
+          </g>
+        </g>
+        <g class="puentes-q" *ngIf="mostrarQueries">
+          <g *ngFor="let p of puentesQ">
+            <line [attr.x1]="p.x1" [attr.y1]="p.y1" [attr.x2]="p.x2" [attr.y2]="p.y2" [attr.stroke-width]="p.grosor" class="puente-q"></line>
+            <title>{{ p.texto }}</title>
+          </g>
+        </g>
+        <g *ngFor="let b of dg.bases" class="base" [class.apagada]="baseApagada(b)" [class.coincide]="baseCoincide(b) > 0" [class.error]="b.error"
+           tabindex="0" role="button" [attr.aria-label]="'Abrir la base ' + b.bd + ', ' + b.tablas + ' tablas'"
+           (click)="entrarBase(b.o, b.bd)" (keydown)="teclaBase($event, b)"
+           (mouseenter)="tipBase($event, b)" (mousemove)="tipBase($event, b)" (mouseleave)="ocultarTip()" (focus)="ocultarTip()">
+          <circle [attr.cx]="b.x" [attr.cy]="b.y" [attr.r]="b.r + 10" fill="url(#mp-brillo)" class="base-brillo" [attr.style]="'color:' + colorDe(b.color)"></circle>
+          <circle [attr.cx]="b.x" [attr.cy]="b.y" [attr.r]="b.r" class="base-cuerpo" [attr.stroke]="colorDe(b.color)" [attr.fill]="colorDe(b.color)"></circle>
+          <circle *ngFor="let d of b.polvo" [attr.cx]="b.x + d.x" [attr.cy]="b.y + d.y" r="1.6" class="polvo"></circle>
+          <text [attr.x]="b.x" [attr.y]="b.y + b.r + 15" text-anchor="middle" class="base-nombre">{{ b.bd }}</text>
+          <text [attr.x]="b.x" [attr.y]="b.y + 4" text-anchor="middle" class="base-n">{{ b.tablas + b.vistas }}</text>
+          <g *ngIf="mostrarQueries && queriesDeBase(b) > 0" class="ins-q">
+            <rect [attr.x]="b.x - b.r * 0.72 - 15" [attr.y]="b.y - b.r * 0.72 - 9" width="30" height="18" rx="9" class="insignia-q"></rect>
+            <text [attr.x]="b.x - b.r * 0.72" [attr.y]="b.y - b.r * 0.72 + 3.5" text-anchor="middle" class="insignia-q-n">Q {{ queriesDeBase(b) > 99 ? '99+' : queriesDeBase(b) }}</text>
+          </g>
+          <g *ngIf="baseCoincide(b) > 0">
+            <circle [attr.cx]="b.x + b.r * 0.72" [attr.cy]="b.y - b.r * 0.72" r="10" class="insignia"></circle>
+            <text [attr.x]="b.x + b.r * 0.72" [attr.y]="b.y - b.r * 0.72 + 3.5" text-anchor="middle" class="insignia-n">{{ baseCoincide(b) > 99 ? '99+' : baseCoincide(b) }}</text>
+          </g>
+        </g>
+      </ng-container>
+
+      <!-- ===== Nivel 2: constelación (tablas de una base) ===== -->
+      <ng-container *ngIf="base && mapa && dm">
+        <circle *ngFor="let h of dm.halos" [attr.cx]="h.x" [attr.cy]="h.y" [attr.r]="h.r" class="halo"></circle>
+        <g class="enlaces">
+          <line *ngFor="let e of lineas" [attr.x1]="e.x1" [attr.y1]="e.y1" [attr.x2]="e.x2" [attr.y2]="e.y2" class="enlace-fk" [class.viva]="enlaceVivo(e.a, e.b)" [class.apagada]="conBusqueda() && !(tablaCoincide(e.a) || tablaCoincide(e.b))"></line>
+        </g>
+        <g class="enlaces-q" *ngIf="mostrarQueries">
+          <g *ngFor="let e of lineasQ">
+            <line [attr.x1]="e.x1" [attr.y1]="e.y1" [attr.x2]="e.x2" [attr.y2]="e.y2" class="enlace-q" [class.sin-fk]="!e.fk" [class.viva]="enlaceQVivo(e.a, e.b)" [class.apagada]="conBusqueda() && !(tablaCoincide(e.a) || tablaCoincide(e.b))"></line>
+            <title>{{ e.texto }}</title>
+          </g>
+        </g>
+        <g *ngFor="let s of dm.estrellas" class="tabla" [class.vista]="mapa.tablas[s.i].tipo === 'VISTA'" [class.coincide]="tablaCoincide(s.i)"
+           [class.apagada]="(conBusqueda() && !tablaCoincide(s.i)) || tablaApagadaQ(s.i)" tabindex="0" role="button"
+           [attr.aria-label]="'Abrir ' + mapa.tablas[s.i].nombre" (click)="clicTabla(s.i)" (keydown)="teclaTabla($event, s.i)"
+           (mouseenter)="tipTabla($event, s.i)" (mousemove)="tipTabla($event, s.i)" (mouseleave)="ocultarTip()">
+          <circle [attr.cx]="s.x" [attr.cy]="s.y" [attr.r]="s.r + 8" class="tabla-hit"></circle>
+          <circle *ngIf="tablaCoincide(s.i)" [attr.cx]="s.x" [attr.cy]="s.y" [attr.r]="s.r + 7" class="tabla-aro"></circle>
+          <circle *ngIf="mostrarQueries && queriesDeTabla(s.i) > 0" [attr.cx]="s.x" [attr.cy]="s.y" [attr.r]="radioAroQ(s.i, s.r)" [attr.stroke-width]="grosorAroQ(s.i)" class="tabla-aro-q"></circle>
+          <circle [attr.cx]="s.x" [attr.cy]="s.y" [attr.r]="s.r" class="tabla-cuerpo" [attr.fill]="colorBase"></circle>
+          <text *ngIf="mostrarEtiqueta(s.i)" [attr.x]="s.x" [attr.y]="s.y + s.r + 11" text-anchor="middle" class="tabla-nombre">{{ recortar(mapa.tablas[s.i].nombre, 22) }}</text>
+        </g>
+      </ng-container>
+    </g>
+  </svg>
+
+  <div class="mp-cargando" *ngIf="cargando || cargandoBase"><div class="spinner"></div><p>{{ cargandoBase ? 'Cargando la base…' : 'Cargando el mapa…' }}</p></div>
+  <div class="mp-vacio" *ngIf="!cargando && !hayDatos && !error"><p>Todavía no hay bases en tu mapa. Este mapa se arma con tus propias credenciales: agrégalas en «Mis credenciales» (arriba). Si ya lo hiciste, espera a que termine la lectura o usa «Actualizar».</p></div>
+  <div class="mp-tip" *ngIf="tip as t" [style.left.px]="t.x" [style.top.px]="t.y">
+    <strong>{{ t.titulo }}</strong>
+    <span class="mp-tip-sub">{{ t.sub }}</span>
+    <span *ngFor="let l of t.lineas">{{ l }}</span>
+  </div>
+  <p class="mp-ayuda" *ngIf="!base">Cada círculo es una base: haz clic para ver sus tablas. Las líneas son «puentes» inferidos por columnas con el mismo nombre, no llaves foráneas.</p>
+  <p class="mp-ayuda" *ngIf="base">Cada punto es una tabla (vistas con borde punteado); las líneas grises son llaves foráneas y las <span class="ley-q">turquesa punteadas</span> son uniones que hace el equipo en sus queries (más gruesas = más queries; rayadas = sin FK). Clic en una tabla para ver su ficha.</p>
+</div>

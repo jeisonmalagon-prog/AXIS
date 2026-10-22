@@ -1,0 +1,5 @@
+@use './azure-base' as *;
+@include base;
+.peq { font-size: 11.5px; }
+.chips-vars { display: flex; flex-wrap: wrap; gap: 6px; }
+.item-lista.sel { border-color: rgba($brand-rgb, 0.6); }

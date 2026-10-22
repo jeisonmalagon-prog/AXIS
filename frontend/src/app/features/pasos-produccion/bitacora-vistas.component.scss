@@ -1,0 +1,21 @@
+@use './bitacora-comun' as *;
+
+.vistas { background: var(--ax-surface, white); border: 1px solid $border-light; border-radius: 14px; padding: 12px 14px; margin-bottom: 14px; display: flex; flex-direction: column; gap: 10px; }
+.vistas__fila { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.vistas__et { font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.4px; color: $brand-gray; min-width: 78px; }
+.vistas__acciones { margin-left: auto; display: inline-flex; gap: 8px; }
+.vistas__ayuda { font-size: 11.5px; color: $brand-gray; }
+.vistas__nota { margin: 0; font-size: 12px; color: $brand-gray; }
+.vistas__volver { border: none; background: transparent; color: $brand; font-size: 12px; font-weight: 700; cursor: pointer; text-decoration: underline; font-family: inherit; margin-left: auto; }
+
+.pastilla { display: inline-flex; align-items: center; gap: 7px; padding: 6px 12px; border-radius: 999px; border: 1px solid $border-light; background: $surface-bg; color: $brand-dark; font-family: inherit; font-size: 12.5px; cursor: pointer; transition: all 0.15s ease;
+  strong { font-weight: 700; }
+  small { font-size: 10.5px; color: $brand-gray; font-weight: 600; }
+  &:hover { border-color: $brand; }
+  &.activa { background: $brand; border-color: $brand; color: #fff; small { color: rgba(255, 255, 255, 0.8); } .pastilla__num { background: rgba(255, 255, 255, 0.25); color: #fff; } }
+}
+.pastilla__num { background: rgba(var(--ax-brand-primary-rgb, 103, 58, 183), 0.12); color: $brand; border-radius: 999px; padding: 1px 7px; font-size: 11px; font-weight: 800; }
+.pastilla--equipo { border-style: dashed; }
+.pastilla--todo { border-color: rgba(var(--ax-brand-primary-rgb, 103, 58, 183), 0.4); }
+
+@media (max-width: 720px) { .vistas__acciones { margin-left: 0; width: 100%; } }

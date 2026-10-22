@@ -1,0 +1,53 @@
+@use './n8n-base' as *;
+
+:host { display: block; font-family: 'Inter', sans-serif; }
+@include base;
+
+.modal-card.modal-accesos { max-width: 1240px; }
+.sub { margin: 4px 0 0; font-size: 12.5px; color: $brand-gray; }
+.resumen-acc { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 14px; }
+
+.vistas { display: inline-flex; gap: 4px; background: $surface-bg; padding: 4px; border-radius: 8px; margin-bottom: 14px;
+  button { border: none; background: transparent; padding: 6px 14px; border-radius: 6px; font-family: inherit; font-size: 12px; font-weight: 600; color: $brand-gray; cursor: pointer;
+    &.activa { background: $surface; color: $brand; box-shadow: 0 2px 5px rgba(0, 0, 0, 0.06); } }
+}
+
+.panel { display: grid; grid-template-columns: 270px minmax(0, 1fr); gap: 16px; align-items: start; @media (max-width: 800px) { grid-template-columns: 1fr; } }
+.lado { display: flex; flex-direction: column; gap: 8px; min-width: 0; &.lado-ancho { }
+  .lista-u { max-height: 52vh; } }
+.buscar, select { font-family: inherit; font-size: 12.5px; padding: 8px 10px; border: 1px solid $border-light; border-radius: 8px; background: $surface-bg; color: $brand-dark; min-width: 0; }
+.buscar { width: 100%; }
+
+.lista-u { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; overflow-y: auto; }
+.item-u { width: 100%; text-align: left; display: flex; flex-direction: column; gap: 2px; border: 1px solid $border-light; background: $surface-bg; border-radius: 10px; padding: 9px 11px; cursor: pointer; font-family: inherit; color: $brand-dark;
+  &:hover { border-color: rgba($brand-rgb, 0.5); }
+  &.sel { border-color: $brand; background: rgba($brand-rgb, 0.08); }
+  .u-nombre { font-size: 13px; font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; display: flex; align-items: center; gap: 6px; }
+  .u-cant { font-size: 11px; font-weight: 700; color: $ok; &.cero { color: $warn; } }
+}
+.u-meta { font-size: 11.5px; color: $brand-gray; font-weight: 500; }
+.punto-sucio { width: 8px; height: 8px; border-radius: 50%; background: $warn; display: inline-block; flex-shrink: 0; }
+
+.centro { min-width: 0; display: flex; flex-direction: column; gap: 10px; }
+.centro-cab { display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap; }
+.copiar { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+.filtros { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; .buscar { flex: 1; min-width: 160px; width: auto; } &.filtros-lado { select { flex: 1; } } }
+
+.lista-f { max-height: 50vh; overflow-y: auto; display: flex; flex-direction: column; gap: 4px; padding-right: 4px; }
+.grupo-cab { position: sticky; top: 0; z-index: 1; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; background: $surface; padding: 8px 4px 6px; border-bottom: 1px solid $border-light; margin-top: 6px; font-size: 13px;
+  .grupo-acc { margin-left: auto; display: flex; gap: 6px; } }
+.fila-f { display: flex; align-items: center; gap: 10px; border: 1px solid transparent; border-radius: 10px; padding: 8px 10px; cursor: pointer; min-width: 0;
+  &:hover { background: $surface-bg; }
+  &.marcada { background: rgba($brand-rgb, 0.07); border-color: rgba($brand-rgb, 0.25); }
+  input { width: 16px; height: 16px; accent-color: var(--ax-brand-primary, #673ab7); flex-shrink: 0; cursor: pointer; }
+  .f-texto { display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1; }
+  .f-nombre { font-size: 13px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; display: flex; align-items: center; gap: 6px; }
+  .f-meta { font-size: 11px; color: $brand-gray; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .f-n { font-size: 11px; font-weight: 700; color: $brand-gray; white-space: nowrap; }
+}
+
+.modal-footer { margin-top: 16px; display: flex; justify-content: flex-end; align-items: center; gap: 10px; flex-wrap: wrap; .pendiente { margin-right: auto; font-size: 12px; font-weight: 600; color: $warn; } }
+.centro-cab .u-meta { margin-left: 8px; }
+
+.filtro-usuarios { width: 100%; margin-top: 6px; }
+.chip-sin-modulo { margin-left: 6px; font-size: 10px; padding: 1px 7px; }

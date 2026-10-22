@@ -1,0 +1,414 @@
+<header class="page-header">
+  <div>
+    <h1>Validación de nodos</h1>
+    <p class="subtitle">Lee el archivo de configuración de cada nodo (SSH o carpeta compartida) y verifica sus apuntamientos contra la bitácora — {{ nodos.length }} {{ nodos.length === 1 ? 'nodo configurado' : 'nodos configurados' }}</p>
+  </div>
+
+  <div class="header-actions">
+    <button type="button" class="btn" (click)="irAHistoricoApuntamientos()">Histórico de apuntamientos</button>
+    <button *ngIf="puedeEditar" type="button" class="btn" [disabled]="ejecutandoTodos || !nodos.length" (click)="ejecutarTodos()">
+      {{ ejecutandoTodos ? 'Validando…' : 'Validar todos ahora' }}
+    </button>
+    <button *ngIf="puedeEditar" type="button" class="btn btn-primary" (click)="abrirFormulario()">+ Nuevo nodo</button>
+  </div>
+</header>
+
+<div class="aviso">
+  <strong>Validación automática:</strong> una vez al día (por defecto a las 02:00, hora de Bogotá) se revisa cada nodo activo.
+  Cuando un nodo tiene <em>Corregir automáticamente</em>, solo se <strong>agregan</strong> a la bitácora los apuntamientos que faltan
+  (con su registro en el histórico); lo que sobra únicamente se reporta, nunca se borra.
+</div>
+
+<div class="banner banner--info" *ngIf="mensajeGlobal">{{ mensajeGlobal }}</div>
+<div class="banner banner--error" *ngIf="errorCarga">{{ errorCarga }}</div>
+
+<div class="empty" *ngIf="cargando">Cargando nodos…</div>
+
+<!-- Resumen y filtros -->
+<div class="barra-nodos" *ngIf="!cargando && nodos.length">
+  <div class="filtros-estado" role="group" aria-label="Filtrar por estado">
+    <button type="button" class="filtro-estado" [class.activo]="filtroEstado === 'todos'" (click)="filtroEstado = 'todos'">
+      Todos <span class="cuenta">{{ nodos.length }}</span>
+    </button>
+    <button type="button" class="filtro-estado f-alerta" [class.activo]="filtroEstado === 'alerta'" *ngIf="contarPorGrupo('alerta')" (click)="filtroEstado = 'alerta'">
+      Con diferencias <span class="cuenta">{{ contarPorGrupo('alerta') }}</span>
+    </button>
+    <button type="button" class="filtro-estado f-error" [class.activo]="filtroEstado === 'error'" *ngIf="contarPorGrupo('error')" (click)="filtroEstado = 'error'">
+      Con error <span class="cuenta">{{ contarPorGrupo('error') }}</span>
+    </button>
+    <button type="button" class="filtro-estado f-ok" [class.activo]="filtroEstado === 'ok'" *ngIf="contarPorGrupo('ok')" (click)="filtroEstado = 'ok'">
+      Sin diferencias <span class="cuenta">{{ contarPorGrupo('ok') }}</span>
+    </button>
+    <button type="button" class="filtro-estado" [class.activo]="filtroEstado === 'ninguno'" *ngIf="contarPorGrupo('ninguno')" (click)="filtroEstado = 'ninguno'">
+      Sin validar <span class="cuenta">{{ contarPorGrupo('ninguno') }}</span>
+    </button>
+  </div>
+  <input type="search" class="buscar-nodos" [(ngModel)]="busquedaNodos" placeholder="Buscar nodo, host, aplicación o archivo…" />
+</div>
+
+<div class="lista-nodos" *ngIf="!cargando && nodos.length">
+  <article
+    class="nodo-card"
+    *ngFor="let n of nodosFiltrados(); trackBy: trackNodo"
+    [ngClass]="'borde-' + grupoEstado(n.UltimoEstado)"
+    [class.nodo-pausado]="!esVerdadero(n.Activo)"
+  >
+    <header class="nodo-cabecera">
+      <div class="nodo-titulo">
+        <h3>{{ n.Nombre }}</h3>
+        <span class="mono nodo-host">{{ n.Host }}</span>
+      </div>
+      <div class="nodo-estado">
+        <span class="estado" [ngClass]="claseEstado(n.UltimoEstado)">{{ etiquetaEstado(n.UltimoEstado) }}</span>
+        <span class="sub">{{ n.UltimaValidacion ? 'Validado ' + formatearFecha(n.UltimaValidacion) : 'Aún no se ha validado' }}</span>
+      </div>
+    </header>
+
+    <div class="nodo-datos">
+      <div class="dato">
+        <span class="dato-label">Aplicación</span>
+        <span class="dato-valor">{{ n.AplicacionNombre || ('Aplicación #' + n.AplicacionId) }}</span>
+        <span class="sub mono" *ngIf="n.Componente">{{ n.Componente }}</span>
+      </div>
+      <div class="dato dato-archivo">
+        <span class="dato-label">Archivo de configuración</span>
+        <span class="archivo-nombre mono" [title]="n.RutaArchivo">{{ nombreArchivo(n.RutaArchivo) }}</span>
+        <span class="archivo-carpeta mono" [title]="n.RutaArchivo">{{ carpetaArchivo(n.RutaArchivo) }}</span>
+      </div>
+      <div class="dato">
+        <span class="dato-label">Validación automática</span>
+        <span class="dato-chips">
+          <span class="chip" [class.chip--on]="esVerdadero(n.Activo)">{{ esVerdadero(n.Activo) ? 'Activa' : 'Pausada' }}</span>
+          <span class="chip" [class.chip--on]="esVerdadero(n.CorregirAuto)" title="Cuando está activo, agrega solo lo que falte en la bitácora">{{ esVerdadero(n.CorregirAuto) ? 'Corrige' : 'Solo reporta' }}</span>
+        </span>
+      </div>
+    </div>
+
+    <footer class="nodo-acciones">
+      <div class="grupo-acciones">
+        <button *ngIf="puedeEditar" type="button" class="btn btn-sm btn-accion" [disabled]="nodoEnProceso !== null" (click)="probar(n)" title="Lee el archivo y compara, sin escribir nada">
+          {{ nodoEnProceso === n.Id ? 'Leyendo…' : 'Probar' }}
+        </button>
+        <button *ngIf="puedeEditar" type="button" class="btn btn-sm btn-accion" [disabled]="nodoEnProceso !== null" (click)="validarAhora(n)" title="Valida y guarda la corrida en el historial (sin corregir)">Validar ahora</button>
+        <button type="button" class="btn btn-sm" (click)="verApuntamientos(n)" title="Apuntamientos que la bitácora tiene hoy para este nodo">Apuntamientos</button>
+        <button type="button" class="btn btn-sm" (click)="verHistorial(n)">Historial</button>
+      </div>
+      <div class="grupo-acciones grupo-gestion" *ngIf="puedeEditar">
+        <button type="button" class="btn btn-sm" (click)="abrirFormulario(n)">Editar</button>
+        <button type="button" class="btn btn-sm btn-danger" (click)="eliminar(n)">Eliminar</button>
+      </div>
+    </footer>
+  </article>
+
+  <div class="empty empty--mini" *ngIf="!nodosFiltrados().length">Ningún nodo coincide con el filtro o la búsqueda.</div>
+</div>
+
+<div class="empty" *ngIf="!cargando && !nodos.length && !errorCarga">
+  Todavía no hay nodos. Agrega uno con <strong>+ Nuevo nodo</strong>: host, ruta del archivo de configuración y la aplicación a la que pertenece.
+</div>
+
+<!-- ========== Formulario de nodo ========== -->
+<div class="overlay" *ngIf="mostrarForm" (click)="cerrarFormulario()">
+  <div class="modal" (click)="$event.stopPropagation()">
+    <div class="modal-header">
+      <h2>{{ editandoId ? 'Editar nodo' : 'Nuevo nodo' }}</h2>
+      <button class="btn-close" type="button" (click)="cerrarFormulario()">✕</button>
+    </div>
+
+    <div class="modal-body">
+      <div class="banner banner--error" *ngIf="errorForm">{{ errorForm }}</div>
+
+      <label class="form-label">Sistema del servidor del nodo</label>
+      <div class="segmento" role="radiogroup" aria-label="Sistema del servidor">
+        <button type="button" class="segmento-op" [class.segmento-op--activo]="form.Sistema === 'WINDOWS'" (click)="cambiarSistema('WINDOWS')">
+          Windows <span>carpeta compartida</span>
+        </button>
+        <button type="button" class="segmento-op" [class.segmento-op--activo]="form.Sistema === 'LINUX'" (click)="cambiarSistema('LINUX')">
+          Linux <span>SSH</span>
+        </button>
+      </div>
+
+      <label class="form-label">Aplicación *</label>
+      <select class="form-input" [(ngModel)]="form.AplicacionId" (ngModelChange)="cambiarAplicacion()">
+        <option [ngValue]="null" disabled>Selecciona la aplicación…</option>
+        <option *ngFor="let a of aplicaciones" [ngValue]="a.Id">{{ a.Nombre }}</option>
+      </select>
+
+      <label class="form-label">Nodo (servidor)</label>
+      <select class="form-input" [ngModel]="servidorSel" (ngModelChange)="elegirServidor($event)" [disabled]="!form.AplicacionId">
+        <option [ngValue]="null" disabled>{{ !form.AplicacionId ? 'Primero elige la aplicación…' : cargandoServidores ? 'Cargando nodos…' : 'Selecciona el nodo…' }}</option>
+        <optgroup label="Nodos con apuntamientos de esta aplicación" *ngIf="servidoresConApuntamientos.length">
+          <option *ngFor="let s of servidoresConApuntamientos" [ngValue]="s.Id">{{ s.Hostname }} ({{ s.IP }}) · {{ s.Apuntamientos }} apuntamientos</option>
+        </optgroup>
+        <optgroup label="Otros servidores registrados" *ngIf="servidoresRestantes.length">
+          <option *ngFor="let s of servidoresRestantes" [ngValue]="s.Id">{{ s.Hostname }} ({{ s.IP }})</option>
+        </optgroup>
+        <option [ngValue]="'otro'">Otro (escribir nombre y host abajo)</option>
+      </select>
+      <p class="ayuda" *ngIf="form.AplicacionId && !cargandoServidores && !servidores.length">No hay servidores registrados; escribe el nombre y el host manualmente.</p>
+
+      <label class="form-label">Nombre *</label>
+      <input class="form-input" [(ngModel)]="form.Nombre" placeholder="Ej. fabogbusdmzd — FinandinaServices" />
+
+      <label class="form-label">Host / IP del servidor *</label>
+      <input class="form-input mono" [(ngModel)]="form.Host" placeholder="10.254.55.98" />
+
+      <ng-container *ngIf="form.Sistema === 'WINDOWS'">
+        <label class="form-label">Archivo de configuración *</label>
+        <div class="segmento segmento--chico" role="radiogroup" aria-label="Origen del archivo">
+          <button type="button" class="segmento-op" [class.segmento-op--activo]="fuenteArchivo === 'COMPARTIDA'" (click)="cambiarFuente('COMPARTIDA')">
+            Carpeta compartida <span>ARCHIVOS</span>
+          </button>
+          <button type="button" class="segmento-op" [class.segmento-op--activo]="fuenteArchivo === 'OTRA'" (click)="cambiarFuente('OTRA')">
+            Otra ruta <span>en el servidor</span>
+          </button>
+        </div>
+
+        <ng-container *ngIf="fuenteArchivo === 'COMPARTIDA'">
+          <div class="fila-buscar">
+            <input class="form-input" [(ngModel)]="busquedaArchivo" (ngModelChange)="recalcularArchivos()" placeholder="Buscar archivo (nombre, carpeta, IP…)" />
+            <button type="button" class="btn btn-sm" (click)="cargarArchivos(true)" [disabled]="cargandoArchivos" title="Volver a leer la carpeta compartida">{{ cargandoArchivos ? 'Leyendo…' : 'Actualizar' }}</button>
+          </div>
+          <div class="banner banner--error" *ngIf="errorArchivos">{{ errorArchivos }} Puedes usar “Otra ruta” mientras tanto.</div>
+          <select class="form-input mono" [ngModel]="archivoSel" (ngModelChange)="elegirArchivo($event)" size="1" [disabled]="cargandoArchivos || !!errorArchivos">
+            <option [ngValue]="null" disabled>{{ cargandoArchivos ? 'Leyendo la carpeta compartida…' : (archivosSugeridos.length + archivosOtros.length ? 'Selecciona el archivo…' : 'No hay archivos que coincidan') }}</option>
+            <optgroup label="Sugeridos para esta aplicación / nodo" *ngIf="archivosSugeridos.length">
+              <option *ngFor="let a of archivosSugeridos" [ngValue]="a.ruta">{{ a.ruta }}</option>
+            </optgroup>
+            <optgroup label="Todos los archivos" *ngIf="archivosOtros.length">
+              <option *ngFor="let a of archivosOtros" [ngValue]="a.ruta">{{ a.ruta }}</option>
+            </optgroup>
+          </select>
+          <p class="ayuda" *ngIf="carpetaCompartida">Carpeta: <code>{{ carpetaCompartida }}</code>. Se listan los archivos de hasta 2 MB, incluidas las subcarpetas.<span *ngIf="listadoTruncado"> El listado se cortó en 3.000 archivos; usa el buscador.</span></p>
+          <p class="ayuda ayuda--ok" *ngIf="archivoSel && rutaWindowsValida">Se leerá por carpeta compartida: <code>{{ rutaWindowsCalculada }}</code></p>
+        </ng-container>
+
+        <ng-container *ngIf="fuenteArchivo === 'OTRA'">
+          <input class="form-input mono" [(ngModel)]="form.RutaArchivo" placeholder="C:\inetpub\wwwroot\MicrosEmpresas\FinandinaServices\appsettings.json" />
+          <p class="ayuda" *ngIf="!form.RutaArchivo">Pega la ruta tal como la ves en el servidor del nodo (incluido el nombre del archivo, por ejemplo <code>appsettings.json</code>), o una ruta de red completa <code>\\servidor\recurso\carpeta\archivo</code>.</p>
+          <p class="ayuda ayuda--ok" *ngIf="form.RutaArchivo && rutaWindowsValida">Se leerá por carpeta compartida: <code>{{ rutaWindowsCalculada }}</code></p>
+          <p class="ayuda ayuda--error" *ngIf="form.RutaArchivo && !rutaWindowsValida">La ruta debe incluir la unidad, las carpetas y el archivo, por ejemplo <code>C:\carpeta\appsettings.json</code>.</p>
+        </ng-container>
+        <p class="ayuda">La lectura usa la cuenta de Windows configurada en el servidor de la aplicación (SMB_USERNAME / SMB_PASSWORD), que debe tener permiso de lectura sobre esa carpeta.</p>
+      </ng-container>
+
+      <ng-container *ngIf="form.Sistema === 'LINUX'">
+        <div class="fila-2">
+          <div>
+            <label class="form-label">Puerto SSH</label>
+            <input class="form-input mono" type="number" [(ngModel)]="form.PuertoSsh" placeholder="22 (por defecto)" />
+          </div>
+          <div>
+            <label class="form-label">Usuario SSH (opcional)</label>
+            <input class="form-input mono" [(ngModel)]="form.UsuarioSsh" placeholder="Vacío = SSH_USERNAME" />
+          </div>
+        </div>
+        <label class="form-label">Ruta del archivo de configuración *</label>
+        <input class="form-input mono" [(ngModel)]="form.RutaArchivo" placeholder="/opt/app/env_production" />
+      </ng-container>
+
+      <label class="form-label">Componente (cómo se identifica este nodo en la bitácora)</label>
+      <input class="form-input mono" [(ngModel)]="form.Componente" placeholder="Vacío = la IP del nodo" />
+
+      <div class="fila-2">
+        <div>
+          <label class="form-label">Texto que identifica ACE en la URL</label>
+          <input class="form-input mono" [(ngModel)]="form.PatronAce" />
+        </div>
+        <div>
+          <label class="form-label">Texto que identifica Bus 10 en la URL</label>
+          <input class="form-input mono" [(ngModel)]="form.PatronBus" />
+        </div>
+      </div>
+      <p class="ayuda">Varios textos se separan con coma. La categoría de cada servicio se deduce de la URL del archivo.</p>
+
+      <label class="check"><input type="checkbox" [(ngModel)]="form.Activo" /><span>Nodo activo (incluido en la validación diaria)</span></label>
+      <label class="check"><input type="checkbox" [(ngModel)]="form.CorregirAuto" /><span>Corregir automáticamente (agregar a la bitácora lo que falte; nunca borra). Recomendado activarlo después de revisar con <em>Probar</em>.</span></label>
+    </div>
+
+    <div class="modal-footer">
+      <button class="btn" type="button" (click)="cerrarFormulario()">Cancelar</button>
+      <button class="btn btn-primary" type="button" [disabled]="guardando" (click)="guardar()">{{ guardando ? 'Guardando…' : 'Guardar' }}</button>
+    </div>
+  </div>
+</div>
+
+<!-- ========== Resultado de Probar / Validar ========== -->
+<div class="overlay" *ngIf="resultado && resultadoNodo" (click)="cerrarResultado()">
+  <div class="modal modal--ancho" (click)="$event.stopPropagation()">
+    <div class="modal-header">
+      <div>
+        <h2>{{ resultadoNodo.Nombre }}</h2>
+        <p class="sub">
+          {{ resultado.modo === 'SIMULACION' ? (resultado.validacionId ? 'Validación guardada (sin cambios en la bitácora)' : 'Prueba — no se escribió nada') : 'Correcciones aplicadas' }}
+          · <span class="estado" [ngClass]="claseEstado(resultado.estado)">{{ etiquetaEstado(resultado.estado) }}</span>
+        </p>
+      </div>
+      <button class="btn-close" type="button" (click)="cerrarResultado()">✕</button>
+    </div>
+
+    <div class="modal-body">
+      <div class="banner banner--error" *ngIf="resultado.estado === 'ERROR'">{{ resultado.mensaje }}</div>
+      <div class="banner banner--error" *ngIf="errorResultado">{{ errorResultado }}</div>
+
+      <ng-container *ngIf="resultado.estado !== 'ERROR'">
+        <div class="kpis">
+          <div class="kpi"><span class="kpi-num">{{ resultado.totalConfig }}</span><span class="kpi-lbl">En el archivo del nodo</span></div>
+          <div class="kpi kpi--link" role="button" tabindex="0" title="Ver los apuntamientos de este nodo en la bitácora" (click)="resultadoNodo && verApuntamientos(resultadoNodo)" (keyup.enter)="resultadoNodo && verApuntamientos(resultadoNodo)"><span class="kpi-num">{{ resultado.totalBitacora }}</span><span class="kpi-lbl">En la bitácora · ver</span></div>
+          <div class="kpi" [class.kpi--alerta]="resultado.faltantes"><span class="kpi-num">{{ resultado.faltantes }}</span><span class="kpi-lbl">Faltan en la bitácora</span></div>
+          <div class="kpi" [class.kpi--ok]="resultado.corregidos"><span class="kpi-num">{{ resultado.corregidos }}</span><span class="kpi-lbl">Agregados ahora</span></div>
+          <div class="kpi"><span class="kpi-num">{{ resultado.sobrantes }}</span><span class="kpi-lbl">Sobran en la bitácora</span></div>
+          <div class="kpi" [class.kpi--alerta]="resultado.sinServicio"><span class="kpi-num">{{ resultado.sinServicio }}</span><span class="kpi-lbl">Sin identificar</span></div>
+        </div>
+        <p class="ayuda" *ngIf="resultado.ignoradas">{{ resultado.ignoradas }} entrada(s) del archivo se ignoraron porque no son la URL de un servicio (texto sin URL, direcciones base sin ruta o hosts que no son ACE ni Bus).</p>
+
+        <div class="filtros" *ngIf="tiposPresentes.length">
+          <button type="button" class="filtro" [class.filtro--activo]="filtroTipo === 'TODOS'" (click)="filtroTipo = 'TODOS'">Todas ({{ resultado.detalle.length }})</button>
+          <button type="button" class="filtro" *ngFor="let t of tiposPresentes" [class.filtro--activo]="filtroTipo === t" (click)="filtroTipo = t">
+            {{ etiquetaTipo(t) }} ({{ contarTipo(t) }})
+          </button>
+        </div>
+
+        <div class="empty empty--mini" *ngIf="!resultado.detalle.length">El archivo del nodo y la bitácora coinciden. No hay diferencias.</div>
+
+        <div class="tabla-scroll" *ngIf="detalleFiltrado.length">
+          <table>
+            <thead>
+              <tr><th>Resultado</th><th>Código</th><th>Categoría</th><th>Servicio (clave y URL)</th><th>Detalle</th></tr>
+            </thead>
+            <tbody>
+              <tr *ngFor="let d of detalleFiltrado">
+                <td><span class="estado" [ngClass]="claseTipo(d.Tipo)">{{ etiquetaTipo(d.Tipo) }}</span></td>
+                <td class="mono">{{ d.Codigo || '—' }}</td>
+                <td>{{ etiquetaCategoria(d.Categoria) }}</td>
+                <td class="celda-servicio">
+                  <div class="mono servicio-clave" [title]="d.Clave || ''">{{ d.Clave || (d.ServicioNombre || '—') }}</div>
+                  <div class="servicio-url" *ngIf="d.Url" [title]="d.Url">{{ d.Url }}</div>
+                </td>
+                <td>{{ d.Detalle }}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </ng-container>
+    </div>
+
+    <div class="modal-footer">
+      <button class="btn" type="button" (click)="cerrarResultado()">Cerrar</button>
+      <button *ngIf="puedeEditar && resultado.faltantes > 0 && resultado.estado !== 'ERROR'" class="btn btn-primary" type="button" [disabled]="aplicando" (click)="aplicarCorrecciones()">
+        {{ aplicando ? 'Aplicando…' : 'Agregar los ' + resultado.faltantes + ' faltantes a la bitácora' }}
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- ========== Historial de corridas ========== -->
+<div class="overlay" *ngIf="historialNodo" (click)="cerrarHistorial()">
+  <div class="modal modal--ancho" (click)="$event.stopPropagation()">
+    <div class="modal-header">
+      <div>
+        <h2>Historial — {{ historialNodo.Nombre }}</h2>
+        <p class="sub">Cada validación (automática o manual) y lo que encontró. Los apuntamientos agregados también aparecen en el Histórico de Apuntamientos con el usuario “validacion-automatica”.</p>
+      </div>
+      <button class="btn-close" type="button" (click)="cerrarHistorial()">✕</button>
+    </div>
+
+    <div class="modal-body">
+      <div class="empty empty--mini" *ngIf="cargandoHistorial">Cargando…</div>
+      <div class="empty empty--mini" *ngIf="!cargandoHistorial && !historial.length">Este nodo todavía no se ha validado.</div>
+
+      <div class="tabla-scroll" *ngIf="historial.length">
+        <table>
+          <thead>
+            <tr><th>Fecha</th><th>Origen</th><th>Resultado</th><th>Archivo</th><th>Bitácora</th><th>Faltan</th><th>Sobran</th><th>Sin identificar</th><th>Agregados</th><th></th></tr>
+          </thead>
+          <tbody>
+            <tr *ngFor="let v of historial" [class.fila-activa]="validacionAbierta?.Id === v.Id">
+              <td>{{ formatearFecha(v.Fecha) }}</td>
+              <td>{{ v.Origen === 'AUTO' ? 'Automática' : 'Manual' }}<div class="sub" *ngIf="v.Origen === 'MANUAL'">{{ v.Usuario }}</div></td>
+              <td><span class="estado" [ngClass]="claseEstado(v.Estado)">{{ etiquetaEstado(v.Estado) }}</span><div class="sub" *ngIf="v.Mensaje">{{ v.Mensaje }}</div></td>
+              <td>{{ v.TotalConfig }}</td>
+              <td>{{ v.TotalBitacora }}</td>
+              <td>{{ v.Faltantes }}</td>
+              <td>{{ v.Sobrantes }}</td>
+              <td>{{ v.SinServicio }}</td>
+              <td>{{ v.Corregidos }}</td>
+              <td><button type="button" class="btn btn-sm" (click)="abrirValidacion(v)" [disabled]="v.Estado === 'ERROR'">Ver detalle</button></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <ng-container *ngIf="validacionAbierta">
+        <h3 class="subtitulo">Detalle de la validación del {{ formatearFecha(validacionAbierta.Fecha) }}</h3>
+        <div class="empty empty--mini" *ngIf="!validacionAbierta.detalle.length">Sin diferencias en esa corrida.</div>
+        <div class="tabla-scroll" *ngIf="validacionAbierta.detalle.length">
+          <table>
+            <thead><tr><th>Resultado</th><th>Código</th><th>Categoría</th><th>Servicio (clave y URL)</th><th>Detalle</th></tr></thead>
+            <tbody>
+              <tr *ngFor="let d of validacionAbierta.detalle">
+                <td><span class="estado" [ngClass]="claseTipo(d.Tipo)">{{ etiquetaTipo(d.Tipo) }}</span></td>
+                <td class="mono">{{ d.Codigo || d.ServicioCodigo || '—' }}</td>
+                <td>{{ etiquetaCategoria(d.Categoria) }}</td>
+                <td class="celda-servicio">
+                  <div class="mono servicio-clave" [title]="d.Clave || ''">{{ d.Clave || (d.ServicioNombre || '—') }}</div>
+                  <div class="servicio-url" *ngIf="d.Url" [title]="d.Url">{{ d.Url }}</div>
+                </td>
+                <td>{{ d.Detalle }}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </ng-container>
+    </div>
+
+    <div class="modal-footer">
+      <button class="btn" type="button" (click)="cerrarHistorial()">Cerrar</button>
+    </div>
+  </div>
+</div>
+
+<!-- ========== Apuntamientos del nodo en la bitácora ========== -->
+<div class="overlay" *ngIf="apuntamientosNodo" (click)="cerrarApuntamientos()">
+  <div class="modal modal--ancho" (click)="$event.stopPropagation()">
+    <div class="modal-header">
+      <div>
+        <h2>Apuntamientos en la bitácora — {{ apuntamientosNodo.Nombre }}</h2>
+        <p class="sub">Aplicación {{ apuntamientosNodo.AplicacionNombre || apuntamientosNodo.AplicacionId }} · componente <span class="mono">{{ apuntamientosNodo.Componente || '(sin componente)' }}</span> · {{ apuntamientos.length }} registro(s)</p>
+      </div>
+      <button class="btn-close" type="button" (click)="cerrarApuntamientos()">✕</button>
+    </div>
+
+    <div class="modal-body">
+      <div class="banner banner--error" *ngIf="errorApuntamientos">{{ errorApuntamientos }}</div>
+      <div class="empty empty--mini" *ngIf="cargandoApuntamientos">Cargando…</div>
+      <div class="empty empty--mini" *ngIf="!cargandoApuntamientos && !errorApuntamientos && !apuntamientos.length">
+        La bitácora no tiene apuntamientos para este nodo (aplicación + componente).
+      </div>
+
+      <ng-container *ngIf="apuntamientos.length">
+        <input class="form-input" [(ngModel)]="busquedaApuntamientos" placeholder="Buscar por código, servicio, categoría u observación…" />
+        <div class="tabla-scroll tabla-scroll--alta">
+          <table>
+            <thead><tr><th>Código</th><th>Servicio</th><th>Categoría</th><th>Observaciones</th><th>Actualizado</th></tr></thead>
+            <tbody>
+              <tr *ngFor="let a of apuntamientosFiltrados">
+                <td class="mono">{{ a.ServicioCodigo || '—' }}</td>
+                <td>{{ a.ServicioNombre || (esVerdadero(a.SinApuntamiento) ? 'Sin apuntamiento' : '—') }}</td>
+                <td>{{ etiquetaCategoria(a.Categoria) }}</td>
+                <td class="sub">{{ a.Observaciones || '—' }}</td>
+                <td>{{ formatearFecha(a.FechaActualizacion) }}</td>
+              </tr>
+              <tr *ngIf="!apuntamientosFiltrados.length"><td colspan="5" class="sub">Sin coincidencias.</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </ng-container>
+    </div>
+
+    <div class="modal-footer">
+      <button class="btn" type="button" (click)="cerrarApuntamientos()">Cerrar</button>
+      <button class="btn btn-primary" type="button" (click)="irABitacora(apuntamientosNodo)">Abrir la bitácora de la aplicación</button>
+    </div>
+  </div>
+</div>

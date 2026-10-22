@@ -1,0 +1,384 @@
+<div class="cons">
+  <!-- ===================== Columna izquierda: construcción ===================== -->
+  <div class="cons-izq">
+
+    <!-- 1. Tablas -->
+    <section class="paso">
+      <div class="paso-cab">
+        <h3><span class="num">1</span> Tablas</h3>
+        <button type="button" class="btn-mini" *ngIf="tablas.length" (click)="limpiar()">Empezar de nuevo</button>
+      </div>
+      <p class="ayuda" *ngIf="!tablas.length">Busca la tabla principal. Si agregas más, AXIS busca cómo unirlas (llaves foráneas, joins que ya usa el equipo, nombres de columna).</p>
+
+      <div class="chips-tablas" *ngIf="tablas.length">
+        <span class="chip-tabla" *ngFor="let t of tablas; let i = index; trackBy: trackIdx" [class.principal]="i === 0">
+          <span class="mono">{{ t.nombre }}</span>
+          <small *ngIf="t.bd">{{ t.bd }}</small>
+          <span class="marca-principal" *ngIf="i === 0">principal</span>
+          <button type="button" (click)="quitar(i)" [attr.aria-label]="'Quitar ' + t.nombre">✕</button>
+        </span>
+      </div>
+
+      <div class="busca-caja">
+        <input type="search" class="entrada" [(ngModel)]="busqueda" (ngModelChange)="buscar()" name="cons-busqueda" autocomplete="off"
+               [placeholder]="tablas.length ? 'Agregar otra tabla (nombre)…' : 'Busca una tabla por nombre…'" aria-label="Buscar tabla" />
+        <div class="busca-res" *ngIf="busqueda.trim().length >= 2">
+          <div class="gris peq" *ngIf="buscando">Buscando…</div>
+          <div class="gris peq" *ngIf="!buscando && !resultadosBusqueda.length">Sin resultados{{ tablas.length ? ' en este servidor' : '' }}.</div>
+          <button type="button" class="busca-item" *ngFor="let r of resultadosBusqueda" [disabled]="yaElegida(r.ref)" (click)="agregarResumen(r)">
+            <span class="mono">{{ r.nombre }}</span>
+            <small>{{ r.origen }} › {{ r.bd }}<ng-container *ngIf="r.esquema"> › {{ r.esquema }}</ng-container></small>
+            <span class="chip" *ngIf="r.tipo === 'VISTA'">Vista</span>
+          </button>
+        </div>
+      </div>
+      <div class="aviso-aviso" *ngIf="mensaje">{{ mensaje }}</div>
+
+      <div class="sug" *ngIf="tablas.length && sugerencias && sugerencias.relacionadas.length">
+        <h4>Tablas relacionadas <small class="gris">(clic para unirlas)</small></h4>
+        <div class="sug-lista">
+          <button type="button" class="sug-item" *ngFor="let r of sugerencias.relacionadas.slice(0, 8)" [disabled]="yaElegida(r.tabla.ref)" (click)="agregarRelacionada(r)" [title]="r.condicion">
+            <span class="mono">{{ r.tabla.nombre }}</span>
+            <span class="chip" [ngClass]="claseOrigen(r.tipo)">{{ etiquetaOrigen(r.tipo) }}</span>
+            <span class="chip" *ngIf="r.usos">{{ r.usos }} {{ r.usos === 1 ? 'uso' : 'usos' }} del equipo</span>
+          </button>
+        </div>
+      </div>
+    </section>
+
+    <!-- Ideas -->
+    <section class="paso" *ngIf="tablas.length && ((sugerencias && (sugerencias.recetas.length || sugerencias.queries.length)) || cargandoSug)">
+      <div class="paso-cab"><h3><span class="num">★</span> Atajos</h3></div>
+      <div class="gris peq" *ngIf="cargandoSug">Buscando ideas…</div>
+      <ng-container *ngIf="sugerencias">
+        <div class="recetas" *ngIf="sugerencias.recetas.length">
+          <button type="button" class="receta" *ngFor="let r of sugerencias.recetas" (click)="usarReceta(r)" [title]="r.descripcion">{{ r.titulo }}</button>
+        </div>
+        <div *ngIf="sugerencias.queries.length">
+          <h4>Queries del equipo con estas tablas</h4>
+          <div class="qs">
+            <button type="button" class="q-item" *ngFor="let q of sugerencias.queries.slice(0, 5)" (click)="verQuery.emit(q.id)">
+              <span class="q-tit">{{ q.titulo }}</span>
+              <span class="chip chip-alta" *ngIf="q.modifica">Modifica datos</span>
+              <small class="gris" *ngIf="q.tablasEnComun">{{ q.tablasEnComun }} en común</small>
+            </button>
+          </div>
+        </div>
+      </ng-container>
+    </section>
+
+    <!-- 2. Qué obtener -->
+    <section class="paso" *ngIf="tablas.length">
+      <div class="paso-cab"><h3><span class="num">2</span> ¿Qué quieres obtener?</h3></div>
+      <div class="modos">
+        <button type="button" class="modo" *ngFor="let m of modos" [class.activo]="modo === m.v" (click)="cambioModo(m.v)" [attr.aria-pressed]="modo === m.v">
+          <span class="modo-ico" aria-hidden="true">{{ m.icono }}</span>
+          <span class="modo-txt"><strong>{{ m.t }}</strong><small>{{ m.ayuda }}</small></span>
+        </button>
+      </div>
+    </section>
+
+    <!-- 3. Columnas / agrupar -->
+    <section class="paso" *ngIf="tablas.length && modo !== 'conteo'">
+      <div class="paso-cab">
+        <h3><span class="num">3</span> {{ modo === 'detalle' ? 'Columnas' : modo === 'repetidos' ? 'Buscar repetidos en' : 'Agrupar por' }}</h3>
+        <span class="gris peq" *ngIf="modo === 'detalle'">{{ cols.length ? cols.length + ' elegida(s)' : 'Sin elegir: se muestran todas' }}</span>
+      </div>
+
+      <div class="picker">
+        <div class="pk-izq">
+          <div class="pk-tabs" *ngIf="tablas.length > 1">
+            <button type="button" class="pk-tab" *ngFor="let t of tablas; let i = index; trackBy: trackIdx" [class.activo]="tablaActiva === i" (click)="tablaActiva = i">
+              {{ t.nombre }}<span class="pk-n" *ngIf="conteoSel(i)">{{ conteoSel(i) }}</span>
+            </button>
+          </div>
+          <div class="pk-busca">
+            <input type="search" class="entrada" [(ngModel)]="filtroCols" name="cons-filtro-cols" placeholder="Buscar columna…" autocomplete="off" aria-label="Buscar columna" />
+            <button type="button" class="btn-mini" (click)="agregarTodasDe(tablaActiva)" *ngIf="modo === 'detalle'">Todas</button>
+          </div>
+          <div class="pk-lista">
+            <span class="gris peq" *ngIf="!columnasDe(tablaActiva).length">Cargando columnas…</span>
+            <button type="button" class="pk-col" *ngFor="let c of columnasDe(tablaActiva)" [hidden]="!coincideColumna(c)" [class.sel]="indiceSel(tablaActiva, c.nombre) >= 0"
+                    (click)="alternarColumna(tablaActiva, c)" [attr.aria-pressed]="indiceSel(tablaActiva, c.nombre) >= 0">
+              <span class="pk-check" aria-hidden="true">{{ indiceSel(tablaActiva, c.nombre) >= 0 ? '✓' : '+' }}</span>
+              <span class="mono pk-nombre">{{ c.nombre }}</span>
+              <span class="pk-tipo">{{ c.tipo }}</span>
+              <span class="marca marca-pk" *ngIf="c.pk">PK</span>
+              <span class="marca marca-fk" *ngIf="c.fk.length" [title]="fkTexto(c)">FK</span>
+              <span class="marca marca-eq" *ngIf="usoColumna(tablaActiva, c.nombre)" [title]="tituloUso(tablaActiva, c.nombre)">★</span>
+            </button>
+          </div>
+          <p class="gris peq pk-leyenda"><span class="marca marca-pk">PK</span> llave · <span class="marca marca-fk">FK</span> referencia · <span class="marca marca-eq">★</span> la usa el equipo</p>
+        </div>
+
+        <div class="pk-der">
+          <div class="pk-der-cab">
+            <strong>{{ modo === 'detalle' ? 'En el resultado' : 'Agrupado por' }}</strong>
+            <button type="button" class="btn-mini" *ngIf="seleccionadas.length" (click)="vaciarSel()">Quitar todas</button>
+          </div>
+          <p class="gris peq" *ngIf="!seleccionadas.length">{{ modo === 'detalle' ? 'Haz clic en las columnas que quieres ver. Podrás ponerles otro nombre.' : 'Elige por qué columna agrupar. Si es una fecha, puedes agrupar por día, mes o año.' }}</p>
+          <div class="sel-fila" *ngFor="let s of seleccionadas; let k = index; trackBy: trackIdx">
+            <div class="sel-top">
+              <span class="mono sel-nombre" [title]="tablas[s.t]?.nombre + '.' + s.c">
+                <small class="gris" *ngIf="tablas.length > 1">{{ tablas[s.t]?.nombre }}.</small>{{ s.c }}
+              </span>
+              <span class="sel-acc">
+                <button type="button" class="x-mini" (click)="moverSel(k, -1)" [disabled]="k === 0" aria-label="Subir">↑</button>
+                <button type="button" class="x-mini" (click)="moverSel(k, 1)" [disabled]="k === seleccionadas.length - 1" aria-label="Bajar">↓</button>
+                <button type="button" class="x-mini peligro" (click)="quitarSel(k)" aria-label="Quitar columna">✕</button>
+              </span>
+            </div>
+            <div class="sel-opts">
+              <input class="entrada mini" [(ngModel)]="s.alias" (ngModelChange)="programar()" maxlength="60" autocomplete="off" placeholder="Nombre en el resultado (opcional)" aria-label="Alias de la columna" />
+              <select class="entrada mini" *ngIf="esFecha(s)" [(ngModel)]="s.trunc" (ngModelChange)="programar()" aria-label="Cómo mostrar la fecha">
+                <option *ngFor="let t of truncs" [ngValue]="t.v">{{ t.t }}</option>
+              </select>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Cálculos -->
+      <div class="calculos" *ngIf="modo === 'agrupado'">
+        <div class="sub-cab"><strong>Calcular</strong><span class="gris peq">qué obtener de cada grupo</span></div>
+        <div class="medida" *ngFor="let m of medidas; let k = index; trackBy: trackIdx">
+          <select class="entrada mini" [(ngModel)]="m.fn" (ngModelChange)="cambioFuncion(m)" aria-label="Cálculo">
+            <option *ngFor="let f of funciones" [value]="f.v">{{ f.t }}</option>
+          </select>
+          <select class="entrada mini" *ngIf="defFuncion(m.fn).conColumna" [(ngModel)]="m.col" (ngModelChange)="programar()" aria-label="Columna del cálculo">
+            <option value="">Elige una columna…</option>
+            <option *ngFor="let o of columnasParaMedida(m.fn)" [value]="o.valor">{{ o.texto }}</option>
+          </select>
+          <input class="entrada mini" [(ngModel)]="m.alias" (ngModelChange)="programar()" maxlength="60" autocomplete="off" placeholder="Nombre (opcional)" aria-label="Nombre del cálculo" />
+          <button type="button" class="x-mini peligro" (click)="quitarMedida(k)" aria-label="Quitar cálculo">✕</button>
+        </div>
+        <div class="fila-opciones">
+          <button type="button" class="btn btn-ghost btn-sm" (click)="agregarMedida()" [disabled]="medidas.length >= 6">+ Agregar cálculo</button>
+          <label class="campo-inline" *ngIf="grupos.length">
+            <span>Mostrar solo grupos con al menos</span>
+            <input type="number" class="entrada mini corto-num" min="2" [(ngModel)]="minTotal" (ngModelChange)="programar()" placeholder="—" aria-label="Mínimo de filas por grupo" />
+            <span>filas</span>
+          </label>
+        </div>
+      </div>
+    </section>
+
+    <!-- 4. Filtros -->
+    <section class="paso" *ngIf="tablas.length">
+      <div class="paso-cab">
+        <h3><span class="num">{{ modo === 'conteo' ? 3 : 4 }}</span> Filtros</h3>
+        <span class="gris peq">Dentro de un bloque, las condiciones son «o». Entre bloques, «y».</span>
+      </div>
+
+      <div class="eq-filtros" *ngIf="filtrosEquipo.length">
+        <span class="gris peq">El equipo suele filtrar por:</span>
+        <button type="button" class="chip chip-marca chip-btn" *ngFor="let f of filtrosEquipo" (click)="agregarFiltro(f.key)" [title]="'Agregar filtro por ' + f.texto">
+          + {{ f.texto }} <small>×{{ f.usos }}</small>
+        </button>
+      </div>
+
+      <div class="gf" *ngFor="let g of gruposF; let gi = index; trackBy: trackGrupo">
+        <div class="gf-sep" *ngIf="gi > 0"><span>y</span></div>
+        <div class="gf-caja">
+          <ng-container *ngFor="let x of g.filas; let fi = index; trackBy: trackFila">
+            <div class="gf-or" *ngIf="fi > 0"><span>o</span></div>
+            <div class="filtro">
+              <select class="entrada f-col" [(ngModel)]="x.f.col" (ngModelChange)="cambioColumnaFiltro(x.f)" aria-label="Columna del filtro">
+                <option value="">Columna…</option>
+                <optgroup *ngFor="let t of tablas; let ti = index; trackBy: trackIdx" [label]="t.nombre">
+                  <option *ngFor="let c of columnasDe(ti)" [value]="ti + '|' + c.nombre">{{ c.nombre }}</option>
+                </optgroup>
+              </select>
+              <select class="entrada f-op" [(ngModel)]="x.f.op" (ngModelChange)="cambioOperador(x.f)" aria-label="Condición">
+                <option *ngFor="let o of operadoresPara(x.f.col)" [value]="o.v">{{ o.t }}</option>
+              </select>
+              <input *ngIf="nValores(x.f.op) >= 1" class="entrada f-val" [type]="tipoEntrada(x.f)" [(ngModel)]="x.f.v" (ngModelChange)="programar()" autocomplete="off" [placeholder]="placeholderValor(x.f)" aria-label="Valor" />
+              <input *ngIf="nValores(x.f.op) === 2" class="entrada f-val" [type]="tipoEntrada(x.f)" [(ngModel)]="x.f.v2" (ngModelChange)="programar()" autocomplete="off" placeholder="hasta" aria-label="Valor final" />
+              <button type="button" class="x-mini peligro" (click)="quitarFiltro(x.i)" aria-label="Quitar filtro">✕</button>
+            </div>
+            <div class="f-extra">
+              <button type="button" class="enlace" *ngIf="puedeVerValores(x.f)" (click)="cargarValores(x.f)">
+                {{ estadoValores(x.f)?.estado === 'ok' ? 'Ocultar valores comunes' : 'Ver valores comunes' }}
+              </button>
+              <button type="button" class="enlace" *ngIf="nValores(x.f.op) >= 1" (click)="fijarPlantilla(x.f)" title="Deja &lt;VALOR&gt; para completarlo al ejecutar">Dejar &lt;VALOR&gt;</button>
+              <span class="gris peq" *ngIf="estadoValores(x.f)?.estado === 'cargando'">Leyendo valores…</span>
+              <span class="aviso-mini" *ngIf="estadoValores(x.f)?.estado === 'error'">{{ estadoValores(x.f)?.error }}</span>
+            </div>
+            <div class="valores" *ngIf="estadoValores(x.f) as ev">
+              <ng-container *ngIf="ev.estado === 'ok' && ev.datos">
+                <button type="button" class="chip chip-btn" *ngFor="let v of ev.datos.valores" [class.chip-marca]="valorUsado(x.f, v.valor)" (click)="usarValor(x.f, v.valor)">
+                  {{ v.valor === null ? '(vacío)' : v.valor }} <small>{{ v.veces }}</small>
+                </button>
+                <small class="gris peq" *ngIf="!ev.datos.valores.length">Sin valores.</small>
+                <small class="gris peq">Sobre una muestra de las primeras {{ ev.datos.muestra }} filas.</small>
+              </ng-container>
+            </div>
+          </ng-container>
+          <button type="button" class="enlace mas-or" (click)="agregarOr(g.g)">+ o otra condición</button>
+        </div>
+      </div>
+
+      <div class="fila-opciones">
+        <button type="button" class="btn btn-ghost btn-sm" (click)="agregarFiltro()">+ Agregar filtro</button>
+        <span class="gris peq" *ngIf="filtrosPendientes">{{ filtrosPendientes }} filtro(s) sin completar todavía no cuentan.</span>
+      </div>
+    </section>
+
+    <!-- 5. Uniones -->
+    <section class="paso" *ngIf="tablas.length > 1">
+      <div class="paso-cab">
+        <h3><span class="num">{{ modo === 'conteo' ? 4 : 5 }}</span> Uniones</h3>
+        <span class="gris peq">
+          Todas como
+          <button type="button" class="enlace" (click)="todasLas('INNER')">INNER</button> /
+          <button type="button" class="enlace" (click)="todasLas('LEFT')">LEFT</button>
+        </span>
+      </div>
+      <p class="gris peq" *ngIf="!armado || !armado.joins.length">{{ armando ? 'Buscando cómo unirlas…' : 'Aquí aparece cómo se unen las tablas.' }}</p>
+      <div class="union" *ngFor="let j of armado?.joins || []; trackBy: trackIdx">
+        <div class="union-top">
+          <strong class="mono">{{ j.hacia }}</strong><span class="gris">se une con</span><strong class="mono">{{ j.desde }}</strong>
+          <span class="chip" [ngClass]="claseOrigen(j.origen)" [title]="j.detalle">{{ etiquetaOrigen(j.origen) }}</span>
+        </div>
+        <div class="union-ctl">
+          <select class="entrada mini" *ngIf="j.opciones.length > 1" [ngModel]="j.alt" (ngModelChange)="cambioAltJoin(j, $event)" aria-label="Condición de unión">
+            <option *ngFor="let o of j.opciones" [ngValue]="o.idx">{{ o.condicion }} ({{ etiquetaOrigen(o.origen) }})</option>
+          </select>
+          <span class="mono peq" *ngIf="j.opciones.length <= 1">{{ j.condicion }}</span>
+          <select class="entrada mini corto" [ngModel]="j.tipo" (ngModelChange)="cambioTipoJoin(j, $event)" aria-label="Tipo de unión">
+            <option *ngFor="let t of tiposJoin" [value]="t">{{ t }} JOIN</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="uniones-man" *ngIf="joinsManuales.length">
+        <span class="gris peq">Uniones que elegiste:</span>
+        <span class="chip" *ngFor="let j of joinsManuales; let i = index">{{ textoUnion(j) }} <button type="button" class="x-mini" (click)="quitarUnion(i)" aria-label="Quitar unión">✕</button></span>
+      </div>
+
+      <details class="union-libre">
+        <summary>Unir por otras columnas</summary>
+        <div class="um-fila">
+          <select class="entrada mini corto" [(ngModel)]="nuevaUnion.t1" aria-label="Tabla A">
+            <option *ngFor="let t of tablas; let i = index; trackBy: trackIdx" [ngValue]="i">{{ t.nombre }}</option>
+          </select>
+          <select class="entrada mini corto" [(ngModel)]="nuevaUnion.c1" aria-label="Columna A">
+            <option value="">columna…</option>
+            <option *ngFor="let c of columnasDe(nuevaUnion.t1)" [value]="c.nombre">{{ c.nombre }}</option>
+          </select>
+          <span class="gris">=</span>
+          <select class="entrada mini corto" [(ngModel)]="nuevaUnion.t2" aria-label="Tabla B">
+            <option *ngFor="let t of tablas; let i = index; trackBy: trackIdx" [ngValue]="i">{{ t.nombre }}</option>
+          </select>
+          <select class="entrada mini corto" [(ngModel)]="nuevaUnion.c2" aria-label="Columna B">
+            <option value="">columna…</option>
+            <option *ngFor="let c of columnasDe(nuevaUnion.t2)" [value]="c.nombre">{{ c.nombre }}</option>
+          </select>
+          <button type="button" class="btn btn-purple btn-sm" [disabled]="!unionValida" (click)="agregarUnionLibre()">Agregar</button>
+        </div>
+      </details>
+    </section>
+
+    <!-- 6. Orden y límite -->
+    <section class="paso" *ngIf="tablas.length">
+      <div class="paso-cab"><h3><span class="num">{{ (modo === 'conteo' ? 3 : 4) + 1 + (tablas.length > 1 ? 1 : 0) }}</span> Orden y límite</h3></div>
+      <div class="orden-fila" *ngFor="let o of orden; let k = index; trackBy: trackIdx">
+        <select class="entrada mini" [(ngModel)]="o.key" (ngModelChange)="programar()" aria-label="Ordenar por">
+          <option value="">Elige una columna…</option>
+          <option *ngFor="let op of opcionesOrden" [value]="op.valor">{{ op.texto }}</option>
+        </select>
+        <select class="entrada mini corto" [(ngModel)]="o.dir" (ngModelChange)="programar()" aria-label="Sentido">
+          <option value="desc">Mayor o más reciente primero</option>
+          <option value="asc">Menor o más antiguo primero</option>
+        </select>
+        <button type="button" class="x-mini peligro" (click)="quitarOrden(k)" aria-label="Quitar orden">✕</button>
+      </div>
+      <div class="fila-opciones">
+        <button type="button" class="btn btn-ghost btn-sm" *ngIf="modo !== 'conteo' && orden.length < 3" (click)="agregarOrden()">+ Ordenar por…</button>
+        <label class="campo-inline" *ngIf="modo !== 'conteo'">
+          <span>Máx. filas</span>
+          <select class="entrada mini corto" [(ngModel)]="top" (ngModelChange)="programar()" name="cons-top">
+            <option *ngFor="let n of topes" [ngValue]="n">{{ n }}</option>
+          </select>
+        </label>
+        <label class="check" *ngIf="modo === 'detalle'"><input type="checkbox" [(ngModel)]="distinct" (ngModelChange)="programar()" name="cons-distinct" /> <span>Sin filas repetidas (DISTINCT)</span></label>
+        <label class="check"><input type="checkbox" [(ngModel)]="nolock" (ngModelChange)="programar()" name="cons-nolock" /> <span>Leer con NOLOCK <small class="gris">(SQL Server)</small></span></label>
+      </div>
+    </section>
+  </div>
+
+  <!-- ===================== Columna derecha: resultado ===================== -->
+  <div class="cons-der">
+    <div class="tarjeta cons-res">
+      <div class="res-cab">
+        <h3>Tu query</h3>
+        <span class="chip chip-marca" *ngIf="armado">{{ armado.motor === 'MSSQL' ? 'SQL Server' : 'MariaDB' }}</span>
+        <span class="chip" *ngIf="armado?.baseDatos">{{ armado?.baseDatos }}</span>
+        <span class="gris peq" *ngIf="armando">Armando…</span>
+      </div>
+
+      <p class="vacio" *ngIf="!tablas.length">Elige al menos una tabla y aquí aparece la consulta.</p>
+
+      <ng-container *ngIf="tablas.length">
+        <div class="nombre-caja">
+          <label class="campo-col">
+            <span>Nombre del query</span>
+            <div class="fila-inline">
+              <input class="entrada" [(ngModel)]="nombre" (ngModelChange)="programar()" maxlength="200" autocomplete="off" name="cons-nombre" placeholder="Ej.: Traza por documento del cliente" />
+              <button type="button" class="btn btn-ghost btn-sm" (click)="usarNombreAutomatico()" title="Propone un nombre según lo que armaste">Sugerir</button>
+            </div>
+          </label>
+          <label class="campo-col">
+            <span>Descripción <small class="gris">(opcional)</small></span>
+            <input class="entrada" [(ngModel)]="descripcion" (ngModelChange)="programar()" maxlength="400" autocomplete="off" name="cons-desc" placeholder="Para qué sirve o cuándo usarlo" />
+          </label>
+          <label class="check"><input type="checkbox" [(ngModel)]="comentarioSql" (ngModelChange)="programar()" name="cons-coment" /> <span>Poner el nombre como comentario al inicio del SQL</span></label>
+        </div>
+        <p class="resumen-cfg gris peq">{{ resumenConfig }}</p>
+      </ng-container>
+
+      <div class="aviso-aviso" *ngIf="errorArmado as e">
+        <strong>{{ e.error }}</strong>
+        <div *ngIf="e.sinRelacion && e.sinRelacion.length" class="union-manual">
+          <p class="peq">Dime con qué columnas se unen:</p>
+          <div class="um-fila" *ngFor="let s of e.sinRelacion">
+            <span class="mono">{{ s.nombre }}</span>
+            <span class="gris">se une con</span>
+            <select class="entrada mini corto" [(ngModel)]="borrador(s.ref).t1" [name]="'um-t-' + s.nombre" aria-label="Tabla de origen">
+              <ng-container *ngFor="let t of tablas; let i = index"><option *ngIf="indiceDe(s.ref) !== i" [ngValue]="i">{{ t.nombre }}</option></ng-container>
+            </select>
+            <select class="entrada mini corto" [(ngModel)]="borrador(s.ref).c1" [name]="'um-c1-' + s.nombre" aria-label="Columna de esa tabla">
+              <option value="">columna…</option>
+              <option *ngFor="let c of columnasDe(borrador(s.ref).t1)" [value]="c.nombre">{{ c.nombre }}</option>
+            </select>
+            <span class="gris">=</span>
+            <select class="entrada mini corto" [(ngModel)]="borrador(s.ref).c2" [name]="'um-c2-' + s.nombre" aria-label="Columna de la tabla sin relación">
+              <option value="">columna…</option>
+              <option *ngFor="let c of columnasDe(indiceDe(s.ref))" [value]="c.nombre">{{ c.nombre }}</option>
+            </select>
+            <button type="button" class="btn btn-purple btn-sm" [disabled]="!borrador(s.ref).c1 || !borrador(s.ref).c2" (click)="agregarUnion(s.ref)">Usar</button>
+          </div>
+        </div>
+        <div *ngIf="e.puentes && e.puentes.length" class="union-manual">
+          <p class="peq">O agrega una tabla puente que conecta ambas:</p>
+          <button type="button" class="chip chip-marca ia-chip" *ngFor="let p of e.puentes" (click)="agregarPuente(p)">+ {{ p.nombre }}</button>
+        </div>
+      </div>
+
+      <ng-container *ngIf="armado as a">
+        <pre class="sql mono">{{ a.sql }}</pre>
+        <div class="res-acciones">
+          <button type="button" class="btn btn-ghost btn-sm" (click)="copiar()">{{ copiado ? '¡Copiado!' : 'Copiar SQL' }}</button>
+          <button type="button" class="btn btn-purple btn-sm" *ngIf="puedeEditar" (click)="guardarEnRepositorio()">Guardar en el repositorio</button>
+        </div>
+
+        <div class="aviso-aviso" *ngIf="a.advertencias.length"><div *ngFor="let w of a.advertencias" class="peq">• {{ w }}</div></div>
+
+        <button type="button" class="enlace expl-btn" (click)="verExplicacion = !verExplicacion">{{ verExplicacion ? 'Ocultar' : 'Ver' }} qué hace esta consulta</button>
+        <ul class="explica" *ngIf="verExplicacion"><li *ngFor="let x of a.explicacion">{{ x }}</li></ul>
+
+        <app-query-ejecucion [sql]="a.sql" [origenes]="origenes" [origenId]="a.origenId" [bd]="a.baseDatos" [puede]="puedeEditar"></app-query-ejecucion>
+      </ng-container>
+    </div>
+  </div>
+</div>

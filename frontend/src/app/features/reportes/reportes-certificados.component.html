@@ -1,0 +1,232 @@
+<header class="page-header">
+  <div>
+    <h1>Informes · Certificados</h1>
+    <p class="subtitle">Fase 1 del informe general del aplicativo — resumen, tendencia, comparación y certificados críticos por periodo</p>
+  </div>
+</header>
+
+<!-- ===================================================
+     SELECTOR DE PERIODO
+==================================================== -->
+<section class="seccion-selector">
+  <div class="selector-periodo">
+    <button type="button" class="btn-periodo" [class.activo]="periodo === 'dia'" (click)="seleccionarPeriodo('dia')">Día</button>
+    <button type="button" class="btn-periodo" [class.activo]="periodo === 'semana'" (click)="seleccionarPeriodo('semana')">Semana</button>
+    <button type="button" class="btn-periodo" [class.activo]="periodo === 'mes'" (click)="seleccionarPeriodo('mes')">Mes</button>
+    <button type="button" class="btn-periodo" [class.activo]="periodo === 'rango'" (click)="seleccionarPeriodo('rango')">Rango personalizado</button>
+  </div>
+
+  <div class="rango-fechas" *ngIf="periodo === 'rango'">
+    <label>
+      Desde
+      <input type="date" [(ngModel)]="desde" [max]="hasta">
+    </label>
+    <label>
+      Hasta
+      <input type="date" [(ngModel)]="hasta" [min]="desde">
+    </label>
+    <button type="button" class="btn-sm" (click)="generarInforme()">Generar</button>
+  </div>
+
+  <div class="acciones-informe">
+    <button type="button" class="btn-sm" (click)="generarInforme()" [disabled]="cargando">↻ Actualizar</button>
+    <button type="button" class="btn-sm btn-pdf" (click)="descargarPdf()" [disabled]="generandoPdf">
+      {{ generandoPdf ? 'Generando PDF…' : '⬇ Descargar PDF' }}
+    </button>
+  </div>
+</section>
+
+<div class="mensaje-error mensaje-error-seccion" *ngIf="error">
+  <svg class="icono-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M12 3.5l9.5 16.5H2.5L12 3.5z"/>
+    <path d="M12 10v4.5"/>
+    <circle cx="12" cy="17.2" r="0.9" fill="currentColor" stroke="none"/>
+  </svg>
+  {{ error }}
+</div>
+
+<div class="mensaje-error mensaje-error-seccion" *ngIf="errorPdf">
+  {{ errorPdf }}
+</div>
+
+<div class="loading-state" *ngIf="cargando">
+  <div class="spinner"></div>
+  <p>Generando informe...</p>
+</div>
+
+<!-- ===================================================
+     CONTENIDO DEL INFORME
+==================================================== -->
+<ng-container *ngIf="!cargando && informe">
+  <p class="etiqueta-periodo-activo">
+    Periodo: <strong>{{ etiquetaPeriodo }}</strong>
+    <span class="etiqueta-comparacion-vs">· comparado contra {{ formatoFecha(informe.comparacion.periodoAnterior.desde) }} — {{ formatoFecha(informe.comparacion.periodoAnterior.hasta) }}</span>
+  </p>
+
+  <section class="centro-analitica">
+    <div class="kpis-grid">
+      <div class="kpi-card kpi-info kpi-sano">
+        <div class="kpi-texto">
+          <span class="kpi-valor">{{ informe.resumen.Vigente || 0 }}</span>
+          <span class="kpi-label">Vigentes (ahora)</span>
+        </div>
+      </div>
+      <div class="kpi-card kpi-info kpi-riesgo">
+        <div class="kpi-texto">
+          <span class="kpi-valor">{{ informe.resumen['Por vencer'] || 0 }}</span>
+          <span class="kpi-label">Por vencer (ahora)</span>
+        </div>
+      </div>
+      <div class="kpi-card kpi-info kpi-critico">
+        <div class="kpi-texto">
+          <span class="kpi-valor">{{ informe.resumen.Vencido || 0 }}</span>
+          <span class="kpi-label">Vencidos (ahora)</span>
+        </div>
+      </div>
+      <div class="kpi-card kpi-info" [ngClass]="totalCriticos ? 'kpi-riesgo' : 'kpi-sano'">
+        <div class="kpi-texto">
+          <span class="kpi-valor">{{ totalCriticos }}</span>
+          <span class="kpi-label">Total críticos</span>
+        </div>
+      </div>
+      <div class="kpi-card kpi-info kpi-sano">
+        <div class="kpi-texto">
+          <span class="kpi-valor">{{ informe.totalActivos }}</span>
+          <span class="kpi-label">Total activos</span>
+        </div>
+      </div>
+      <div class="kpi-card kpi-info kpi-sano">
+        <div class="kpi-texto">
+          <span class="kpi-valor">{{ informe.tasaRenovacionPorc !== null ? (informe.tasaRenovacionPorc + '%') : '—' }}</span>
+          <span class="kpi-label">Tasa de renovación</span>
+        </div>
+      </div>
+      <div class="kpi-card kpi-info" [ngClass]="(informe.promedioDiasParaVencer ?? 999) <= 15 ? 'kpi-riesgo' : 'kpi-sano'">
+        <div class="kpi-texto">
+          <span class="kpi-valor">{{ informe.promedioDiasParaVencer !== null ? informe.promedioDiasParaVencer : '—' }}</span>
+          <span class="kpi-label">Días prom. para vencer</span>
+        </div>
+      </div>
+
+      <div class="kpi-card kpi-info kpi-sano">
+        <div class="kpi-texto">
+          <span class="kpi-valor">{{ informe.altasEnPeriodo }}</span>
+          <span class="kpi-label">Altas en el periodo</span>
+        </div>
+        <span class="pill-comparacion" [ngClass]="claseComparacion(informe.comparacion.altas.cambioPorc)">
+          {{ textoComparacion(informe.comparacion.altas.cambioPorc) }}
+        </span>
+      </div>
+      <div class="kpi-card kpi-info kpi-sano">
+        <div class="kpi-texto">
+          <span class="kpi-valor">{{ informe.renovacionesEnPeriodo }}</span>
+          <span class="kpi-label">Renovaciones en el periodo</span>
+        </div>
+        <span class="pill-comparacion" [ngClass]="claseComparacion(informe.comparacion.renovaciones.cambioPorc)">
+          {{ textoComparacion(informe.comparacion.renovaciones.cambioPorc) }}
+        </span>
+      </div>
+      <div class="kpi-card kpi-info" [ngClass]="informe.vencidosEnPeriodo.length ? 'kpi-riesgo' : 'kpi-sano'">
+        <div class="kpi-texto">
+          <span class="kpi-valor">{{ informe.vencidosEnPeriodo.length }}</span>
+          <span class="kpi-label">Vencieron en el periodo</span>
+        </div>
+        <span class="pill-comparacion" [ngClass]="claseComparacion(informe.comparacion.vencidos.cambioPorc, true)">
+          {{ textoComparacion(informe.comparacion.vencidos.cambioPorc) }}
+        </span>
+      </div>
+      <div class="kpi-card kpi-info kpi-sano">
+        <div class="kpi-texto">
+          <span class="kpi-valor">{{ informe.altasEnPeriodo + informe.renovacionesEnPeriodo }}</span>
+          <span class="kpi-label">Actividad total</span>
+        </div>
+        <span class="pill-comparacion" [ngClass]="claseComparacion(informe.comparacion.actividadTotal.cambioPorc)">
+          {{ textoComparacion(informe.comparacion.actividadTotal.cambioPorc) }}
+        </span>
+      </div>
+    </div>
+
+    <!-- ---------- Tendencia histórica ---------- -->
+    <div class="panel-analitica panel-analitica-ancho">
+      <h3>Tendencia — altas, renovaciones y vencidos</h3>
+      <p class="panel-atencion-subtitulo">Evolución por periodo (el tamaño de cada cubeta se ajusta automáticamente a la ventana de tiempo seleccionada)</p>
+      <app-line-chart [etiquetas]="etiquetasTendencia" [series]="seriesTendencia"></app-line-chart>
+    </div>
+
+    <!-- ---------- Distribución actual + rankings ---------- -->
+    <div class="analitica-paneles-secundarios">
+      <div class="panel-analitica">
+        <h3>Distribución actual</h3>
+        <p class="panel-atencion-subtitulo">Estado de todos los certificados activos ahora mismo</p>
+        <app-donut-chart [segmentos]="segmentosResumen" centroEtiqueta="Certificados"></app-donut-chart>
+      </div>
+
+      <div class="panel-analitica">
+        <h3>Responsables con más críticos</h3>
+        <app-bar-list [items]="informe.topResponsablesCriticos" colorVar="var(--ax-chart-series-1)"></app-bar-list>
+      </div>
+
+      <div class="panel-analitica">
+        <h3>Aplicaciones con más críticos</h3>
+        <app-bar-list [items]="informe.topAplicacionesCriticas" colorVar="var(--ax-chart-series-2)"></app-bar-list>
+      </div>
+
+      <div class="panel-analitica">
+        <h3>Servidores con más críticos</h3>
+        <app-bar-list [items]="informe.topServidoresCriticos" colorVar="var(--ax-chart-danger)"></app-bar-list>
+      </div>
+    </div>
+
+    <!-- ---------- Actividad del periodo ---------- -->
+    <div class="panel-analitica panel-atencion panel-analitica-ancho">
+      <h3>Actividad del periodo</h3>
+      <p class="panel-atencion-subtitulo">Altas y renovaciones registradas en el histórico durante este periodo</p>
+      <div class="tabla-atencion" *ngIf="informe.actividadEnPeriodo.length; else sinActividad">
+        <div class="tabla-atencion-header cols-5">
+          <span>Fecha</span>
+          <span>Acción</span>
+          <span>Certificado</span>
+          <span>Nueva vigencia</span>
+          <span>Usuario</span>
+        </div>
+        <div class="tabla-atencion-fila cols-5" *ngFor="let fila of informe.actividadEnPeriodo; trackBy: trackPorId">
+          <span>{{ formatoFecha(fila.FechaCambio) }}</span>
+          <span class="chip-accion" [ngClass]="claseAccion(fila.Accion)">{{ fila.Accion }}</span>
+          <span [title]="fila.NombreComun || ''">{{ fila.NombreComun || '(sin nombre común)' }}</span>
+          <span>{{ formatoFecha(fila.FechaFinNueva) }}</span>
+          <span [title]="fila.UsuarioSistema">{{ fila.UsuarioSistema }}</span>
+        </div>
+      </div>
+      <ng-template #sinActividad>
+        <p class="sin-datos">No hubo altas ni renovaciones registradas en este periodo.</p>
+      </ng-template>
+    </div>
+
+    <!-- ---------- Certificados vencidos en el periodo ---------- -->
+    <div class="panel-analitica panel-atencion panel-analitica-ancho">
+      <h3>Certificados vencidos en el periodo</h3>
+      <p class="panel-atencion-subtitulo">Certificados activos cuya fecha de fin cayó dentro de este periodo</p>
+      <div class="tabla-atencion" *ngIf="informe.vencidosEnPeriodo.length; else sinVencidos">
+        <div class="tabla-atencion-header cols-6">
+          <span>Servidor</span>
+          <span>Aplicación</span>
+          <span>Certificado</span>
+          <span>Venció</span>
+          <span>Responsable</span>
+          <span>Estado</span>
+        </div>
+        <div class="tabla-atencion-fila cols-6" *ngFor="let fila of informe.vencidosEnPeriodo; trackBy: trackPorId">
+          <span [title]="fila.Hostname">{{ fila.Hostname }}</span>
+          <span [title]="fila.Aplicacion">{{ fila.Aplicacion }}</span>
+          <span [title]="fila.NombreComun || ''">{{ fila.NombreComun || '(sin nombre común)' }}</span>
+          <span>{{ formatoFecha(fila.FechaFin) }}</span>
+          <span>{{ fila.Responsable || 'Sin asignar' }}</span>
+          <span class="status-pill" [ngClass]="claseEstado(fila.Estado)">{{ fila.Estado }}</span>
+        </div>
+      </div>
+      <ng-template #sinVencidos>
+        <p class="sin-datos">No venció ningún certificado activo en este periodo.</p>
+      </ng-template>
+    </div>
+  </section>
+</ng-container>

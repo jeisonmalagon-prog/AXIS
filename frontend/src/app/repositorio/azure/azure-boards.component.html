@@ -1,0 +1,232 @@
+<div class="pestanas" role="tablist">
+  <button type="button" [class.activa]="vista === 'resumen'" (click)="cambiarVista('resumen')"><app-ico n="resumen"></app-ico>Resumen</button>
+  <button type="button" [class.activa]="vista === 'items'" (click)="cambiarVista('items')"><app-ico n="tablero"></app-ico>Work items</button>
+  <button type="button" [class.activa]="vista === 'sprints'" (click)="cambiarVista('sprints')"><app-ico n="timer"></app-ico>Sprints</button>
+  <button type="button" [class.activa]="vista === 'consultas'" (click)="cambiarVista('consultas')"><app-ico n="buscar"></app-ico>Consultas guardadas</button>
+</div>
+
+<app-azure-fallo [fallo]="falloVista"></app-azure-fallo>
+<div class="cargando" *ngIf="cargandoVista"><div class="spinner"></div>Cargando…</div>
+
+<!-- RESUMEN -->
+<ng-container *ngIf="vista === 'resumen' && resumen as r">
+  <div class="barra">
+    <div class="selector-dias" role="group" aria-label="Periodo"><button type="button" *ngFor="let d of [30, 60, 90, 180]" [class.activo]="dias === d" (click)="cambiarDias(d)">{{ d }} días</button></div>
+    <span class="gris">Items abiertos + los modificados en el periodo ({{ fmtNum(r.muestra) }}<ng-container *ngIf="r.limitada">, limitado a 1.000</ng-container>).</span>
+  </div>
+  <div class="kpis kpis-6">
+    <div class="kpi"><span class="kpi-et">Abiertos</span><span class="kpi-v">{{ r.estadisticas.abiertos }}</span><span class="kpi-s">de {{ r.estadisticas.total }}</span></div>
+    <div class="kpi"><span class="kpi-et">Terminados</span><span class="kpi-v">{{ r.estadisticas.terminados }}</span></div>
+    <div class="kpi"><span class="kpi-et">Sin asignar</span><span class="kpi-v" [class.t-aviso]="r.estadisticas.sinAsignar > 0">{{ r.estadisticas.sinAsignar }}</span><span class="kpi-s">abiertos</span></div>
+    <div class="kpi"><span class="kpi-et">Más de 30 días</span><span class="kpi-v" [class.t-aviso]="r.estadisticas.antiguosMas30Dias > 0">{{ r.estadisticas.antiguosMas30Dias }}</span><span class="kpi-s">abiertos</span></div>
+    <div class="kpi"><span class="kpi-et">Edad mediana</span><span class="kpi-v">{{ r.estadisticas.edadDias.p50 !== null ? r.estadisticas.edadDias.p50 + ' d' : '—' }}</span><span class="kpi-s">p90: {{ r.estadisticas.edadDias.p90 !== null ? r.estadisticas.edadDias.p90 + ' d' : '—' }}</span></div>
+    <div class="kpi"><span class="kpi-et">Lead time</span><span class="kpi-v">{{ r.estadisticas.leadTimeDias.p50 !== null ? r.estadisticas.leadTimeDias.p50 + ' d' : '—' }}</span><span class="kpi-s">p90: {{ r.estadisticas.leadTimeDias.p90 !== null ? r.estadisticas.leadTimeDias.p90 + ' d' : '—' }}</span></div>
+  </div>
+  <div class="contenido">
+    <div class="grilla g-3">
+      <section class="tarjeta"><div class="tarjeta-cab"><h2>Por estado</h2></div><app-donut-chart [segmentos]="estados" centroEtiqueta="Items"></app-donut-chart></section>
+      <section class="tarjeta"><div class="tarjeta-cab"><h2>Por tipo</h2></div><app-bar-list [items]="tipos"></app-bar-list></section>
+      <section class="tarjeta"><div class="tarjeta-cab"><h2>Prioridad (abiertos)</h2></div><app-bar-list [items]="prioridades"></app-bar-list></section>
+    </div>
+    <div class="grilla g-2-1">
+      <section class="tarjeta"><div class="tarjeta-cab"><h2>Creados vs cerrados</h2><span class="tarjeta-sub">Por semana</span></div><app-line-chart [etiquetas]="semEtq" [series]="semSeries"></app-line-chart></section>
+      <section class="tarjeta"><div class="tarjeta-cab"><h2>Carga por persona</h2><span class="tarjeta-sub">Abiertos</span></div><app-bar-list [items]="asignados"></app-bar-list></section>
+    </div>
+    <section class="tarjeta">
+      <div class="tarjeta-cab"><h2>Cambios recientes</h2></div>
+      <ul class="lista">
+        <li class="item-lista click" *ngFor="let i of r.recientes" (click)="abrir(i)" tabindex="0" (keyup.enter)="abrir(i)">
+          <div class="il-cab"><span class="chip">#{{ i.id }}</span><span class="chip chip-marca">{{ i.tipo }}</span><strong>{{ i.titulo }}</strong><span class="est" [ngClass]="claseEstadoItem(i.estado)">{{ i.estado }}</span></div>
+          <div class="il-sub"><span>{{ i.asignado || 'Sin asignar' }}</span><span>{{ fmtRelativo(i.cambiado) }}</span></div>
+        </li>
+      </ul>
+    </section>
+  </div>
+</ng-container>
+
+<!-- WORK ITEMS -->
+<ng-container *ngIf="vista === 'items'">
+  <div class="barra">
+    <label class="buscar"><span aria-hidden="true"><app-ico n="buscar" class="solo"></app-ico></span><input type="text" [(ngModel)]="fTexto" (keyup.enter)="buscarItems()" placeholder="Título o número…" aria-label="Buscar work items" /></label>
+    <label class="campo">Tipo<select [(ngModel)]="fTipo" (change)="buscarItems()"><option value="">Todos</option><option *ngFor="let t of opcionesTipo" [value]="t">{{ t }}</option></select></label>
+    <label class="campo">Estado<select [(ngModel)]="fEstado" (change)="buscarItems()"><option value="">Todos</option><option *ngFor="let t of opcionesEstado" [value]="t">{{ t }}</option></select></label>
+    <label class="campo">Asignado<select [(ngModel)]="fAsignado" (change)="buscarItems()"><option value="">Todos</option><option value="__sin_asignar__">Sin asignar</option><option *ngFor="let t of opcionesAsignado" [value]="t">{{ t }}</option></select></label>
+    <label class="campo">Iteración<select [(ngModel)]="fIteracion" (change)="buscarItems()"><option value="">Todas</option><option *ngFor="let t of opcionesIteracion" [value]="t">{{ t }}</option></select></label>
+    <label class="campo">Etiqueta<input type="text" [(ngModel)]="fEtiqueta" (keyup.enter)="buscarItems()" /></label>
+    <label class="campo">Cambiados en<select [(ngModel)]="fDias" (change)="buscarItems()"><option value="">Sin límite</option><option value="7">7 días</option><option value="30">30 días</option><option value="90">90 días</option></select></label>
+    <label class="campo"><input type="checkbox" [(ngModel)]="fAbiertos" (change)="buscarItems()" /> Solo abiertos</label>
+    <button type="button" class="btn btn-purple btn-sm" (click)="buscarItems()">Buscar</button>
+    <button type="button" class="btn btn-ghost btn-sm" (click)="limpiarItems()">Limpiar</button>
+    <span class="espacio"></span>
+    <button type="button" class="btn btn-ghost btn-sm" (click)="exportar()" [disabled]="!items.length"><app-ico n="descargar"></app-ico>CSV</button>
+  </div>
+  <section class="tarjeta" *ngIf="!cargandoVista && !falloVista">
+    <div class="tarjeta-cab"><h2>Work items</h2><span class="tarjeta-sub">{{ items.length }} mostrados<ng-container *ngIf="limitado"> (hay más: afina los filtros)</ng-container></span></div>
+    <p class="vacio" *ngIf="!items.length">No hay work items con esos filtros.</p>
+    <div class="tabla-wrap tabla-alta" *ngIf="items.length">
+      <table class="tabla">
+        <thead><tr><th>#</th><th>Título</th><th>Tipo</th><th>Estado</th><th>Asignado</th><th>Prio.</th><th class="num">Pts</th><th>Iteración</th><th>Cambió</th></tr></thead>
+        <tbody>
+          <tr class="fila-click" *ngFor="let i of items" (click)="abrir(i)" tabindex="0" (keyup.enter)="abrir(i)">
+            <td>{{ i.id }}</td><td class="td-nombre"><strong>{{ i.titulo }}</strong> <span class="chip chip-marca" *ngFor="let e of i.etiquetas.slice(0, 3)">{{ e }}</span></td>
+            <td>{{ i.tipo }}</td><td><span class="est" [ngClass]="claseEstadoItem(i.estado)">{{ i.estado }}</span></td>
+            <td><span class="persona" *ngIf="i.asignado; else sinAs"><span class="avatar">{{ iniciales(i.asignado) }}</span>{{ i.asignado }}</span><ng-template #sinAs><span class="gris">Sin asignar</span></ng-template></td>
+            <td><span class="chip" [ngClass]="clasePrioridad(i.prioridad)" *ngIf="i.prioridad">P{{ i.prioridad }}</span></td><td class="num">{{ i.puntos ?? '' }}</td>
+            <td>{{ i.iteracion ? i.iteracion.split('\\').pop() : '—' }}</td><td [title]="fmtFecha(i.cambiado)">{{ fmtRelativo(i.cambiado) }}</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+</ng-container>
+
+<!-- SPRINTS -->
+<ng-container *ngIf="vista === 'sprints' && sprints">
+  <div class="barra">
+    <div class="selector-dias" role="group" aria-label="Filtro">
+      <button type="button" *ngFor="let f of ['todos', 'actual', 'futuro', 'pasado']" [class.activo]="filtroSprint === f" (click)="filtroSprint = $any(f)">{{ f === 'todos' ? 'Todos' : f === 'actual' ? 'En curso' : f === 'futuro' ? 'Próximos' : 'Terminados' }}</button>
+    </div>
+  </div>
+  <section class="tarjeta">
+    <p class="vacio" *ngIf="!sprintsFiltrados.length">No hay iteraciones con ese filtro.</p>
+    <div class="tabla-wrap" *ngIf="sprintsFiltrados.length">
+      <table class="tabla">
+        <thead><tr><th>Iteración</th><th>Estado</th><th>Inicio</th><th>Fin</th><th>Avance de tiempo</th></tr></thead>
+        <tbody>
+          <tr class="fila-click" *ngFor="let s of sprintsFiltrados" (click)="abrirSprint(s)" tabindex="0" (keyup.enter)="abrirSprint(s)">
+            <td class="td-nombre"><strong>{{ s.nombre }}</strong><div class="gris peq">{{ s.ruta }}</div></td>
+            <td><span class="est" [ngClass]="claseSprint(s.estado)">{{ textoSprint(s.estado) }}</span></td>
+            <td>{{ s.inicio ? (s.inicio | date: 'dd/MM/yyyy') : '—' }}</td><td>{{ s.fin ? (s.fin | date: 'dd/MM/yyyy') : '—' }}</td>
+            <td><div class="progreso" *ngIf="progresoTiempo(s) !== null"><span [style.width.%]="progresoTiempo(s)"></span></div></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+  <section class="tarjeta" style="margin-top: 16px" *ngIf="sprints.areas?.length">
+    <div class="tarjeta-cab"><h2>Áreas del proyecto</h2></div>
+    <div class="chips-areas"><span class="chip" *ngFor="let a of sprints.areas">{{ a.ruta }}</span></div>
+  </section>
+</ng-container>
+
+<!-- CONSULTAS -->
+<ng-container *ngIf="vista === 'consultas' && consultas">
+  <div class="grilla g-1-1">
+    <section class="tarjeta">
+      <div class="tarjeta-cab"><h2>Consultas compartidas</h2><span class="tarjeta-sub">Solo se ejecutan, no se modifican</span></div>
+      <p class="vacio" *ngIf="!consultas.length">No hay consultas compartidas.</p>
+      <ul class="lista">
+        <li class="item-lista click" *ngFor="let c of consultas" (click)="ejecutarConsulta(c)" tabindex="0" (keyup.enter)="ejecutarConsulta(c)" [class.sel]="consultaAbierta?.id === c.id">
+          <div class="il-cab"><strong>{{ c.nombre }}</strong></div><div class="il-sub"><span>{{ c.carpeta }}</span></div>
+        </li>
+      </ul>
+    </section>
+    <section class="tarjeta">
+      <div class="tarjeta-cab"><h2>{{ consultaAbierta ? consultaAbierta.nombre : 'Resultado' }}</h2></div>
+      <p class="vacio" *ngIf="!consultaAbierta">Elige una consulta para ver sus resultados.</p>
+      <div class="cargando" *ngIf="consultaCargando"><div class="spinner"></div></div>
+      <ul class="lista" *ngIf="consultaAbierta && !consultaCargando">
+        <li class="item-lista click" *ngFor="let i of consultaItems" (click)="abrir(i)"><div class="il-cab"><span class="chip">#{{ i.id }}</span><strong>{{ i.titulo }}</strong><span class="est" [ngClass]="claseEstadoItem(i.estado)">{{ i.estado }}</span></div><div class="il-sub"><span>{{ i.tipo }}</span><span>{{ i.asignado || 'Sin asignar' }}</span></div></li>
+        <li class="vacio" *ngIf="!consultaItems.length">La consulta no devolvió resultados.</li>
+      </ul>
+    </section>
+  </div>
+</ng-container>
+
+<!-- DETALLE DE WORK ITEM -->
+<div class="modal-overlay" *ngIf="abierto" (click)="cerrar()">
+  <div class="modal-card" role="dialog" aria-modal="true" (click)="$event.stopPropagation()">
+    <div class="modal-header">
+      <div>
+        <h2>#{{ abierto.id }} · {{ det?.item?.titulo || abierto.titulo }}</h2>
+        <div class="meta" *ngIf="det as d">
+          <span class="chip chip-marca">{{ d.item.tipo }}</span><span class="est" [ngClass]="claseEstadoItem(d.item.estado)">{{ d.item.estado }}</span>
+          <span>{{ d.item.asignado || 'Sin asignar' }}</span><span *ngIf="d.item.iteracion">{{ d.item.iteracion }}</span>
+          <a class="ext" *ngIf="d.item.url" [href]="d.item.url" target="_blank" rel="noopener">Ver en Azure DevOps<app-ico n="externo" class="fin"></app-ico></a>
+        </div>
+      </div>
+      <button type="button" class="close-btn" (click)="cerrar()" aria-label="Cerrar"><app-ico n="cerrar" class="solo"></app-ico></button>
+    </div>
+    <div class="cargando" *ngIf="detCargando"><div class="spinner"></div></div>
+    <app-azure-fallo [fallo]="detFallo"></app-azure-fallo>
+    <ng-container *ngIf="det as d">
+      <div class="grilla g-2-1">
+        <div>
+          <ng-container *ngIf="d.descripcion"><h3 class="titulo-sec" style="margin-top: 0">Descripción</h3><pre class="texto-bloque">{{ d.descripcion }}</pre></ng-container>
+          <ng-container *ngIf="d.criterios"><h3 class="titulo-sec">Criterios de aceptación</h3><pre class="texto-bloque">{{ d.criterios }}</pre></ng-container>
+          <ng-container *ngIf="d.pasosRepro"><h3 class="titulo-sec">Pasos para reproducir</h3><pre class="texto-bloque">{{ d.pasosRepro }}</pre></ng-container>
+          <p class="vacio" *ngIf="!d.descripcion && !d.criterios && !d.pasosRepro">Sin descripción.</p>
+          <h3 class="titulo-sec">Comentarios</h3>
+          <app-azure-fallo [fallo]="d.errorComentarios ? { error: d.errorComentarios } : null"></app-azure-fallo>
+          <ul class="lista"><li class="item-lista" *ngFor="let c of d.comentarios"><div class="il-cab"><strong>{{ c.autor }}</strong><span class="gris">{{ fmtRelativo(c.fecha) }}</span></div><div class="texto-c">{{ c.texto }}</div></li><li class="vacio" *ngIf="!d.comentarios.length">Sin comentarios.</li></ul>
+        </div>
+        <div>
+          <h3 class="titulo-sec" style="margin-top: 0">Datos</h3>
+          <dl class="kv">
+            <dt>Creado</dt><dd>{{ fmtFecha(d.item.creado) }} · {{ d.item.creador || '—' }}</dd>
+            <dt>Modificado</dt><dd>{{ fmtFecha(d.item.cambiado) }}</dd>
+            <dt *ngIf="d.item.cerrado">Cerrado</dt><dd *ngIf="d.item.cerrado">{{ fmtFecha(d.item.cerrado) }}</dd>
+            <dt>Prioridad</dt><dd>{{ d.item.prioridad ? 'P' + d.item.prioridad : '—' }}</dd>
+            <dt *ngIf="d.item.severidad">Severidad</dt><dd *ngIf="d.item.severidad">{{ d.item.severidad }}</dd>
+            <dt>Puntos</dt><dd>{{ d.item.puntos ?? '—' }}</dd>
+            <dt *ngIf="d.item.restante !== null">Trabajo restante</dt><dd *ngIf="d.item.restante !== null">{{ d.item.restante }} h</dd>
+            <dt>Área</dt><dd>{{ d.item.area || '—' }}</dd>
+            <dt>Etiquetas</dt><dd><span class="chip chip-marca" *ngFor="let e of d.item.etiquetas" style="margin-right: 4px">{{ e }}</span><span *ngIf="!d.item.etiquetas.length" class="gris">—</span></dd>
+          </dl>
+          <h3 class="titulo-sec">Relaciones</h3>
+          <ul class="lista">
+            <li class="item-lista" *ngFor="let r of d.relaciones" [class.click]="r.clase === 'workitem'" (click)="abrirRelacionado(r)">
+              <div class="il-cab"><span class="chip">{{ r.tipo }}</span>
+                <ng-container [ngSwitch]="r.clase">
+                  <strong *ngSwitchCase="'workitem'">#{{ r.id }} {{ r.titulo || '' }}</strong>
+                  <code class="sha" *ngSwitchCase="'commit'">{{ r.id }}</code>
+                  <strong *ngSwitchCase="'pr'">PR #{{ r.id }}</strong>
+                  <strong *ngSwitchCase="'build'">Build #{{ r.id }}</strong>
+                  <strong *ngSwitchCase="'rama'">{{ r.id }}</strong>
+                  <a *ngSwitchCase="'enlace'" class="ext" [href]="r.url" target="_blank" rel="noopener">{{ r.url }}</a>
+                  <strong *ngSwitchCase="'adjunto'">{{ r.nombre }}</strong>
+                </ng-container>
+                <span class="est" *ngIf="r.estado" [ngClass]="claseEstadoItem(r.estado)">{{ r.estado }}</span></div>
+            </li>
+            <li class="vacio" *ngIf="!d.relaciones.length">Sin relaciones.</li>
+          </ul>
+        </div>
+      </div>
+      <h3 class="titulo-sec">Historial de cambios</h3>
+      <app-azure-fallo [fallo]="d.errorHistorial ? { error: d.errorHistorial } : null"></app-azure-fallo>
+      <div class="tabla-wrap" *ngIf="d.historial.length"><table class="tabla"><thead><tr><th>Fecha</th><th>Quién</th><th>Campo</th><th>Antes</th><th>Después</th></tr></thead>
+        <tbody><tr *ngFor="let h of d.historial"><td>{{ fmtFecha(h.fecha) }}</td><td>{{ h.autor }}</td><td>{{ h.campo }}</td><td>{{ h.antes || '—' }}</td><td><strong>{{ h.despues }}</strong></td></tr></tbody></table></div>
+      <p class="vacio" *ngIf="!d.historial.length">Sin historial.</p>
+    </ng-container>
+  </div>
+</div>
+
+<!-- DETALLE DE SPRINT -->
+<div class="modal-overlay" *ngIf="sprint" (click)="cerrarSprint()">
+  <div class="modal-card" role="dialog" aria-modal="true" (click)="$event.stopPropagation()">
+    <div class="modal-header">
+      <div><h2>{{ sprint.nombre }}</h2><div class="meta"><span class="est" [ngClass]="claseSprint(sprint.estado)">{{ textoSprint(sprint.estado) }}</span><span *ngIf="sprint.inicio">{{ sprint.inicio | date: 'dd/MM/yyyy' }}<app-ico n="derecha" class="sep"></app-ico>{{ sprint.fin | date: 'dd/MM/yyyy' }}</span></div></div>
+      <button type="button" class="close-btn" (click)="cerrarSprint()" aria-label="Cerrar"><app-ico n="cerrar" class="solo"></app-ico></button>
+    </div>
+    <div class="cargando" *ngIf="sprintCargando"><div class="spinner"></div></div>
+    <app-azure-fallo [fallo]="sprintFallo"></app-azure-fallo>
+    <ng-container *ngIf="sprintDet as s">
+      <div class="kpis kpis-5">
+        <div class="kpi"><span class="kpi-et">Items</span><span class="kpi-v">{{ s.resumen.hechos }}<small> / {{ s.resumen.total }}</small></span><span class="kpi-s">{{ fmtPct(s.resumen.avance) }} terminado</span></div>
+        <div class="kpi"><span class="kpi-et">Puntos</span><span class="kpi-v">{{ s.resumen.puntosHechos }}<small> / {{ s.resumen.puntos }}</small></span><span class="kpi-s">{{ fmtPct(s.resumen.avancePuntos) }}</span></div>
+        <div class="kpi"><span class="kpi-et">Trabajo restante</span><span class="kpi-v">{{ s.resumen.restante }}<small> h</small></span></div>
+        <div class="kpi"><span class="kpi-et">Sin asignar</span><span class="kpi-v" [class.t-aviso]="s.resumen.sinAsignar > 0">{{ s.resumen.sinAsignar }}</span></div>
+        <div class="kpi"><span class="kpi-et">Tiempo</span><span class="kpi-v">{{ progresoTiempo(sprint) !== null ? progresoTiempo(sprint) + '%' : '—' }}</span><span class="kpi-s">transcurrido</span></div>
+      </div>
+      <div class="grilla g-1-1">
+        <section class="tarjeta"><div class="tarjeta-cab"><h2>Por estado</h2></div><ul class="lista"><li class="il-sub filaE" *ngFor="let e of s.porEstado"><span class="est" [ngClass]="claseEstadoItem(e.nombre)">{{ e.nombre }}</span><strong>{{ e.cantidad }}</strong></li></ul></section>
+        <section class="tarjeta"><div class="tarjeta-cab"><h2>Por persona</h2></div>
+          <div class="tabla-wrap"><table class="tabla"><thead><tr><th>Persona</th><th class="num">Items</th><th class="num">Hechos</th><th class="num">Puntos</th></tr></thead><tbody><tr *ngFor="let a of s.porAsignado"><td>{{ a.nombre }}</td><td class="num">{{ a.total }}</td><td class="num">{{ a.hechos }}</td><td class="num">{{ a.puntosHechos }}/{{ a.puntos }}</td></tr></tbody></table></div></section>
+      </div>
+      <h3 class="titulo-sec">Items del sprint</h3>
+      <div class="tabla-wrap tabla-alta"><table class="tabla"><thead><tr><th>#</th><th>Título</th><th>Tipo</th><th>Estado</th><th>Asignado</th></tr></thead>
+        <tbody><tr class="fila-click" *ngFor="let i of s.items" (click)="cerrarSprint(); abrir(i)"><td>{{ i.id }}</td><td class="td-nombre">{{ i.titulo }}</td><td>{{ i.tipo }}</td><td><span class="est" [ngClass]="claseEstadoItem(i.estado)">{{ i.estado }}</span></td><td>{{ i.asignado || '—' }}</td></tr></tbody></table></div>
+      <p class="gris" *ngIf="s.limitado">Se muestran los primeros 800 items del sprint.</p>
+    </ng-container>
+  </div>
+</div>

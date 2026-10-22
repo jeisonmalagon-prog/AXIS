@@ -1,0 +1,27 @@
+@use './tablero-comun';
+$texto: var(--ax-text, #1e293b);
+$suave: var(--ax-text-muted, #64748b);
+$borde: var(--ax-border, #e2e8f0);
+
+.banner-estado { display: flex; align-items: center; gap: 14px; padding: 16px 20px; border-radius: 16px; margin-bottom: 18px; border: 1px solid; flex-wrap: wrap;
+  div { flex: 1; min-width: 220px; display: flex; flex-direction: column; gap: 2px; strong { font-size: 16px; } span { font-size: 13px; opacity: .9; } }
+  &__punto { width: 14px; height: 14px; border-radius: 50%; background: currentColor; flex-shrink: 0; box-shadow: 0 0 0 5px color-mix(in srgb, currentColor 20%, transparent); }
+  &--ok { background: var(--f-ok-bg); color: var(--f-ok-ink); border-color: var(--f-ok); }
+  &--aviso { background: var(--f-warn-bg); color: var(--f-warn-ink); border-color: var(--f-warn-line); }
+  &--critico { background: var(--f-err-bg); color: var(--f-err-ink); border-color: var(--f-err-line); }
+}
+.semaforo { list-style: none; margin: 0; padding: 0;
+  li { display: flex; gap: 12px; align-items: flex-start; padding: 11px 0; border-top: 1px solid $borde; &:first-child { border-top: none; padding-top: 2px; }
+    div { display: flex; flex-direction: column; gap: 1px; min-width: 0; strong { font-size: 13.5px; } span { font-size: 12.5px; color: $suave; line-height: 1.4; } } } }
+.luz { width: 12px; height: 12px; border-radius: 50%; margin-top: 4px; flex-shrink: 0;
+  &--ok { background: var(--f-ok); } &--aviso { background: var(--f-warn); } &--critico { background: var(--f-err); } }
+.datos-etl { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px 18px; margin: 0 0 12px;
+  div { display: flex; flex-direction: column; gap: 2px; } dt { font-size: 11px; font-weight: 700; color: $suave; text-transform: uppercase; } dd { margin: 0; font-size: 14px; font-weight: 700; } }
+.etl-error { background: var(--f-err-soft); color: var(--f-err-ink); border: 1px solid var(--f-err-line); border-radius: 10px; padding: 9px 12px; font-size: 12.5px; font-weight: 600; margin: 0 0 12px; }
+.subtit { font-size: 12px; text-transform: uppercase; letter-spacing: .4px; color: $suave; margin: 14px 0 8px; }
+.calendario { display: grid; grid-template-columns: repeat(15, minmax(0, 24px)); gap: 6px; }
+.leyenda { margin-top: 12px; }
+.celda { aspect-ratio: 1; border-radius: 5px; display: block;
+  &--ok { background: var(--f-ok); opacity: .8; } &--hoy { background: var(--f-ok); opacity: .4; outline: 2px dashed var(--f-ok); outline-offset: -2px; } &--falta { background: var(--f-err); opacity: .75; } }
+.leyenda .punto.celda--ok, .leyenda .punto.celda--hoy, .leyenda .punto.celda--falta { aspect-ratio: auto; }
+.como-funciona ul { margin: 0; padding-left: 20px; display: flex; flex-direction: column; gap: 8px; font-size: 13px; line-height: 1.5; color: $suave; strong { color: $texto; } }

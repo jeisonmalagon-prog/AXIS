@@ -1,0 +1,11 @@
+:host { display: block; font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; }
+.hm { display: flex; flex-direction: column; gap: 3px; }
+.hm-fila { display: flex; gap: 3px; align-items: center; }
+.hm-etq { width: 30px; flex-shrink: 0; font-size: 10px; font-weight: 600; color: var(--ax-text-muted, #94a3b8); }
+.hm-col { flex: 1 1 0; min-width: 0; font-size: 9.5px; color: var(--ax-text-muted, #94a3b8); text-align: left; }
+.hm-celda { flex: 1 1 0; min-width: 0; height: 20px; border-radius: 4px; cursor: default; &.vacia { background: var(--ax-chart-grid, #e2e8f0); opacity: 0.45; } &:hover { outline: 2px solid var(--ax-text, #1e293b); outline-offset: -1px; } }
+.hm-pie { display: flex; justify-content: space-between; align-items: center; margin: 8px 0 0 33px; gap: 12px; flex-wrap: wrap; }
+.hm-foco { font-size: 12px; font-weight: 600; color: var(--ax-text, #1e293b); min-height: 16px; }
+.hm-escala { display: inline-flex; align-items: center; gap: 6px; font-size: 10.5px; color: var(--ax-text-muted, #94a3b8); }
+.hm-grad { width: 70px; height: 8px; border-radius: 4px; border: 1px solid var(--ax-border, #e2e8f0); }
+.hm-vacio { padding: 32px 12px; text-align: center; font-size: 13px; color: var(--ax-text-muted, #94a3b8); }

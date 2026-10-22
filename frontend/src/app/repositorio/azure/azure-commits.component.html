@@ -1,0 +1,89 @@
+<div class="barra">
+  <label class="buscar"><span aria-hidden="true"><app-ico n="buscar" class="solo"></app-ico></span><input type="text" [(ngModel)]="texto" (keyup.enter)="filtrar()" placeholder="Mensaje, autor o commit…" aria-label="Buscar en commits" /></label>
+  <label class="campo">Rama
+    <select [(ngModel)]="rama" (change)="filtrar()"><option value="">Por defecto</option><option *ngFor="let r of ramas" [value]="r">{{ r }}</option></select>
+  </label>
+  <label class="campo">Autor<input type="text" [(ngModel)]="autor" (keyup.enter)="filtrar()" placeholder="Nombre" /></label>
+  <label class="campo">Ruta<input type="text" [(ngModel)]="ruta" (keyup.enter)="filtrar()" placeholder="/carpeta/archivo" /></label>
+  <label class="campo">Desde<input type="date" [(ngModel)]="desde" (change)="filtrar()" /></label>
+  <label class="campo">Hasta<input type="date" [(ngModel)]="hasta" (change)="filtrar()" /></label>
+  <button type="button" class="btn btn-purple btn-sm" (click)="filtrar()">Buscar</button>
+  <button type="button" class="btn btn-ghost btn-sm" (click)="limpiar()">Limpiar</button>
+  <span class="espacio"></span>
+  <button type="button" class="btn btn-ghost btn-sm" (click)="exportar()" [disabled]="!commits.length"><app-ico n="descargar"></app-ico>CSV</button>
+</div>
+
+<app-azure-fallo [fallo]="fallo"></app-azure-fallo>
+<div class="cargando" *ngIf="cargando"><div class="spinner"></div>Cargando commits…</div>
+
+<section class="tarjeta" *ngIf="!cargando && !fallo">
+  <div class="tarjeta-cab"><h2>Commits de {{ ramaUsada }}</h2><span class="tarjeta-sub">Página {{ pagina }} · {{ commits.length }} mostrados</span></div>
+  <p class="vacio" *ngIf="!commits.length">No hay commits con esos filtros.</p>
+  <div class="tabla-wrap" *ngIf="commits.length">
+    <table class="tabla">
+      <thead><tr><th>Commit</th><th>Mensaje</th><th>Autor</th><th>Fecha</th><th class="num">Cambios</th></tr></thead>
+      <tbody>
+        <tr class="fila-click" *ngFor="let c of commits" (click)="abrir(c)" tabindex="0" (keyup.enter)="abrir(c)">
+          <td><code class="sha">{{ c.idCorto }}</code></td>
+          <td class="td-nombre"><span class="msg">{{ c.comentario || '(sin mensaje)' }}</span> <span class="chip chip-marca" *ngIf="c.esMerge">merge</span></td>
+          <td><span class="persona"><span class="avatar">{{ iniciales(c.autor) }}</span>{{ c.autor }}</span></td>
+          <td [title]="fmtFecha(c.fecha)">{{ fmtRelativo(c.fecha) }}</td>
+          <td class="num"><ng-container *ngIf="c.cambios"><span class="t-ok">+{{ c.cambios.agregados }}</span> <span class="t-aviso">~{{ c.cambios.editados }}</span> <span class="t-mal">−{{ c.cambios.eliminados }}</span></ng-container></td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+  <div class="paginador">
+    <button type="button" class="btn-mini" (click)="cambiarPagina(-1)" [disabled]="pagina === 1"><app-ico n="izquierda"></app-ico>Anterior</button>
+    <span>Página {{ pagina }}</span>
+    <button type="button" class="btn-mini" (click)="cambiarPagina(1)" [disabled]="!hayMas">Siguiente<app-ico n="derecha" class="fin"></app-ico></button>
+  </div>
+</section>
+
+<!-- DETALLE DEL COMMIT -->
+<div class="modal-overlay" *ngIf="abierto" (click)="cerrar()">
+  <div class="modal-card" role="dialog" aria-modal="true" (click)="$event.stopPropagation()">
+    <div class="modal-header">
+      <div>
+        <h2>{{ abierto.comentario || '(sin mensaje)' }}</h2>
+        <div class="meta"><code class="sha">{{ abierto.idCorto }}</code><span>{{ abierto.autor }}</span><span>{{ fmtFecha(abierto.fecha) }}</span><a class="ext" *ngIf="abierto.url" [href]="abierto.url" target="_blank" rel="noopener">Ver en Azure DevOps<app-ico n="externo" class="fin"></app-ico></a></div>
+      </div>
+      <button type="button" class="close-btn" (click)="cerrar()" aria-label="Cerrar"><app-ico n="cerrar" class="solo"></app-ico></button>
+    </div>
+
+    <div class="cargando" *ngIf="detalleCargando"><div class="spinner"></div>Cargando…</div>
+    <app-azure-fallo [fallo]="detalleFallo"></app-azure-fallo>
+
+    <ng-container *ngIf="detalle">
+      <pre class="texto-bloque" *ngIf="detalle.commit.comentarioCompleto && detalle.commit.comentarioCompleto.trim() !== detalle.commit.comentario">{{ detalle.commit.comentarioCompleto }}</pre>
+      <dl class="kv" style="margin-top: 12px">
+        <dt>Commit completo</dt><dd><code class="sha">{{ detalle.commit.id }}</code></dd>
+        <dt>Padres</dt><dd><ng-container *ngFor="let p of detalle.commit.padres"><code class="sha" style="margin-right: 6px">{{ p.substring(0, 8) }}</code></ng-container><span *ngIf="!detalle.commit.padres.length" class="gris">Commit inicial</span></dd>
+        <dt>Commiteó</dt><dd>{{ detalle.commit.commitador || detalle.commit.autor }} · {{ fmtFecha(detalle.commit.fechaCommit) }}</dd>
+        <dt>Pull requests</dt><dd><ng-container *ngIf="detalle.pullRequests.length; else sinPr"><a class="ext" *ngFor="let p of detalle.pullRequests" [href]="p.url" target="_blank" rel="noopener" style="margin-right: 10px">#{{ p.id }} {{ p.titulo }}</a></ng-container><ng-template #sinPr><span class="gris">Ninguno asociado</span></ng-template></dd>
+      </dl>
+
+      <h3 class="titulo-sec">Archivos modificados</h3>
+      <app-azure-fallo [fallo]="detalle.errorArchivos ? { error: detalle.errorArchivos } : null"></app-azure-fallo>
+      <ng-container *ngIf="detalle.archivos as ar">
+        <p class="gris resumen-ar"><span class="t-ok">{{ ar.resumen.agregados }} agregados</span> · <span class="t-aviso">{{ ar.resumen.editados }} editados</span> · <span class="t-mal">{{ ar.resumen.eliminados }} eliminados</span><span *ngIf="ar.resumen.renombrados"> · {{ ar.resumen.renombrados }} renombrados</span></p>
+        <ul class="lista">
+          <li class="item-lista" *ngFor="let a of ar.lista">
+            <div class="il-cab archivo" (click)="verDiff(a)" tabindex="0" (keyup.enter)="verDiff(a)" role="button">
+              <span class="chip" [ngClass]="claseTipo(a.tipo)">{{ a.tipo }}</span>
+              <code class="ruta">{{ a.ruta }}</code>
+              <span class="gris" *ngIf="a.rutaAnterior"><app-ico n="izquierda"></app-ico>{{ a.rutaAnterior }}</span>
+              <span class="espacio"></span><span class="enlace">{{ archivoAbierto === a.ruta ? 'Ocultar cambios' : 'Ver cambios' }}</span>
+            </div>
+            <ng-container *ngIf="archivoAbierto === a.ruta">
+              <div class="cargando" *ngIf="diffCargando"><div class="spinner chico"></div></div>
+              <app-azure-fallo [fallo]="diffFallo"></app-azure-fallo>
+              <app-azure-diff [diff]="diff"></app-azure-diff>
+            </ng-container>
+          </li>
+        </ul>
+        <p class="gris" *ngIf="ar.truncado">Se muestran los primeros 500 archivos.</p>
+      </ng-container>
+    </ng-container>
+  </div>
+</div>

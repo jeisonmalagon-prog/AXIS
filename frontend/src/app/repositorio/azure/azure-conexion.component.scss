@@ -1,0 +1,59 @@
+@use './azure-base' as *;
+@include base;
+
+.modal-conexion { max-width: 980px; }
+.modal-header h2 { display: flex; align-items: center; }
+.sub { margin: 4px 0 0; font-size: 13px; color: $brand-gray; }
+code { font-family: 'JetBrains Mono', monospace; font-size: 12px; }
+
+.bloque { background: $surface; border: 1px solid $border-light; border-radius: 14px; padding: 16px 18px; margin-bottom: 16px;
+  h3 { margin: 0; font-size: 15px; } h4 { margin: 0 0 10px; font-size: 13.5px; display: flex; align-items: center; } }
+.bloque-cab { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 6px; }
+.ayuda { margin: 0 0 14px; font-size: 12.5px; color: $brand-gray; line-height: 1.55; strong { color: $brand-dark; } }
+.nota { margin: 8px 0 0; font-size: 11.5px; color: $brand-gray; line-height: 1.55; strong, em { color: $brand-dark; } }
+.mono { font-family: 'JetBrains Mono', monospace; }
+
+.tokens { list-style: none; margin: 0 0 12px; padding: 0; display: flex; flex-direction: column; gap: 10px; }
+.token { border: 1px solid $border-light; background: $surface-bg; border-radius: 12px; padding: 12px 14px; display: flex; flex-direction: column; gap: 10px; min-width: 0;
+  &.inactivo { opacity: 0.75; }
+  &.env { margin-bottom: 14px; border-style: dashed; } }
+.tk-cab { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.tk-ico { width: 34px; height: 34px; border-radius: 10px; display: inline-flex; align-items: center; justify-content: center; flex: none; font-size: 17px;
+  background: rgba($brand-rgb, 0.12); color: $brand; }
+.tk-id { display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1 1 200px; }
+.tk-nombre { font-size: 14px; overflow-wrap: anywhere; }
+.tk-mask { font-size: 12px; color: $brand-gray; letter-spacing: 0.3px; }
+.tk-estado { display: flex; flex-wrap: wrap; gap: 6px; }
+.tk-orden { display: flex; gap: 4px; }
+.tk-acciones { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; .espacio { flex: 1; } }
+.confirmar { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 8px; font-size: 12.5px; font-weight: 600; }
+.peligro { color: $danger; border-color: rgba(239, 68, 68, 0.4); &:hover:not(:disabled) { background: rgba(239, 68, 68, 0.08) !important; } }
+.btn-peligro { background: $danger; color: #fff; }
+
+.ico-btn { width: 30px; height: 30px; border-radius: 8px; border: 1px solid $border-light; background: $surface; color: $brand-gray; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; font-size: 15px;
+  &:hover:not(:disabled) { color: $brand; border-color: rgba($brand-rgb, 0.5); }
+  &:disabled { opacity: 0.4; cursor: not-allowed; }
+  &:focus-visible { outline: 2px solid $brand; outline-offset: 1px; } }
+
+.entrada { font-family: inherit; font-size: 13px; padding: 8px 10px; border: 1px solid $border-light; border-radius: 8px; background: $surface; color: $brand-dark; min-width: 0; width: 100%;
+  &:focus-visible { outline: 2px solid $brand; outline-offset: 1px; } }
+.en-linea { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; .entrada { flex: 1 1 220px; width: auto; } }
+
+.error-linea { font-size: 12.5px; color: $danger; font-weight: 600; display: flex; align-items: center; }
+.ok-linea { font-size: 12.5px; color: $ok; font-weight: 600; display: flex; align-items: center; }
+.ver-det { font-size: 12px; align-self: flex-start; small { color: $brand-gray; font-weight: 500; } }
+.det-areas { display: flex; flex-wrap: wrap; gap: 6px; .aviso-aviso, .nota { flex-basis: 100%; margin: 0; } }
+.area { display: inline-flex; align-items: center; font-size: 11.5px; font-weight: 600; padding: 3px 9px; border-radius: 999px; border: 1px solid transparent;
+  app-ico { margin-right: 4px; width: 1em; height: 1em; }
+  &.ok { background: rgba(16, 185, 129, 0.12); color: $ok; } &.mal { background: $surface; color: $brand-gray; border-color: $border-light; } }
+.vacio-tk { padding: 14px; text-align: center; font-size: 12.5px; color: $brand-gray; border: 1px dashed $border-light; border-radius: 10px; margin-bottom: 14px; }
+
+.alta { border-top: 1px solid $border-light; padding-top: 14px; margin-top: 4px; }
+.alta-campos { display: grid; grid-template-columns: minmax(150px, 1fr) minmax(220px, 2fr) auto; gap: 10px; align-items: end; @media (max-width: 760px) { grid-template-columns: 1fr; } }
+.campo-v { display: flex; flex-direction: column; gap: 4px; font-size: 11.5px; font-weight: 700; color: $brand-gray; min-width: 0; text-transform: uppercase; letter-spacing: 0.3px; }
+.con-ojo { display: flex; gap: 6px; align-items: center; text-transform: none; }
+
+.ajustes { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 10px 12px; align-items: end; }
+.ajustes-acc { grid-column: 1 / -1; display: flex; flex-wrap: wrap; align-items: center; gap: 8px 10px; }
+.vigente { margin-left: auto; font-size: 12px; color: $brand-gray; b { color: $brand-dark; } }
+.ajustes .ok-linea, .ajustes .error-linea { grid-column: 1 / -1; }

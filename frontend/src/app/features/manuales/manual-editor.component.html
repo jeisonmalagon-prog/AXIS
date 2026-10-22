@@ -1,0 +1,82 @@
+<div class="ed">
+  <div class="ed-barra" role="toolbar" aria-label="Formato del texto" (mousedown)="$event.target === $event.currentTarget && $event.preventDefault()">
+    <div class="ed-grupo">
+      <button type="button" class="ed-b" title="Deshacer (Ctrl+Z)" [disabled]="!puede('deshacer')" (mousedown)="$event.preventDefault()" (click)="cmd('deshacer')">&#8630;</button>
+      <button type="button" class="ed-b" title="Rehacer (Ctrl+Y)" [disabled]="!puede('rehacer')" (mousedown)="$event.preventDefault()" (click)="cmd('rehacer')">&#8631;</button>
+    </div>
+    <div class="ed-grupo">
+      <select class="ed-sel" title="Estilo del párrafo" [ngModel]="estiloBloque()" (ngModelChange)="cambiarEstilo($event)">
+        <option value="p">Texto normal</option>
+        <option value="h1">Título grande</option>
+        <option value="h2">Título mediano</option>
+        <option value="h3">Título pequeño</option>
+        <option value="code">Comando / código</option>
+      </select>
+    </div>
+    <div class="ed-grupo">
+      <button type="button" class="ed-b" [class.on]="activo('bold')" title="Negrita (Ctrl+B)" (mousedown)="$event.preventDefault()" (click)="cmd('negrita')"><b>B</b></button>
+      <button type="button" class="ed-b" [class.on]="activo('italic')" title="Cursiva (Ctrl+I)" (mousedown)="$event.preventDefault()" (click)="cmd('cursiva')"><i>I</i></button>
+      <button type="button" class="ed-b" [class.on]="activo('underline')" title="Subrayado (Ctrl+U)" (mousedown)="$event.preventDefault()" (click)="cmd('subrayado')"><u>U</u></button>
+      <button type="button" class="ed-b" [class.on]="activo('strike')" title="Tachado" (mousedown)="$event.preventDefault()" (click)="cmd('tachado')"><s>S</s></button>
+      <button type="button" class="ed-b mono" [class.on]="activo('code')" title="Marcar como comando dentro de una frase" (mousedown)="$event.preventDefault()" (click)="cmd('codigoLinea')">&lt;/&gt;</button>
+    </div>
+    <div class="ed-grupo ed-rel">
+      <button type="button" class="ed-b" title="Color del texto" [class.on]="menu === 'color'" (mousedown)="$event.preventDefault()" (click)="alternarMenu('color')"><span class="ed-a">A</span></button>
+      <button type="button" class="ed-b" title="Resaltar texto" [class.on]="menu === 'resaltado' || activo('highlight')" (mousedown)="$event.preventDefault()" (click)="alternarMenu('resaltado')"><span class="ed-r">ab</span></button>
+      @if (menu === 'color') {
+        <div class="ed-pop" (mousedown)="$event.preventDefault()">
+          @for (c of coloresTexto; track c.valor) {
+            <button type="button" class="ed-col" [style.background]="c.valor" [title]="c.nombre" [attr.aria-label]="c.nombre" (click)="ponerColor(c.valor)"></button>
+          }
+          <button type="button" class="ed-quitar" (click)="ponerColor(null)">Quitar color</button>
+        </div>
+      }
+      @if (menu === 'resaltado') {
+        <div class="ed-pop" (mousedown)="$event.preventDefault()">
+          @for (c of coloresResaltado; track c.valor) {
+            <button type="button" class="ed-col" [style.background]="c.valor" [title]="c.nombre" [attr.aria-label]="c.nombre" (click)="ponerResaltado(c.valor)"></button>
+          }
+          <button type="button" class="ed-quitar" (click)="ponerResaltado(null)">Quitar resaltado</button>
+        </div>
+      }
+    </div>
+    <div class="ed-grupo">
+      <button type="button" class="ed-b" [class.on]="activo('bulletList')" title="Lista con viñetas" (mousedown)="$event.preventDefault()" (click)="cmd('viñetas')">&#8226;&#8801;</button>
+      <button type="button" class="ed-b" [class.on]="activo('orderedList')" title="Lista numerada" (mousedown)="$event.preventDefault()" (click)="cmd('numerada')">1.&#8801;</button>
+      <button type="button" class="ed-b" [class.on]="activo('blockquote')" title="Nota destacada (cita)" (mousedown)="$event.preventDefault()" (click)="cmd('cita')">&#8220;</button>
+      <button type="button" class="ed-b" title="Línea separadora" (mousedown)="$event.preventDefault()" (click)="cmd('linea')">&#8212;</button>
+    </div>
+    <div class="ed-grupo ed-rel">
+      <button type="button" class="ed-b ed-txt" [class.on]="activo('link') || menu === 'enlace'" title="Enlace" (mousedown)="$event.preventDefault()" (click)="abrirEnlace()">Enlace</button>
+      <button type="button" class="ed-b ed-txt" title="Insertar imagen o captura" (mousedown)="$event.preventDefault()" (click)="elegirImagen()">Imagen</button>
+      <button type="button" class="ed-b ed-txt" [class.on]="activo('table')" title="Tabla" (mousedown)="$event.preventDefault()" (click)="activo('table') ? alternarMenu('tabla') : tablaCmd('insertar')">Tabla</button>
+      @if (menu === 'enlace') {
+        <form class="ed-pop ed-enlace" (submit)="$event.preventDefault(); aplicarEnlace()">
+          <input type="text" name="url" [(ngModel)]="enlaceUrl" placeholder="https://…" autocomplete="off" aria-label="Dirección del enlace" />
+          <button type="submit" class="ed-ok">Aplicar</button>
+          @if (activo('link')) { <button type="button" class="ed-quitar" (click)="quitarEnlace()">Quitar</button> }
+        </form>
+      }
+      @if (menu === 'tabla' && activo('table')) {
+        <div class="ed-pop ed-tabla" (mousedown)="$event.preventDefault()">
+          <button type="button" (click)="tablaCmd('filaMas')">+ Fila</button>
+          <button type="button" (click)="tablaCmd('filaMenos')">− Fila</button>
+          <button type="button" (click)="tablaCmd('colMas')">+ Columna</button>
+          <button type="button" (click)="tablaCmd('colMenos')">− Columna</button>
+          <button type="button" class="ed-peligro" (click)="tablaCmd('quitar')">Quitar tabla</button>
+        </div>
+      }
+      <input #archivoImagen type="file" accept="image/*" multiple hidden (change)="alElegirImagen()" />
+    </div>
+    @if (activo('image')) {
+      <div class="ed-grupo ed-imagen" aria-label="Tamaño de la imagen">
+        <span class="ed-et">Tamaño:</span>
+        <button type="button" class="ed-b ed-txt" (mousedown)="$event.preventDefault()" (click)="anchoImagen(25)">25%</button>
+        <button type="button" class="ed-b ed-txt" (mousedown)="$event.preventDefault()" (click)="anchoImagen(50)">50%</button>
+        <button type="button" class="ed-b ed-txt" (mousedown)="$event.preventDefault()" (click)="anchoImagen(75)">75%</button>
+        <button type="button" class="ed-b ed-txt" (mousedown)="$event.preventDefault()" (click)="anchoImagen(null)">Original</button>
+      </div>
+    }
+  </div>
+  <div #anfitrion class="ed-area"></div>
+</div>

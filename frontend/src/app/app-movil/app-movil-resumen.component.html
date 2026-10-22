@@ -1,0 +1,292 @@
+<!-- FILTROS -->
+<div class="barra-filtros">
+  <div class="campo">
+    <label for="filtroDispositivo">Dispositivo</label>
+    <select id="filtroDispositivo" [ngModel]="dispositivoSeleccionado" [disabled]="cargando" (ngModelChange)="cambiarDispositivo($event)">
+      <option value="">Todos los dispositivos</option>
+      <option *ngFor="let d of dispositivosDisponibles" [value]="d">{{ d }}</option>
+    </select>
+  </div>
+  <div class="campo campo--documento">
+    <label for="filtroDocumento">Cliente (CC)</label>
+    <div class="grupo">
+      <input id="filtroDocumento" type="text" placeholder="Número de documento…" [(ngModel)]="documentoInput" [disabled]="cargando" (keyup.enter)="buscarPorDocumento()">
+      <button type="button" class="btn-secundario" [disabled]="cargando" (click)="buscarPorDocumento()">Buscar</button>
+    </div>
+  </div>
+  <button type="button" class="btn-limpiar" *ngIf="hayFiltrosActivos" [disabled]="cargando" (click)="limpiarFiltros()">Limpiar filtros</button>
+  <span class="aviso-chip" *ngIf="datosDesactualizados" title="Se está recalculando en segundo plano; estos son los últimos datos disponibles.">Actualizando en segundo plano…</span>
+</div>
+<p class="error-texto" *ngIf="errorDocumento">{{ errorDocumento }}</p>
+
+<div class="cliente-banner" *ngIf="documentoAplicado">
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" /></svg>
+  <span>Viendo al cliente con documento <strong>{{ documentoAplicado }}</strong>, no el agregado general.</span>
+  <a [routerLink]="['/app-movil-logs']" [queryParams]="{ documento: documentoAplicado }">Abrir en Consulta de Logs</a>
+  <button type="button" (click)="limpiarDocumento()" aria-label="Quitar filtro de cliente">&times;</button>
+</div>
+
+<div class="error-banner" *ngIf="error">{{ error }}</div>
+<div class="carga-inicial" *ngIf="cargando && !datos">Cargando analítica…</div>
+
+<ng-container *ngIf="resumen">
+  <div [class.atenuado]="cargando">
+
+    <!-- HALLAZGOS -->
+    <section class="hallazgos" *ngIf="hallazgos.length" aria-label="Qué está pasando">
+      <header>
+        <h2>Qué está pasando</h2>
+        <span class="sub">Lectura automática de este rango, de lo más urgente a lo informativo</span>
+      </header>
+      <ul>
+        <li *ngFor="let h of hallazgos" class="hallazgo hallazgo--{{ h.nivel }}">
+          <span class="hallazgo__icono" aria-hidden="true">
+            <svg *ngIf="h.nivel === 'critico'" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 9v4m0 4h.01M10.3 3.9L2.4 18a2 2 0 001.7 3h15.8a2 2 0 001.7-3L13.7 3.9a2 2 0 00-3.4 0z"/></svg>
+            <svg *ngIf="h.nivel === 'aviso'" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="12" cy="12" r="9"/><path stroke-linecap="round" d="M12 8v5m0 3h.01"/></svg>
+            <svg *ngIf="h.nivel === 'info'" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="12" cy="12" r="9"/><path stroke-linecap="round" d="M12 11v5m0-8h.01"/></svg>
+            <svg *ngIf="h.nivel === 'ok'" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="12" cy="12" r="9"/><path stroke-linecap="round" stroke-linejoin="round" d="M8 12.5l3 3 5-6"/></svg>
+          </span>
+          <div class="hallazgo__texto">
+            <strong>{{ h.titulo }}</strong>
+            <span>{{ h.detalle }}</span>
+          </div>
+          <button type="button" class="hallazgo__accion" *ngIf="h.tab" (click)="irA.emit(h.tab!)">{{ h.accion }} →</button>
+        </li>
+      </ul>
+    </section>
+
+    <!-- KPIs -->
+    <section class="kpis" [class.kpis--6]="kpis.length === 6" aria-label="Indicadores del rango">
+      <article class="kpi" *ngFor="let k of kpis" [class.kpi--ok]="k.tono === 'ok'" [class.kpi--warn]="k.tono === 'warn'" [class.kpi--error]="k.tono === 'error'" [title]="k.ayuda">
+        <div class="kpi__cab">
+          <span class="kpi__etiqueta">{{ k.etiqueta }}</span>
+          <span *ngIf="k.delta" [class]="k.claseDelta" [title]="serieDatos ? 'Frente al período anterior (' + fmtFechaCorta(serieDatos.rangoAnterior.inicio) + ' – ' + fmtFechaCorta(serieDatos.rangoAnterior.fin) + ')' : 'Frente al período anterior'">{{ k.delta }}</span>
+        </div>
+        <div class="kpi__cuerpo">
+          <span class="kpi__valor">{{ k.valor }}</span>
+          <app-sparkline *ngIf="k.spark.length > 1" [valores]="k.spark" [color]="k.sparkColor" [ancho]="92" [alto]="32"></app-sparkline>
+        </div>
+        <span class="kpi__pie">{{ k.pie }}</span>
+      </article>
+    </section>
+
+    <!-- GRÁFICOS PRINCIPALES -->
+    <section class="panel-diagrama grafico-panel">
+      <div class="panel-diagrama__cabecera">
+        <div>
+          <h2>Volumen de transacciones por día</h2>
+          <p class="sub" *ngIf="anteriorGrafico; else sinComparacion">La línea punteada es el total del período anterior, día contra día. Pasa el cursor por una barra para ver el detalle.</p>
+          <ng-template #sinComparacion><p class="sub">Pasa el cursor por una barra para ver el detalle del día.</p></ng-template>
+        </div>
+      </div>
+      <app-grafico-volumen *ngIf="serieGrafico.length; else sinSerie" [serie]="serieGrafico" [anterior]="anteriorGrafico" [hoy]="hoyTexto"></app-grafico-volumen>
+      <ng-template #sinSerie><div class="vacio-int">Sin registros suficientes en este rango.</div></ng-template>
+    </section>
+
+    <section class="panel-diagrama grafico-panel" *ngIf="serieGrafico.length > 1">
+      <div class="panel-diagrama__cabecera">
+        <div>
+          <h2>Efectividad diaria</h2>
+          <p class="sub">Porcentaje de transacciones sin error. Los puntos rojos son días por debajo del 95%.</p>
+        </div>
+      </div>
+      <app-grafico-tasa [serie]="serieGrafico"></app-grafico-tasa>
+    </section>
+
+    <!-- SEMANA + DISPOSITIVOS + SERVICIOS -->
+    <section class="rejilla-3">
+      <div class="panel-diagrama" *ngIf="semana.length">
+        <div class="panel-diagrama__cabecera"><div><h2>Patrón semanal</h2><p class="sub">Promedio de transacciones por día de la semana</p></div></div>
+        <ul class="semana">
+          <li *ngFor="let d of semana" [class.semana--max]="d.max">
+            <span class="semana__valor">{{ d.promedio ? fmtCompacto(d.promedio) : "—" }}</span>
+            <span class="semana__barra"><i [style.height.%]="d.alto"></i></span>
+            <span class="semana__dia">{{ d.dia }}</span>
+            <span class="semana__err" [class.semana__err--alto]="(d.tasaError || 0) >= 5" title="Tasa de error promedio de ese día">{{ d.tasaError === null ? '—' : (d.tasaError | numEs:1:1) + '%' }}</span>
+          </li>
+        </ul>
+        <p class="nota">Debajo de cada día: porcentaje de error.</p>
+      </div>
+
+      <div class="panel-diagrama">
+        <div class="panel-diagrama__cabecera"><div><h2>Por dispositivo</h2><p class="sub">Participación de cada tipo de dispositivo</p></div></div>
+        <ul class="barras" *ngIf="porDispositivoBarras.length; else sinDisp">
+          <li *ngFor="let b of porDispositivoBarras">
+            <div class="barras__top"><span>{{ b.etiqueta }}</span><b>{{ b.total | numEs }} <small>· {{ porcentajeDeTotal(b.total) }}%</small></b></div>
+            <div class="barras__pista"><i [style.width.%]="b.porcentajeAncho"></i></div>
+          </li>
+        </ul>
+        <ng-template #sinDisp><div class="vacio-int">Sin datos de dispositivo en este rango.</div></ng-template>
+      </div>
+
+      <div class="panel-diagrama">
+        <div class="panel-diagrama__cabecera"><div><h2>Servicios más usados</h2><p class="sub">Los 6 con más tráfico</p></div></div>
+        <ul class="barras" *ngIf="topServiciosPorVolumen.length; else sinTop">
+          <li *ngFor="let g of topServiciosPorVolumen">
+            <div class="barras__top"><span [title]="g.clase + '.' + g.metodo">{{ g.nombre }}</span><b>{{ g.cantidad | numEs }}</b></div>
+            <div class="barras__pista"><i [style.width.%]="g.porcentajeAncho"></i></div>
+          </li>
+        </ul>
+        <ng-template #sinTop><div class="vacio-int">Sin registros suficientes.</div></ng-template>
+      </div>
+    </section>
+
+    <!-- FALLOS + LENTOS -->
+    <section class="rejilla-2">
+      <div class="panel-diagrama">
+        <div class="panel-diagrama__cabecera">
+          <div><h2>Servicios con más fallos</h2><p class="sub">Haz clic en uno para ver los errores uno a uno</p></div>
+        </div>
+        <ul class="barras barras--clic" *ngIf="topEndpoints.length; else sinEnd">
+          <li *ngFor="let g of topEndpoints" (click)="abrirDetalle(g.clase, g.metodo)" tabindex="0" (keyup.enter)="abrirDetalle(g.clase, g.metodo)">
+            <div class="barras__top"><span [title]="g.clase + '.' + g.metodo">{{ g.nombre }}</span><b>{{ g.cantidad | numEs }} fallos</b></div>
+            <div class="barras__pista"><i class="roja" [style.width.%]="g.porcentajeAncho"></i></div>
+          </li>
+        </ul>
+        <ng-template #sinEnd><div class="vacio-int">Sin errores registrados en los servicios.</div></ng-template>
+      </div>
+
+      <div class="panel-diagrama" *ngIf="!hayFiltrosActivos">
+        <div class="panel-diagrama__cabecera">
+          <div><h2>Servicios más lentos</h2><p class="sub">Tiempo promedio de respuesta y su tendencia en el rango</p></div>
+          <button type="button" class="btn-link" (click)="irA.emit('servicios')">Ver todos →</button>
+        </div>
+        <ul class="lentos" *ngIf="masLentos.length; else sinLentos">
+          <li *ngFor="let s of masLentos">
+            <div class="lentos__nombre">
+              <span [title]="s.clase + '.' + s.metodo">{{ nombreServicioLegible(s.metodo) }}</span>
+              <small>{{ s.llamadasMedidas | numEs }} llamadas medidas</small>
+            </div>
+            <app-sparkline [valores]="s.serie" [ancho]="84" [alto]="26" [color]="s.estado === 'critico' ? 'var(--ax-chart-danger, #ef4444)' : 'var(--ax-brand-primary, #673ab7)'"></app-sparkline>
+            <span class="lentos__valor pill" [class.pill--error]="s.estado === 'critico'" [class.pill--warn]="s.estado === 'aviso'" [class.pill--ok]="s.estado === 'ok'">{{ fmtSeg(s.promedio) }}</span>
+            <span class="lentos__delta" *ngIf="s.deltaPct !== null" [class.lentos__delta--mal]="s.deltaPct > 10" [class.lentos__delta--bien]="s.deltaPct < -10">{{ s.deltaPct > 0 ? '▲' : (s.deltaPct < 0 ? '▼' : '=') }} {{ s.deltaPct < 0 ? -s.deltaPct : s.deltaPct | numEs }}%</span>
+          </li>
+        </ul>
+        <ng-template #sinLentos><div class="vacio-int">Todavía no hay latencia medida para este rango.</div></ng-template>
+      </div>
+    </section>
+
+    <!-- TABLA POR FUNCIONALIDAD -->
+    <section class="panel-diagrama">
+      <div class="panel-diagrama__cabecera">
+        <div><h2>Efectividad por funcionalidad</h2><p class="sub">Qué servicios se usan más, cuánto fallan y cuánto tardan</p></div>
+        <div class="herramientas">
+          <input class="buscar" type="search" placeholder="Buscar servicio, clase o código…" [(ngModel)]="filtroFuncion" aria-label="Buscar servicio">
+        </div>
+      </div>
+      <div class="tabla-scroll" *ngIf="funcionesVisibles.length; else vacioFunc">
+        <table>
+          <thead>
+            <tr>
+              <th class="orden" (click)="ordenarFunc('metodo')">Servicio{{ flecha('metodo') }}</th>
+              <th title="Código de funcionalidad: agrupa varios métodos relacionados">Código</th>
+              <th class="orden num" (click)="ordenarFunc('total')">Transacciones{{ flecha('total') }}</th>
+              <th class="orden num" (click)="ordenarFunc('errores')">Errores{{ flecha('errores') }}</th>
+              <th class="orden num" (click)="ordenarFunc('tasaExito')">Éxito{{ flecha('tasaExito') }}</th>
+              <th class="orden num" (click)="ordenarFunc('tiempo')" title="Promedio ponderado, arranque → fin de la misma llamada">Tiempo{{ flecha('tiempo') }}</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr *ngFor="let f of funcionesVisibles">
+              <td>
+                <div class="fn-nombre">{{ nombreServicioLegible(f.metodo) }}</div>
+                <div class="mono fn-tec">{{ f.clase }}.{{ f.metodo }}</div>
+              </td>
+              <td class="mono">{{ f.codigoServicio || '—' }}</td>
+              <td class="num">
+                <div class="celda-barra"><span>{{ f.total | numEs }}</span><i [style.width.%]="(f.total / maxTotalFunc) * 100"></i></div>
+              </td>
+              <td class="num" [class.txt-error]="f.errores > 0">{{ f.errores | numEs }}</td>
+              <td class="num"><span class="pill" [class.pill--ok]="f.tasaExito >= 98" [class.pill--warn]="f.tasaExito >= 95 && f.tasaExito < 98" [class.pill--error]="f.tasaExito < 95">{{ f.tasaExito }}%</span></td>
+              <td class="num mono">{{ fmtSeg(f.tiempoPromedioSegundos) }}</td>
+              <td><button type="button" class="btn-detalle" *ngIf="f.errores > 0" (click)="abrirDetalle(f.clase, f.metodo)">Ver errores</button></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <ng-template #vacioFunc><div class="vacio-int">{{ filtroFuncion ? 'Ningún servicio coincide con la búsqueda.' : 'No hay datos acumulados en este rango.' }}</div></ng-template>
+      <div class="ver-mas" *ngIf="!filtroFuncion && funcionesFiltradas.length > limiteFunc">
+        <button type="button" class="btn-secundario btn-mini" (click)="verTodasFunc = !verTodasFunc">{{ verTodasFunc ? 'Ver menos' : 'Ver los ' + funcionesFiltradas.length + ' servicios' }}</button>
+      </div>
+    </section>
+
+    <!-- ACTIVIDAD DEL CLIENTE -->
+    <section class="panel-diagrama" *ngIf="documentoAplicado">
+      <div class="panel-diagrama__cabecera">
+        <div><h2>Actividad reciente de este cliente</h2></div>
+        <a class="btn-secundario btn-mini enlace-btn" [routerLink]="['/app-movil-logs']" [queryParams]="{ documento: documentoAplicado }">Ver todo en Consulta de Logs</a>
+      </div>
+      <div class="carga-inicial" *ngIf="logsClienteCargando">Cargando actividad…</div>
+      <div class="vacio-int txt-error" *ngIf="!logsClienteCargando && logsClienteError">{{ logsClienteError }}</div>
+      <div class="tabla-scroll" *ngIf="!logsClienteCargando && !logsClienteError && logsCliente.length; else sinLogsCliente">
+        <table>
+          <thead><tr><th>Fecha</th><th>Estado</th><th>Servicio</th><th>Dispositivo</th><th>Detalle</th></tr></thead>
+          <tbody>
+            <tr *ngFor="let l of logsCliente">
+              <td class="mono">{{ l.fecha | date:'d MMM, HH:mm:ss' }}</td>
+              <td>
+                <span class="pill" [class.pill--ok]="l.estado === 'exito'" [class.pill--error]="l.estado === 'error'" [class.pill--warn]="l.estado === 'en_curso'" [title]="l.estado === 'incompleta' ? l.estadoTexto : ''">
+                  {{ l.estado === 'exito' ? 'Exitosa' : (l.estado === 'error' ? 'Error' : (l.estado === 'incompleta' ? 'Sin respuesta' : 'En curso')) }}
+                </span>
+              </td>
+              <td><div class="fn-nombre">{{ l.servicio }}</div><div class="mono fn-tec">{{ l.clase }}.{{ l.metodo }}</div></td>
+              <td>{{ l.dispositivo }}</td>
+              <td class="detalle-mensaje">{{ (l.estado === 'error' || l.estado === 'incompleta') ? l.estadoTexto : (l.descripcion || '—') }}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <ng-template #sinLogsCliente><div class="vacio-int" *ngIf="!logsClienteCargando && !logsClienteError">No hay actividad registrada para este cliente en el rango seleccionado.</div></ng-template>
+      <p class="nota" *ngIf="logsClienteTotal > logsClienteLimit">Mostrando las {{ logsClienteLimit }} más recientes de {{ logsClienteTotal | numEs }} — <a [routerLink]="['/app-movil-logs']" [queryParams]="{ documento: documentoAplicado }">ver todas</a>.</p>
+    </section>
+  </div>
+</ng-container>
+
+<!-- PANEL DE DETALLE DE ERRORES -->
+<div class="detalle-overlay" *ngIf="detalleAbierto" (click)="cerrarDetalle()">
+  <div class="detalle-panel" (click)="$event.stopPropagation()" role="dialog" aria-modal="true">
+    <div class="detalle-panel__header">
+      <div>
+        <h2>{{ nombreServicioLegible(detalleMetodo) }}</h2>
+        <p class="sub"><span class="mono">{{ detalleClase }}.{{ detalleMetodo }}</span> · {{ detalleTotal | numEs }} error(es) en el rango ·
+          <a [routerLink]="['/app-movil-logs']" [queryParams]="{ metodo: detalleMetodo }">ver todos los logs de este servicio</a></p>
+      </div>
+      <div class="detalle-panel__acciones">
+        <button type="button" class="btn-exportar" (click)="exportarErrores()" [disabled]="exportando || !detalleTotal" title="Exportar a CSV">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2M7 10l5 5 5-5M12 15V3" /></svg>
+          <span>{{ exportando ? 'Exportando…' : 'Exportar CSV' }}</span>
+        </button>
+        <button type="button" class="btn-cerrar" (click)="cerrarDetalle()" aria-label="Cerrar">&times;</button>
+      </div>
+    </div>
+    <p class="detalle-aviso">El documento del cliente se muestra parcialmente enmascarado. No se incluye el contenido de la petición ni la respuesta completa.</p>
+    <p class="detalle-aviso detalle-aviso--exportacion" *ngIf="avisoExportacion">{{ avisoExportacion }}</p>
+    <div class="carga-inicial" *ngIf="detalleCargando">Cargando…</div>
+    <div class="vacio-int txt-error" *ngIf="!detalleCargando && detalleError">
+      <p>{{ detalleError }}</p>
+      <button type="button" class="btn-secundario btn-mini" (click)="cargarDetalle()">Reintentar</button>
+    </div>
+    <div class="tabla-scroll" *ngIf="!detalleCargando && !detalleError && detalleErrores.length; else sinDetalle">
+      <table>
+        <thead><tr><th>Fecha</th><th>Documento</th><th>Servicio</th><th>Dispositivo</th><th>IP</th><th>Mensaje</th></tr></thead>
+        <tbody>
+          <tr *ngFor="let e of detalleErrores">
+            <td class="mono">{{ e.fecha | date:'d MMM, HH:mm' }}</td>
+            <td class="mono">{{ e.documento }}</td>
+            <td>{{ e.servicio }}</td>
+            <td>{{ e.dispositivo }}</td>
+            <td class="mono">{{ e.ip || '—' }}</td>
+            <td class="detalle-mensaje">{{ e.mensaje }}</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+    <ng-template #sinDetalle><div class="vacio-int" *ngIf="!detalleCargando && !detalleError">No hay errores registrados para este servicio en este rango.</div></ng-template>
+    <div class="detalle-paginacion" *ngIf="detalleTotal > detalleLimit">
+      <button type="button" (click)="anteriorPaginaDetalle()" [disabled]="detalleOffset === 0">Anterior</button>
+      <span>Página {{ detallePaginaActual }} de {{ detalleTotalPaginas }}</span>
+      <button type="button" (click)="siguientePaginaDetalle()" [disabled]="detalleOffset + detalleLimit >= detalleTotal">Siguiente</button>
+    </div>
+  </div>
+</div>

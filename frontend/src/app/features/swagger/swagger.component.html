@@ -1,0 +1,344 @@
+<header class="cab">
+  <div>
+    <h1>Swagger</h1>
+    <p class="sub">Lee el Swagger de un servicio, consúmelo desde aquí y guarda los consumos para repetirlos.</p>
+  </div>
+  <div class="cab-acciones" *ngIf="origenes.length">
+    <label class="campo">Origen
+      <select [ngModel]="origenId" (ngModelChange)="cambiarOrigen($event)" aria-label="Origen de Swagger">
+        <optgroup label="Mis Swagger" *ngIf="misOrigenes.length">
+          <option *ngFor="let o of misOrigenes" [ngValue]="o.Id">{{ o.Nombre }}</option>
+        </optgroup>
+        <optgroup [label]="tituloAjenos" *ngIf="origenesAjenos.length">
+          <option *ngFor="let o of origenesAjenos" [ngValue]="o.Id">{{ o.Nombre }} · {{ textoDueno(o) }}</option>
+        </optgroup>
+      </select>
+    </label>
+    <label class="check-chico" *ngIf="esAdminPod" title="Como ADMIN_POD puedes ver y gestionar también los Swagger privados de los demás usuarios">
+      <input type="checkbox" [(ngModel)]="verTodos" (ngModelChange)="alternarVerTodos()" /> Ver todos (admin)
+    </label>
+    <label class="campo" *ngIf="doc && doc.definiciones.length > 1">Definición
+      <select [ngModel]="defIdx" (ngModelChange)="cambiarDefinicion($event)" aria-label="Definición del documento">
+        <option *ngFor="let d of doc.definiciones" [ngValue]="d.indice">{{ d.nombre }}</option>
+      </select>
+    </label>
+    <button type="button" class="btn btn-ghost btn-sm" (click)="cargarDocumento(true)" [disabled]="cargandoDoc" title="Volver a leer el documento Swagger">Recargar</button>
+    <button type="button" class="btn btn-ghost btn-sm" *ngIf="puedeEditar" (click)="abrirOrigenes()">Orígenes</button>
+  </div>
+</header>
+
+<div class="cargando" *ngIf="cargandoInicial"><div class="spinner"></div><p>Cargando…</p></div>
+<div class="error-state" *ngIf="errorGeneral">{{ errorGeneral }}</div>
+
+<div class="aviso-aviso" *ngIf="sinTablas">
+  <strong>El módulo todavía no está listo en la base de datos.</strong> {{ sinTablas }}
+</div>
+
+<!-- Sin orígenes -->
+<section class="tarjeta vacio-inicial" *ngIf="!cargandoInicial && !sinTablas && !errorGeneral && !origenes.length">
+  <h2>Aún no tienes ningún Swagger</h2>
+  <p *ngIf="puedeEditar">Registra la URL del Swagger de un servicio (por ejemplo la página <code>…/swagger/index.html</code>) para leer sus endpoints y consumirlos desde aquí. Lo que registres es <strong>privado</strong>: solo tú lo ves hasta que decidas compartirlo.</p>
+  <p *ngIf="!puedeEditar">Aquí aparecen los Swagger que registres y los que otros usuarios compartan contigo. Tu rol en este módulo es de Consulta: pídele a un administrador que te dé permiso de edición para registrar los tuyos.</p>
+  <button type="button" class="btn btn-purple" *ngIf="puedeEditar" (click)="abrirOrigenes(true)">+ Registrar Swagger</button>
+</section>
+
+<ng-container *ngIf="origenes.length && !sinTablas">
+  <div class="aviso-info mensaje-ok" *ngIf="mensajeOk">{{ mensajeOk }}</div>
+
+  <div class="cargando chico-v" *ngIf="cargandoDoc"><div class="spinner"></div><p>Leyendo el Swagger…</p></div>
+  <div class="error-state" *ngIf="errorDoc">
+    {{ errorDoc }}
+    <div class="acc-error">
+      <button type="button" class="btn btn-ghost btn-sm" (click)="cargarDocumento(true)">Reintentar</button>
+      <button type="button" class="btn btn-ghost btn-sm" *ngIf="puedeEditar" (click)="abrirOrigenes()">Revisar el origen</button>
+    </div>
+  </div>
+
+  <ng-container *ngIf="doc && !cargandoDoc">
+    <!-- ============ Información de la API ============ -->
+    <section class="tarjeta info-api">
+      <div class="ia-titulo">
+        <h2>{{ doc.info.titulo || 'Sin título' }}</h2>
+        <span class="chip" *ngIf="doc.info.version">v{{ doc.info.version }}</span>
+        <span class="chip chip-ok">{{ doc.info.especificacion }}</span>
+        <span class="chip">{{ doc.totalOperaciones }} endpoint(s)</span>
+        <span class="chip" *ngIf="totalModelos">{{ totalModelos }} modelo(s)</span>
+        <ng-container *ngIf="origenActual as oa">
+          <span class="chip chip-media" *ngIf="oa.Propio && !oa.CompartidoTodos && !oa.CompartidoCon" title="Solo tú ves este Swagger">Privado</span>
+          <span class="chip chip-ok" *ngIf="oa.Propio && oa.CompartidoTodos" title="Lo ven todos los usuarios con el módulo Swagger">Compartido con todos</span>
+          <span class="chip chip-ok" *ngIf="oa.Propio && !oa.CompartidoTodos && oa.CompartidoCon" title="Lo ven los usuarios con quienes lo compartiste">Compartido con {{ oa.CompartidoCon }} usuario(s)</span>
+          <span class="chip" *ngIf="!oa.Propio" [title]="oa.PuedeGestionar ? 'Eres ADMIN_POD: puedes gestionarlo' : 'Puedes verlo y consumirlo; solo su dueño lo modifica o comparte'">{{ oa.SinDueno ? 'Sin dueño' : 'De ' + oa.CreadoPor }}{{ oa.PuedeGestionar ? '' : ' · solo lectura/consumo' }}</span>
+        </ng-container>
+      </div>
+      <p class="ia-url mono">
+        <span>{{ doc.urlDocumento }}</span>
+        <button type="button" class="btn-mini" (click)="copiarTextoPlano(doc.urlDocumento, 'urldoc')">{{ copiado === 'urldoc' ? '✓ Copiado' : 'Copiar' }}</button>
+      </p>
+      <ng-container *ngIf="doc.info.descripcion">
+        <p class="ia-desc" [class.ia-clamp]="!infoExpandida">{{ doc.info.descripcion }}</p>
+        <button type="button" class="enlace-chico" *ngIf="doc.info.descripcion.length > 240" (click)="infoExpandida = !infoExpandida">{{ infoExpandida ? 'Ver menos' : 'Ver más' }}</button>
+      </ng-container>
+      <div class="ia-enlaces" *ngIf="doc.info.contacto || doc.info.licencia || doc.info.terminos || doc.info.docExterna">
+        <span *ngIf="doc.info.contacto && (doc.info.contacto.nombre || doc.info.contacto.correo)">Contacto: {{ doc.info.contacto.nombre }} <a *ngIf="doc.info.contacto.correo" [href]="'mailto:' + doc.info.contacto.correo">{{ doc.info.contacto.correo }}</a></span>
+        <a *ngIf="doc.info.contacto?.url" [href]="doc.info.contacto?.url" target="_blank" rel="noopener noreferrer">Sitio del contacto</a>
+        <a *ngIf="doc.info.licencia?.url; else licSinUrl" [href]="doc.info.licencia?.url" target="_blank" rel="noopener noreferrer">Licencia: {{ doc.info.licencia?.nombre }}</a>
+        <ng-template #licSinUrl><span *ngIf="doc.info.licencia?.nombre">Licencia: {{ doc.info.licencia?.nombre }}</span></ng-template>
+        <a *ngIf="doc.info.terminos" [href]="doc.info.terminos" target="_blank" rel="noopener noreferrer">Términos de servicio</a>
+        <a *ngIf="doc.info.docExterna" [href]="doc.info.docExterna.url" target="_blank" rel="noopener noreferrer">{{ doc.info.docExterna.descripcion || 'Documentación externa' }}</a>
+      </div>
+    </section>
+
+    <!-- ============ Servidor y autorización ============ -->
+    <section class="tarjeta barra-conexion">
+      <div class="bc-servidor">
+        <label for="swagger-base" class="bc-etiqueta">Servidor</label>
+        <input id="swagger-base" class="entrada mono" [(ngModel)]="baseUrl" list="servidores-swagger" placeholder="https://host:puerto" aria-label="URL base del servidor" />
+        <datalist id="servidores-swagger"><option *ngFor="let s of doc.servidores" [value]="s"></option></datalist>
+        <div class="bc-chips" *ngIf="doc.servidores.length > 1">
+          <button type="button" class="chip-btn" *ngFor="let s of doc.servidores" [class.on]="s === baseUrl" (click)="usarServidor(s)">{{ s }}</button>
+        </div>
+      </div>
+      <div class="bc-aviso" *ngIf="servidorInvalido">
+        <strong>Este host no pertenece al Swagger</strong> y el servidor no lo aceptará.
+        <button type="button" class="btn btn-ghost btn-sm" (click)="usarServidor(doc.servidores[0])">Usar {{ doc.servidores[0] }}</button>
+      </div>
+      <button type="button" class="btn-auth" [class.autorizado]="totalAutorizados > 0" (click)="abrirAutorizar()" title="Configurar las credenciales para los endpoints protegidos">
+        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="11" width="16" height="10" rx="2"/><path *ngIf="totalAutorizados > 0" d="M8 11V7a4 4 0 0 1 8 0v4"/><path *ngIf="totalAutorizados === 0" d="M8 11V7a4 4 0 0 1 7.5-2"/></svg>
+        Authorize
+        <span class="cuenta" *ngIf="totalAutorizados > 0">{{ totalAutorizados }}</span>
+      </button>
+    </section>
+
+    <!-- ============ Pestañas ============ -->
+    <div class="pestanas pestanas-top" role="tablist">
+      <button type="button" role="tab" [class.activa]="pestana === 'endpoints'" [attr.aria-selected]="pestana === 'endpoints'" (click)="seleccionarPestana('endpoints')">Endpoints<span class="num"> {{ doc.totalOperaciones }}</span></button>
+      <button type="button" role="tab" [class.activa]="pestana === 'guardados'" [attr.aria-selected]="pestana === 'guardados'" (click)="seleccionarPestana('guardados')">Guardados<span class="num"> {{ consumos.length }}</span></button>
+      <button type="button" role="tab" [class.activa]="pestana === 'historial'" [attr.aria-selected]="pestana === 'historial'" (click)="seleccionarPestana('historial')">Historial</button>
+      <button type="button" role="tab" *ngIf="totalModelos" [class.activa]="pestana === 'modelos'" [attr.aria-selected]="pestana === 'modelos'" (click)="seleccionarPestana('modelos')">Modelos<span class="num"> {{ totalModelos }}</span></button>
+    </div>
+
+    <!-- ================= ENDPOINTS ================= -->
+    <ng-container *ngIf="pestana === 'endpoints'">
+      <div class="aviso-aviso" *ngIf="doc.truncado">El documento tiene más endpoints de los que se muestran (máximo 5000).</div>
+
+      <div class="toolbar">
+        <input class="entrada buscar" type="search" [(ngModel)]="busqueda" (ngModelChange)="recalcular()" placeholder="Buscar por ruta, nombre, etiqueta o descripción…" aria-label="Buscar endpoint" />
+        <div class="chips-metodo">
+          <button type="button" class="mchip" *ngFor="let m of metodosResumen" [ngClass]="claseMetodo(m.metodo)" [class.on]="metodosActivos.includes(m.metodo)" (click)="alternarMetodo(m.metodo)" [attr.aria-pressed]="metodosActivos.includes(m.metodo)">{{ m.metodo }} <span>{{ m.n }}</span></button>
+        </div>
+        <div class="acc-toolbar">
+          <span class="contador">{{ totalFiltrado }} endpoint(s)</span>
+          <button type="button" class="btn-mini" (click)="expandirTodosGrupos()">Expandir etiquetas</button>
+          <button type="button" class="btn-mini" (click)="contraerTodosGrupos()">Contraer etiquetas</button>
+          <button type="button" class="btn-mini" *ngIf="abiertas.size" (click)="cerrarOperaciones()">Cerrar los {{ abiertas.size }} abiertos</button>
+          <button type="button" class="btn-mini" *ngIf="hayFiltros" (click)="limpiarFiltros()">Limpiar filtros</button>
+        </div>
+      </div>
+
+      <!-- Petición manual -->
+      <div class="op-bloque m-manual" [class.abierto]="manualAbierto" id="op-manual">
+        <button type="button" class="op-fila" (click)="alternarManual()" [attr.aria-expanded]="manualAbierto">
+          <span class="metodo">LIBRE</span>
+          <span class="op-ruta">Petición manual</span>
+          <span class="op-resumen">Arma una petición cualquiera (método, ruta, parámetros y cuerpo) sin partir de un endpoint</span>
+          <span class="espacio"></span>
+          <span class="flecha" [class.abierta]="manualAbierto">&#9656;</span>
+        </button>
+        <app-swagger-operacion *ngIf="manualUsado" [hidden]="!manualAbierto" [op]="null" [doc]="doc" [origenId]="origenId!" [baseUrl]="baseUrl" [esquemasSeg]="esquemasSeg" [credenciales]="credenciales"
+          [puedeEditar]="puedeEditar" [puedeGuardar]="puedeGuardar" [carga]="cargaPara('__manual__')" (consumoGuardado)="alGuardarConsumo()" (abrirAutorizar)="abrirAutorizar()" (servidorSugerido)="usarServidor($event)"
+          (ejecutado)="refrescarHistorialSiAbierto()" (aviso)="avisar($event)"></app-swagger-operacion>
+      </div>
+
+      <div class="grupos">
+        <section class="grupo" *ngFor="let g of grupos; trackBy: trackGrupo">
+          <button type="button" class="grupo-cab" (click)="alternarGrupo(g)" [attr.aria-expanded]="grupoAbierto(g)">
+            <span class="flecha" [class.abierta]="grupoAbierto(g)">&#9656;</span>
+            <span class="grupo-nombre">{{ g.etiqueta }}</span>
+            <span class="grupo-desc" *ngIf="g.descripcion">{{ g.descripcion }}</span>
+            <span class="espacio"></span>
+            <span class="chip">{{ g.operaciones.length }}</span>
+          </button>
+          <div class="ops" *ngIf="grupoAbierto(g)">
+            <div class="op-bloque" *ngFor="let op of g.operaciones; trackBy: trackOperacion" [ngClass]="claseMetodo(op.metodo)" [class.abierto]="esAbierta(op)" [class.dep]="op.deprecado" [id]="idDom(op)">
+              <button type="button" class="op-fila" (click)="alternarOperacion(op)" [attr.aria-expanded]="esAbierta(op)">
+                <span class="metodo">{{ op.metodo }}</span>
+                <span class="op-ruta mono">{{ op.ruta }}</span>
+                <span class="op-resumen" *ngIf="op.resumen">{{ op.resumen }}</span>
+                <span class="espacio"></span>
+                <span class="chip chip-marca" *ngIf="conteoPorOp.get(op.id)">{{ conteoPorOp.get(op.id) }} guardado(s)</span>
+                <span class="chip chip-media" *ngIf="op.deprecado">deprecado</span>
+                <svg *ngIf="op.seguridad" class="candado" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-label="Requiere autenticación"><title>Requiere autenticación</title><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>
+                <span class="flecha" [class.abierta]="esAbierta(op)">&#9656;</span>
+              </button>
+              <app-swagger-operacion *ngIf="fueAbierta.has(op.id)" [hidden]="!esAbierta(op)" [op]="op" [doc]="doc" [origenId]="origenId!" [baseUrl]="baseUrl" [esquemasSeg]="esquemasSeg" [credenciales]="credenciales"
+                [puedeEditar]="puedeEditar" [puedeGuardar]="puedeGuardar" [carga]="cargaPara(op.id)" (consumoGuardado)="alGuardarConsumo()" (abrirAutorizar)="abrirAutorizar()" (servidorSugerido)="usarServidor($event)"
+                (ejecutado)="refrescarHistorialSiAbierto()" (aviso)="avisar($event)"></app-swagger-operacion>
+            </div>
+          </div>
+        </section>
+        <p class="vacio" *ngIf="!grupos.length">Ningún endpoint coincide con el filtro.</p>
+      </div>
+    </ng-container>
+
+    <!-- ================= GUARDADOS ================= -->
+    <ng-container *ngIf="pestana === 'guardados'">
+      <div class="toolbar">
+        <input class="entrada buscar" type="search" [(ngModel)]="busquedaConsumos" (ngModelChange)="recalcularConsumos()" placeholder="Buscar consumo guardado…" aria-label="Buscar consumo guardado" />
+      </div>
+      <div class="cargando chico-v" *ngIf="cargandoConsumos"><div class="spinner"></div></div>
+      <section class="tarjeta vacio-card" *ngIf="!cargandoConsumos && !consumos.length">
+        <h3>Aún no hay consumos guardados</h3>
+        <p>Abre un endpoint, completa los parámetros y usa «Guardar consumo» para tenerlo a la mano. Los tokens y contraseñas nunca se guardan.</p>
+      </section>
+      <p class="vacio" *ngIf="consumos.length && !gruposConsumos.length">Ningún consumo coincide con la búsqueda.</p>
+      <section class="grupo" *ngFor="let g of gruposConsumos">
+        <div class="grupo-cab sin-click"><span class="grupo-nombre">{{ g.nombre }}</span><span class="espacio"></span><span class="chip">{{ g.consumos.length }}</span></div>
+        <div class="consumos-grid">
+          <article class="consumo-card" *ngFor="let c of g.consumos; trackBy: trackConsumo" (click)="abrirConsumo(c)" tabindex="0" (keydown.enter)="abrirConsumo(c)">
+            <div class="cc-cab">
+              <span class="metodo" [ngClass]="claseMetodo(c.Metodo)">{{ c.Metodo }}</span>
+              <strong class="cc-nombre">{{ c.Nombre }}</strong>
+            </div>
+            <div class="cc-ruta mono">{{ c.Ruta }}</div>
+            <div class="cc-notas" *ngIf="c.Notas">{{ c.Notas }}</div>
+            <div class="cc-pie">
+              <span>{{ c.CreadoPor ? 'por ' + c.CreadoPor + ' · ' : '' }}{{ c.FechaActualizacion | date: 'dd/MM/yyyy HH:mm' }}</span>
+              <span class="espacio"></span>
+              <button type="button" class="btn-mini" (click)="abrirConsumo(c); $event.stopPropagation()">Abrir</button>
+              <button type="button" class="btn-mini btn-peligro" *ngIf="puedeGuardar" (click)="eliminarConsumo(c); $event.stopPropagation()" title="Eliminar este consumo guardado">Eliminar</button>
+            </div>
+          </article>
+        </div>
+      </section>
+    </ng-container>
+
+    <!-- ================= HISTORIAL ================= -->
+    <ng-container *ngIf="pestana === 'historial'">
+      <div class="toolbar toolbar-fila">
+        <input class="entrada buscar" type="search" [(ngModel)]="busquedaHistorial" (ngModelChange)="recalcularHistorial()" placeholder="Buscar en la URL, método o usuario…" aria-label="Buscar en el historial" />
+        <select class="entrada corto" [(ngModel)]="filtroHistEstado" (ngModelChange)="recalcularHistorial()" aria-label="Filtrar por resultado">
+          <option value="">Todos los resultados</option>
+          <option value="ok">Correctos (&lt; 400)</option>
+          <option value="4xx">Error 4xx</option>
+          <option value="5xx">Error 5xx</option>
+          <option value="error">Sin respuesta</option>
+        </select>
+        <label class="check-chico" *ngIf="esAdminPod"><input type="checkbox" [(ngModel)]="historialTodos" (ngModelChange)="cargarHistorial()" /> Historial de todos los usuarios</label>
+        <button type="button" class="btn-mini" (click)="cargarHistorial()">Actualizar</button>
+      </div>
+      <p class="ayuda-chica" *ngIf="!esAdminPod">Aquí ves tus últimas ejecuciones sobre este origen.</p>
+      <div class="cargando chico-v" *ngIf="cargandoHistorial"><div class="spinner"></div></div>
+      <div class="error-state" *ngIf="errorHistorial">{{ errorHistorial }}</div>
+      <p class="vacio" *ngIf="!cargandoHistorial && !errorHistorial && !historial.length">Todavía no hay ejecuciones registradas.</p>
+      <p class="vacio" *ngIf="historial.length && !historialFiltrado.length">Ningún registro coincide con el filtro.</p>
+      <div class="hist-lista">
+        <button type="button" class="hist-fila" *ngFor="let h of historialFiltrado; trackBy: trackHist" (click)="verHistorial(h)">
+          <span class="metodo" [ngClass]="claseMetodo(h.Metodo)">{{ h.Metodo }}</span>
+          <span class="est" [ngClass]="claseEstado(h.Estado)">{{ h.Estado ?? 'Error' }}</span>
+          <span class="hist-url mono">{{ h.Url }}</span>
+          <span class="t-mal hist-err" *ngIf="h.Error">{{ h.Error }}</span>
+          <span class="hist-meta">{{ h.DuracionMs ?? '—' }} ms</span>
+          <span class="hist-meta" *ngIf="historialTodos && h.Username">{{ h.Username }}</span>
+          <span class="hist-meta">{{ h.Fecha | date: 'dd/MM HH:mm:ss' }}</span>
+        </button>
+      </div>
+    </ng-container>
+
+    <!-- ================= MODELOS ================= -->
+    <ng-container *ngIf="pestana === 'modelos'">
+      <div class="toolbar">
+        <input class="entrada buscar" type="search" [(ngModel)]="busquedaModelos" (ngModelChange)="recalcularModelos()" placeholder="Buscar modelo…" aria-label="Buscar modelo" />
+      </div>
+      <p class="vacio" *ngIf="!modelosFiltrados.length">Ningún modelo coincide con la búsqueda.</p>
+      <div class="modelos-lista">
+        <section class="modelo-item" *ngFor="let m of modelosFiltrados; trackBy: trackModelo">
+          <button type="button" class="modelo-cab" (click)="alternarModelo(m.nombre)" [attr.aria-expanded]="modelosAbiertos.has(m.nombre)">
+            <span class="flecha" [class.abierta]="modelosAbiertos.has(m.nombre)">&#9656;</span>
+            <span class="mono modelo-nombre">{{ m.nombre }}</span>
+            <span class="chip">{{ m.modelo.propiedades?.length || 0 }} propiedad(es)</span>
+          </button>
+          <div class="modelo-cuerpo" *ngIf="modelosAbiertos.has(m.nombre)">
+            <app-swagger-modelo [modelo]="m.modelo" [raiz]="true"></app-swagger-modelo>
+            <ng-container *ngIf="m.ejemplo">
+              <div class="modelo-ej-cab"><span>Ejemplo</span><button type="button" class="btn-mini" (click)="copiarTextoPlano(m.ejemplo, 'ej-' + m.nombre)">{{ copiado === 'ej-' + m.nombre ? '✓ Copiado' : 'Copiar' }}</button></div>
+              <pre class="modelo-ejemplo mono">{{ m.ejemplo }}</pre>
+            </ng-container>
+          </div>
+        </section>
+      </div>
+    </ng-container>
+  </ng-container>
+</ng-container>
+
+<!-- ============ Authorize ============ -->
+<div class="modal-overlay" *ngIf="mostrarAutorizar" (click)="mostrarAutorizar = false">
+  <div class="modal-card modal-auth" (click)="$event.stopPropagation()" role="dialog" aria-modal="true" aria-label="Autorizar">
+    <div class="modal-header">
+      <h2>Credenciales de acceso</h2>
+      <button type="button" class="close-btn" (click)="mostrarAutorizar = false" aria-label="Cerrar">✕</button>
+    </div>
+    <p class="ayuda-chica">Se envían solo a los endpoints que las requieren. Quedan en esta pestaña del navegador (se pierden al cerrarla) y no se guardan en la base de datos ni en el historial.</p>
+    <div class="esq-card" *ngFor="let e of esquemasSeg">
+      <div class="esq-cab">
+        <strong>{{ e.nombre === '__manual' ? 'Authorization' : e.nombre }}</strong>
+        <span class="chip">{{ etiquetaTipoEsquema(e) }}</span>
+        <span class="chip chip-ok" *ngIf="credEdicion[e.nombre].valor || credEdicion[e.nombre].usuario">Con valor</span>
+      </div>
+      <p class="ayuda-chica" *ngIf="e.descripcion">{{ e.descripcion }}</p>
+      <ng-container *ngIf="esBasic(e); else unValor">
+        <label class="etiqueta">Usuario</label>
+        <input class="entrada" autocomplete="off" [(ngModel)]="credEdicion[e.nombre].usuario" [attr.aria-label]="'Usuario de ' + e.nombre" />
+        <label class="etiqueta">Contraseña</label>
+        <input class="entrada" type="password" autocomplete="off" [(ngModel)]="credEdicion[e.nombre].clave" [attr.aria-label]="'Contraseña de ' + e.nombre" />
+      </ng-container>
+      <ng-template #unValor>
+        <label class="etiqueta">{{ e.tipo === 'apiKey' ? 'Valor' : 'Token' }}</label>
+        <div class="esq-valor">
+          <input class="entrada mono" [type]="verSecreto.has(e.nombre) ? 'text' : 'password'" autocomplete="off" [(ngModel)]="credEdicion[e.nombre].valor"
+            [placeholder]="e.tipo === 'http' && e.esquema === 'bearer' ? 'eyJ… (sin «Bearer »)' : (e.nombre === '__manual' ? 'Bearer eyJ…' : '')" [attr.aria-label]="'Valor de ' + e.nombre" />
+          <button type="button" class="btn-mini" (click)="alternarSecreto(e.nombre)">{{ verSecreto.has(e.nombre) ? 'Ocultar' : 'Ver' }}</button>
+        </div>
+      </ng-template>
+      <div class="esq-pie"><button type="button" class="btn-mini" (click)="cerrarSesionEsquema(e)">Quitar valor</button></div>
+    </div>
+    <div class="pie-form">
+      <button type="button" class="btn btn-ghost" (click)="cerrarSesionTodo()">Quitar todo</button>
+      <span class="espacio"></span>
+      <button type="button" class="btn btn-ghost" (click)="mostrarAutorizar = false">Cancelar</button>
+      <button type="button" class="btn btn-purple" (click)="autorizar()">Aplicar</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============ Detalle del historial ============ -->
+<div class="modal-overlay" *ngIf="histDetalle as d" (click)="histDetalle = null">
+  <div class="modal-card modal-hist" (click)="$event.stopPropagation()" role="dialog" aria-modal="true" aria-label="Registro del historial">
+    <div class="modal-header">
+      <h2>Registro del historial</h2>
+      <button type="button" class="close-btn" (click)="histDetalle = null" aria-label="Cerrar">✕</button>
+    </div>
+    <p class="ayuda-chica">{{ d.Fecha | date: 'dd/MM/yyyy HH:mm:ss' }} · {{ d.Username }}</p>
+    <div class="resumen-resp">
+      <span class="metodo" [ngClass]="claseMetodo(d.Metodo)">{{ d.Metodo }}</span>
+      <span class="est est-grande" [ngClass]="claseEstado(d.Estado)">{{ d.Estado ?? 'Error' }} {{ d.EstadoTexto }}</span>
+      <span class="chip" *ngIf="d.DuracionMs !== null">{{ d.DuracionMs }} ms</span>
+      <span class="chip">{{ tamano(d.ResponseBytes) }}</span>
+      <span class="chip chip-media" *ngIf="d.Truncado">Truncada</span>
+    </div>
+    <p class="il-url mono">{{ d.Url }}</p>
+    <div class="error-state" *ngIf="d.Error">{{ d.Error }}</div>
+    <p class="ayuda-chica">En el historial los tokens, contraseñas y API keys aparecen como ***.</p>
+    <h3 class="titulo-sec">Encabezados enviados</h3>
+    <dl class="kv"><ng-container *ngFor="let h of entradas(d.RequestHeaders)"><dt class="mono">{{ h.k }}</dt><dd class="mono">{{ h.v }}</dd></ng-container></dl>
+    <ng-container *ngIf="d.RequestBody">
+      <h3 class="titulo-sec">Cuerpo enviado</h3>
+      <pre class="resp-cuerpo mono">{{ cuerpoHistorial(d.RequestBody) }}</pre>
+    </ng-container>
+    <ng-container *ngIf="d.ResponseBody">
+      <h3 class="titulo-sec">Cuerpo recibido</h3>
+      <pre class="resp-cuerpo mono">{{ cuerpoHistorial(d.ResponseBody) }}</pre>
+    </ng-container>
+  </div>
+</div>
+
+<app-swagger-origenes *ngIf="mostrarOrigenes" [origenActualId]="origenId" [verTodos]="verTodos" [abrirNuevo]="abrirNuevoOrigen" (cerrar)="cerrarOrigenes($event)"></app-swagger-origenes>

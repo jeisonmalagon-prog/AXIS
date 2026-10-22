@@ -1,0 +1,184 @@
+<div class="modal-overlay" (click)="intentarCerrar()">
+  <div class="modal-card modal-accesos" (click)="$event.stopPropagation()" role="dialog" aria-modal="true" aria-label="Accesos a flujos de n8n">
+    <div class="modal-header">
+      <div>
+        <h2>Accesos a flujos de n8n</h2>
+        <p class="sub">Elige qué flujos ve cada usuario de AXIS. El ADMIN_POD siempre ve todo.</p>
+      </div>
+      <button class="close-btn" (click)="intentarCerrar()" aria-label="Cerrar">✕</button>
+    </div>
+
+    <div class="cargando" *ngIf="cargando"><div class="spinner"></div><p>Cargando accesos…</p></div>
+    <div class="aviso-cuentas" *ngIf="error">{{ error }}</div>
+
+    <ng-container *ngIf="!cargando && !error">
+      <div class="aviso-cuentas" *ngFor="let c of cuentasConError">
+        <strong>{{ c.nombre }}:</strong> {{ c.error }} — sus flujos no aparecen en esta lista hasta que responda.
+      </div>
+
+      <!-- Control de acceso aún sin activar -->
+      <div class="aviso-aviso" *ngIf="!estricto">
+        <strong>El control de acceso todavía no está activado.</strong> Hoy todos los usuarios con el módulo ven todos los flujos.
+        Para activarlo, ejecuta una sola vez en la base de datos el script <code>crear_tabla_n8n_permisos.sql</code>.
+        <br>Ojo: apenas exista la tabla, cada usuario (que no sea ADMIN_POD) <strong>no verá ningún flujo</strong> hasta que le asignes los suyos aquí.
+        Los flujos nuevos también quedan ocultos hasta que los autorices.
+      </div>
+
+      <ng-container *ngIf="estricto">
+        <div class="resumen-acc">
+          <span class="chip chip-ok">Control de acceso activo</span>
+          <span class="chip" [ngClass]="sinAsignarTotal ? 'chip-media' : 'chip-ok'">{{ sinAsignarTotal }} flujo(s) sin asignar a nadie</span>
+          <span class="chip">{{ usuarios.length }} usuario(s) de AXIS</span>
+          <span class="chip" [ngClass]="sinModuloTotal ? 'chip-media' : 'chip-ok'" title="Usuarios que aún no tienen habilitado el módulo Orquestador n8n">{{ sinModuloTotal }} sin el módulo</span>
+          <span class="chip">{{ flujos.length }} flujo(s)</span>
+        </div>
+
+        <div class="aviso-aviso" *ngIf="!usuarios.length">No hay usuarios activos (distintos de ADMIN_POD) en AXIS para asignar.</div>
+        <div class="aviso-aviso" *ngIf="usuarios.length && !flujos.length">No se encontraron flujos en n8n. Revisa las API keys.</div>
+
+        <ng-container *ngIf="usuarios.length && flujos.length">
+          <div class="vistas" role="tablist">
+            <button type="button" role="tab" [class.activa]="vista === 'usuario'" [attr.aria-selected]="vista === 'usuario'" (click)="cambiarVista('usuario')">Por usuario</button>
+            <button type="button" role="tab" [class.activa]="vista === 'flujo'" [attr.aria-selected]="vista === 'flujo'" (click)="cambiarVista('flujo')">Por flujo</button>
+          </div>
+
+          <!-- ============ POR USUARIO ============ -->
+          <div class="panel" *ngIf="vista === 'usuario'">
+            <aside class="lado">
+              <input class="buscar" type="search" placeholder="Buscar usuario…" [(ngModel)]="busquedaUsuarios" (ngModelChange)="recalcular()" aria-label="Buscar usuario">
+              <select class="filtro-usuarios" [(ngModel)]="filtroUsuarios" (ngModelChange)="recalcular()" aria-label="Filtrar usuarios por módulo">
+                <option value="todos">Todos los usuarios</option>
+                <option value="con-modulo">Con módulo n8n</option>
+                <option value="sin-modulo">Sin módulo n8n</option>
+              </select>
+              <ul class="lista-u">
+                <li *ngFor="let u of usuariosVisibles; trackBy: trackUsuario">
+                  <button type="button" class="item-u" [class.sel]="u.id === usuarioSel" (click)="elegirUsuario(u.id)">
+                    <span class="u-nombre">{{ u.nombre }}<span class="punto-sucio" *ngIf="sucios.has(u.id)" title="Cambios sin guardar"></span></span>
+                    <span class="u-meta">{{ u.username }} · {{ u.rol }}<span class="chip chip-media chip-sin-modulo" *ngIf="!u.tieneModulo" title="Este usuario no tiene habilitado el módulo Orquestador n8n">Sin módulo</span></span>
+                    <span class="u-cant" [class.cero]="!cantidadDe(u.id)">{{ cantidadDe(u.id) }} de {{ flujos.length }} flujos</span>
+                  </button>
+                </li>
+                <li class="vacio" *ngIf="!usuariosVisibles.length">Sin resultados.</li>
+              </ul>
+            </aside>
+
+            <section class="centro" *ngIf="usuario as u">
+              <div class="centro-cab">
+                <div><strong>{{ u.nombre }}</strong> <span class="u-meta">verá {{ cantidadDe(u.id) }} de {{ flujos.length }} flujos</span></div>
+                <div class="copiar">
+                  <select [(ngModel)]="copiarDeId" aria-label="Copiar accesos de otro usuario">
+                    <option value="">Sumar los flujos de…</option>
+                    <ng-container *ngFor="let o of usuarios; trackBy: trackUsuario"><option *ngIf="o.id !== u.id" [value]="o.id">{{ o.nombre }} ({{ cantidadDe(o.id) }})</option></ng-container>
+                  </select>
+                  <button type="button" class="btn-mini" [disabled]="!copiarDeId" (click)="copiarDesde()">Sumar</button>
+                </div>
+              </div>
+
+              <div class="aviso-aviso" *ngIf="!u.tieneModulo">
+                {{ u.nombre }} no tiene habilitado el módulo Orquestador n8n: puedes dejarle los flujos listos, pero no podrá entrar hasta que se lo asignes en Gestión de Usuarios.
+              </div>
+
+              <div class="filtros">
+                <input class="buscar" type="search" placeholder="Buscar flujo, ID o etiqueta…" [(ngModel)]="busquedaFlujos" (ngModelChange)="recalcular()" aria-label="Buscar flujo">
+                <select [(ngModel)]="filtroFlujos" (ngModelChange)="recalcular()" aria-label="Filtrar flujos">
+                  <option value="todos">Todos</option>
+                  <option value="marcados">Con acceso</option>
+                  <option value="sin-marcar">Sin acceso</option>
+                  <option value="sin-asignar">Sin asignar a nadie</option>
+                </select>
+                <select *ngIf="cuentas.length > 1" [(ngModel)]="filtroCuenta" (ngModelChange)="recalcular()" aria-label="Filtrar por propietario">
+                  <option value="todas">Todos los propietarios</option>
+                  <option *ngFor="let c of cuentas" [value]="c.id">{{ c.nombre }}</option>
+                </select>
+                <button type="button" class="btn-mini" (click)="marcarVisibles(true)" [disabled]="!flujosVisibles.length">Marcar visibles ({{ flujosVisibles.length }})</button>
+                <button type="button" class="btn-mini" (click)="marcarVisibles(false)" [disabled]="!flujosVisibles.length">Quitar visibles</button>
+              </div>
+
+              <div class="lista-f">
+                <div class="grupo" *ngFor="let g of grupos; trackBy: trackGrupo">
+                  <div class="grupo-cab">
+                    <strong>{{ g.nombre }}</strong>
+                    <span class="u-meta">{{ g.marcados }} de {{ g.flujos.length }} marcados</span>
+                    <span class="grupo-acc">
+                      <button type="button" class="btn-mini" (click)="marcarGrupo(g, true)">Todos</button>
+                      <button type="button" class="btn-mini" (click)="marcarGrupo(g, false)">Ninguno</button>
+                    </span>
+                  </div>
+                  <label class="fila-f" *ngFor="let f of g.flujos; trackBy: trackFlujo" [class.marcada]="tiene(u.id, f.id)">
+                    <input type="checkbox" [checked]="tiene(u.id, f.id)" (change)="alternar(u.id, f.id)">
+                    <span class="f-texto">
+                      <span class="f-nombre">{{ f.nombre }}</span>
+                      <span class="f-meta"><span class="mono">{{ f.id }}</span> · {{ f.activo ? 'Activo' : 'Detenido' }}<ng-container *ngFor="let t of f.etiquetas"> · {{ t }}</ng-container></span>
+                    </span>
+                    <span class="chip chip-media" *ngIf="!conteoDe(f.id)">Sin asignar</span>
+                    <span class="f-n" *ngIf="conteoDe(f.id)" [title]="conteoDe(f.id) + ' usuario(s) lo ven'">{{ conteoDe(f.id) }} usuario(s)</span>
+                  </label>
+                </div>
+                <p class="vacio" *ngIf="!grupos.length">Ningún flujo coincide con el filtro.</p>
+              </div>
+            </section>
+          </div>
+
+          <!-- ============ POR FLUJO ============ -->
+          <div class="panel" *ngIf="vista === 'flujo'">
+            <aside class="lado lado-ancho">
+              <input class="buscar" type="search" placeholder="Buscar flujo, ID o etiqueta…" [(ngModel)]="busquedaFlujos" (ngModelChange)="recalcular()" aria-label="Buscar flujo">
+              <div class="filtros filtros-lado">
+                <select [(ngModel)]="filtroFlujos" (ngModelChange)="recalcular()" aria-label="Filtrar flujos">
+                  <option value="todos">Todos</option>
+                  <option value="marcados">Con algún usuario</option>
+                  <option value="sin-asignar">Sin asignar a nadie</option>
+                </select>
+                <select *ngIf="cuentas.length > 1" [(ngModel)]="filtroCuenta" (ngModelChange)="recalcular()" aria-label="Filtrar por propietario">
+                  <option value="todas">Todos los propietarios</option>
+                  <option *ngFor="let c of cuentas" [value]="c.id">{{ c.nombre }}</option>
+                </select>
+              </div>
+              <ul class="lista-u">
+                <li *ngFor="let f of flujosVisibles; trackBy: trackFlujo">
+                  <button type="button" class="item-u" [class.sel]="f.id === flujoSel" (click)="elegirFlujo(f.id)">
+                    <span class="u-nombre">{{ f.nombre }}</span>
+                    <span class="u-meta">{{ f.cuentaNombre }} · <span class="mono">{{ f.id }}</span></span>
+                    <span class="u-cant" [class.cero]="!conteoDe(f.id)">{{ conteoDe(f.id) ? conteoDe(f.id) + ' usuario(s)' : 'Sin asignar' }}</span>
+                  </button>
+                </li>
+                <li class="vacio" *ngIf="!flujosVisibles.length">Sin resultados.</li>
+              </ul>
+            </aside>
+
+            <section class="centro" *ngIf="flujo as f">
+              <div class="centro-cab">
+                <div><strong>{{ f.nombre }}</strong> <span class="u-meta">{{ conteoDe(f.id) }} de {{ usuarios.length }} usuarios lo ven</span></div>
+                <div class="copiar">
+                  <button type="button" class="btn-mini" (click)="darAccesoATodos(f.id, true)">Dar a todos</button>
+                  <button type="button" class="btn-mini" (click)="darAccesoATodos(f.id, false)">Quitar a todos</button>
+                </div>
+              </div>
+              <div class="lista-f">
+                <label class="fila-f" *ngFor="let u of usuarios; trackBy: trackUsuario" [class.marcada]="tiene(u.id, f.id)">
+                  <input type="checkbox" [checked]="tiene(u.id, f.id)" (change)="alternar(u.id, f.id)">
+                  <span class="f-texto">
+                    <span class="f-nombre">{{ u.nombre }}<span class="punto-sucio" *ngIf="sucios.has(u.id)" title="Cambios sin guardar"></span></span>
+                    <span class="f-meta">{{ u.username }} · {{ u.rol }}</span>
+                  </span>
+                  <span class="chip chip-media" *ngIf="!u.tieneModulo">Sin módulo</span>
+                </label>
+              </div>
+            </section>
+          </div>
+        </ng-container>
+
+        <div class="aviso-cuentas" *ngIf="errorGuardar">{{ errorGuardar }}</div>
+        <div class="aviso-ok" *ngIf="mensaje">{{ mensaje }}</div>
+      </ng-container>
+    </ng-container>
+
+    <div class="modal-footer">
+      <span class="pendiente" *ngIf="hayCambios">{{ sucios.size }} usuario(s) con cambios sin guardar</span>
+      <button type="button" class="btn btn-ghost" (click)="descartar()" *ngIf="hayCambios" [disabled]="guardando">Descartar</button>
+      <button type="button" class="btn btn-purple" (click)="guardar()" *ngIf="estricto" [disabled]="!hayCambios || guardando">{{ guardando ? 'Guardando…' : 'Guardar cambios' }}</button>
+      <button type="button" class="btn btn-ghost" (click)="intentarCerrar()">Cerrar</button>
+    </div>
+  </div>
+</div>

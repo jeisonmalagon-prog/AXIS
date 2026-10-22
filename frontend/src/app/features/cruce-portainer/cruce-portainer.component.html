@@ -1,0 +1,157 @@
+<header class="cab">
+  <div>
+    <h2 class="titulo">Conciliación con Portainer</h2>
+    <p class="sub">Cruza los contenedores y puertos que corren en Portainer con el inventario de sub-aplicativos y muestra lo que no cuadra: contenedores sin registrar, sub-aplicativos sin contenedor, puertos o estados distintos y puertos duplicados. Solo lectura.</p>
+  </div>
+  <div class="cab-acciones">
+    <button type="button" class="btn btn-ghost btn-sm" *ngIf="datos && (hayFilas || datos.servidoresSinPortainer.length)" (click)="exportarExcel()">Exportar Excel</button>
+    <button type="button" class="btn btn-purple" (click)="cargar(true)" [disabled]="cargando">
+      <span class="spinner chico" *ngIf="cargando"></span>
+      {{ cargando ? 'Consultando Portainer…' : 'Actualizar' }}
+    </button>
+  </div>
+</header>
+
+<div class="error-state" *ngIf="error">{{ error }} <button type="button" class="btn btn-ghost btn-sm" (click)="cargar(true)">Reintentar</button></div>
+<div class="aviso-aviso" *ngIf="sinPortainer">
+  Portainer no está configurado en el backend. Define <span class="mono">PORTAINER_URL</span>, <span class="mono">PORTAINER_USER</span> y <span class="mono">PORTAINER_PASS</span> en el .env (son los mismos que usa Monitoreo).
+</div>
+
+<div class="cargando chico-v" *ngIf="cargando && !datos"><div class="spinner"></div><p>Consultando Portainer y cruzando con el inventario…</p></div>
+
+<ng-container *ngIf="datos && datos.configurado && datos.resumen as r">
+  <div class="kpis kpis-6">
+    <div class="kpi"><span class="kpi-et">Servidores en Portainer</span><span class="kpi-v">{{ r.servidoresConPortainer - r.servidoresSinLeer }}<small *ngIf="r.servidoresSinLeer"> / {{ r.servidoresConPortainer }}</small></span><span class="kpi-s">{{ r.contenedores }} contenedores</span></div>
+    <div class="kpi"><span class="kpi-et">Sub-aplicativos</span><span class="kpi-v">{{ r.subaplicativosEnPortainer }}<small> / {{ r.subaplicativos }}</small></span><span class="kpi-s">del inventario con contenedor</span></div>
+    <div class="kpi"><span class="kpi-et">Coinciden</span><span class="kpi-v t-ok">{{ r.ok }}</span><span class="kpi-s">nombre, puerto y estado iguales</span></div>
+    <div class="kpi" [class.kpi-alerta]="r.graves"><span class="kpi-et">Para revisar</span><span class="kpi-v">{{ r.graves }}</span><span class="kpi-s">diferencias importantes</span></div>
+    <div class="kpi"><span class="kpi-et">Sin registrar</span><span class="kpi-v">{{ r.porHallazgo.sin_registrar }}</span><span class="kpi-s">contenedores fuera del inventario</span></div>
+    <div class="kpi"><span class="kpi-et">Sin contenedor</span><span class="kpi-v">{{ r.porHallazgo.sin_contenedor }}</span><span class="kpi-s">del inventario, no están en Portainer</span></div>
+  </div>
+
+  <details class="como">
+    <summary>¿Cómo se hace el cruce?</summary>
+    <p>Por cada servidor que está en Portainer, cada contenedor se empareja con un sub-aplicativo de ese mismo servidor: primero por <strong>nombre</strong> (se ignoran prefijos como «container_», guiones y la réplica «-1»), luego por el nombre de la <strong>imagen</strong> y, si no, por el <strong>puerto</strong> publicado. Después se comparan puertos, estado, versión y duplicados.</p>
+    <p>Portainer solo ve Docker: los sub-aplicativos que por su nombre no son contenedores (servicios, sitios IIS) se marcan «Fuera de Docker» y no cuentan como diferencia importante. Los contenedores con red «host» no informan puertos.</p>
+  </details>
+
+  <section class="tarjeta filtros-card">
+    <div class="filtros-fila">
+      <label class="etiqueta">Buscar
+        <input class="entrada" type="search" [(ngModel)]="texto" name="c-texto" (ngModelChange)="recalcular()" placeholder="Contenedor, sub-aplicativo, puerto, imagen, servidor o aplicación" autocomplete="off" />
+      </label>
+      <label class="check">
+        <input type="checkbox" [(ngModel)]="soloDiferencias" name="c-solo" (ngModelChange)="recalcular()" />
+        <span>Solo con diferencias</span>
+      </label>
+    </div>
+    <div class="filtros-bloque" *ngIf="conteos.length">
+      <span class="filtros-et">Diferencia</span>
+      <button type="button" class="chip-filtro" *ngFor="let c of conteos" [class.activo]="hallazgo === c.info.id" [title]="c.info.ayuda" (click)="elegirHallazgo(c.info.id)">{{ c.info.texto }} <span>{{ c.total }}</span></button>
+    </div>
+    <div class="filtros-bloque" *ngIf="ambientes.length > 1">
+      <span class="filtros-et">Ambiente</span>
+      <button type="button" class="chip-filtro" *ngFor="let a of ambientes" [class.activo]="ambiente === a.nombre" (click)="elegirAmbiente(a.nombre)">{{ a.nombre }} <span>{{ a.total }}</span></button>
+    </div>
+    <div class="filtros-pie">
+      <span class="gris">Consultado {{ hora(datos.consultadoEn) }} · {{ filasVisibles }} fila(s)</span>
+      <button type="button" class="btn btn-ghost btn-sm" *ngIf="hayFiltros" (click)="quitarFiltros()">Quitar filtros</button>
+    </div>
+  </section>
+
+  <section class="tarjeta vacio-inicial" *ngIf="!vistas.length && !hayFiltros">
+    <h3>Portainer no devolvió servidores</h3>
+    <p>No hay entornos de Docker disponibles en Portainer.</p>
+  </section>
+  <section class="tarjeta vacio-inicial" *ngIf="!vistas.length && hayFiltros">
+    <h3>{{ r.graves || r.conHallazgos ? 'Sin coincidencias' : 'Todo coincide' }}</h3>
+    <p>{{ r.conHallazgos ? 'Ningún servidor tiene filas con esos filtros.' : 'Los contenedores de Portainer y el inventario de sub-aplicativos coinciden.' }}</p>
+  </section>
+
+  <section class="tarjeta srv" *ngFor="let v of vistas; trackBy: trackS">
+    <div class="srv-cab" [class.clic]="v.s.ok" (click)="v.s.ok && alternar(v.s)">
+      <div class="srv-id">
+        <span class="srv-flecha" *ngIf="v.s.ok">{{ abierta(v.s) ? '▾' : '▸' }}</span>
+        <strong>{{ v.s.hostname || v.s.entorno }}</strong>
+        <span class="mono gris" *ngIf="v.s.ip">{{ v.s.ip }}</span>
+        <span class="chip" *ngIf="v.s.ambiente">{{ v.s.ambiente }}</span>
+        <span class="chip chip-media" *ngIf="v.s.ok && !v.s.servidorInventariado" title="El entorno de Portainer no coincide con ningún servidor del inventario por nombre ni por IP">No está en el inventario</span>
+      </div>
+      <div class="srv-estado">
+        <span class="t-mal" *ngIf="!v.s.ok">{{ v.s.error || 'No se pudo leer este servidor' }}</span>
+        <span *ngIf="v.s.ok">
+          {{ v.s.contenedores }} contenedores · {{ v.s.subaplicativos }} sub-aplicativos ·
+          <span class="chip chip-alta" *ngIf="v.diferencias">{{ v.diferencias }} diferencia(s)</span>
+          <span class="chip chip-ok" *ngIf="!v.diferencias">Todo coincide</span>
+        </span>
+      </div>
+    </div>
+
+    <div *ngIf="v.s.ok && abierta(v.s)">
+      <div class="vacio" *ngIf="!v.filas.length">Sin filas con estos filtros en este servidor.</div>
+      <div class="tabla-wrap tabla-alta" *ngIf="v.filas.length">
+        <table class="tabla">
+          <thead><tr><th>Resultado</th><th>Contenedor (Portainer)</th><th>Puertos</th><th>Sub-aplicativo (inventario)</th><th>Detalle</th></tr></thead>
+          <tbody>
+            <tr *ngFor="let f of v.filas; trackBy: trackF" [class.fila-ok]="f.estado === 'ok'" [class.fila-grave]="f.grave">
+              <td class="celda-res">
+                <span class="chip chip-ok" *ngIf="f.estado === 'ok'">Coincide</span>
+                <span class="chip" *ngFor="let h of f.hallazgos" [ngClass]="info(h).clase" [title]="info(h).ayuda">{{ info(h).texto }}</span>
+              </td>
+              <td class="celda-cont">
+                <ng-container *ngIf="f.contenedor as c; else sinCont">
+                  <strong class="nombre" [title]="c.nombre">{{ c.nombre }}</strong>
+                  <span class="chip" [ngClass]="claseContenedor(c.estado)">{{ etiquetaContenedor(c.estado) }}</span>
+                  <span class="sec gris" [title]="c.imagen">{{ c.imagen }}</span>
+                  <span class="sec gris" *ngIf="c.stack">stack: {{ c.stack }}</span>
+                </ng-container>
+                <ng-template #sinCont><span class="gris">— no hay contenedor —</span></ng-template>
+              </td>
+              <td class="mono celda-pto">
+                <ng-container *ngIf="f.contenedor as c">
+                  <span *ngIf="c.puertos.length">{{ puertosTexto(c.puertos) }}</span>
+                  <span class="sec gris" *ngIf="!c.puertos.length">{{ c.redHost ? 'red «host»' : 'sin puertos' }}</span>
+                  <span class="sec gris" *ngIf="c.puertos.length && c.puertos[0].reservado">reservados (detenido)</span>
+                </ng-container>
+              </td>
+              <td class="celda-sub">
+                <ng-container *ngIf="f.subaplicativo as s; else sinSub">
+                  <button type="button" class="enlace nombre" (click)="verEnInventario(f)" title="Abrir en Sub-aplicativos">{{ s.nombre }}</button>
+                  <span class="sec gris">
+                    <ng-container *ngIf="s.tipo">{{ s.tipo }} · </ng-container>puerto <span class="mono">{{ s.puerto ?? '—' }}</span>
+                    <ng-container *ngIf="s.estado"> · {{ s.estado }}</ng-container>
+                  </span>
+                  <span class="sec gris" *ngIf="s.aplicaciones.length">{{ s.aplicaciones.join(', ') }}</span>
+                </ng-container>
+                <ng-template #sinSub><span class="gris">— no está en el inventario —</span></ng-template>
+              </td>
+              <td class="celda-det"><span class="det" *ngFor="let n of f.notas">{{ n }}</span></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="aviso-aviso inv-aviso" *ngIf="v.s.sinLeer">Hay {{ v.s.sinLeer }} contenedor(es) detenido(s) cuyos puertos reservados no se leyeron (límite por servidor).</div>
+    </div>
+  </section>
+
+  <section class="tarjeta srv" *ngIf="datos.servidoresSinPortainer.length">
+    <div class="srv-cab clic" (click)="verSinPortainer = !verSinPortainer">
+      <div class="srv-id">
+        <span class="srv-flecha">{{ verSinPortainer ? '▾' : '▸' }}</span>
+        <strong>Servidores con sub-aplicativos que no están en Portainer</strong>
+        <span class="chip">{{ datos.servidoresSinPortainer.length }}</span>
+      </div>
+      <div class="srv-estado gris">Máquinas del inventario sin entorno en Portainer (Windows, servicios del sistema…).</div>
+    </div>
+    <div class="tabla-wrap" *ngIf="verSinPortainer">
+      <table class="tabla tabla-simple">
+        <thead><tr><th>Servidor</th><th>IP</th><th>Ambiente</th><th>Sub-aplicativos</th></tr></thead>
+        <tbody>
+          <tr *ngFor="let s of datos.servidoresSinPortainer">
+            <td><strong>{{ s.hostname }}</strong></td><td class="mono gris">{{ s.ip }}</td><td>{{ s.ambiente }}</td><td>{{ s.subaplicativos }}</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+</ng-container>

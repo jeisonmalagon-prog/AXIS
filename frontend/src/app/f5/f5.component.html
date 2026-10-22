@@ -1,0 +1,571 @@
+<div class="f5-container">
+  <div class="header-section">
+    <div>
+      <h1>Balanceador F5</h1>
+      <p *ngIf="dispositivoNombre">{{ dispositivoNombre }}</p>
+      <div class="chips-equipo" *ngIf="sistema && dispositivoId">
+        <span class="chip-info" *ngIf="sistema.hostname" title="Nombre del equipo"><span class="chip-info-k">Host</span> {{ sistema.hostname }}</span>
+        <span class="chip-info" *ngIf="sistema.version" title="Versión de TMOS"><span class="chip-info-k">Versión</span> {{ sistema.version }}<ng-container *ngIf="sistema.build"> (build {{ sistema.build }})</ng-container></span>
+        <span class="chip-info" *ngIf="sistema.haEstado" [ngClass]="claseHa(sistema.haEstado)" [title]="sistema.haResumen || ''"><span class="chip-info-k">HA</span> {{ textoHa(sistema.haEstado) }}</span>
+      </div>
+    </div>
+
+    <div class="header-actions">
+      <select *ngIf="dispositivos.length > 1" [ngModel]="dispositivoId" (ngModelChange)="cambiarDispositivo($event)">
+        <option [ngValue]="null">— Selecciona un equipo F5 —</option>
+        <option *ngFor="let d of dispositivos" [ngValue]="d.id">{{ d.nombre }}</option>
+      </select>
+      <button
+        type="button"
+        class="btn-vivo"
+        *ngIf="dispositivoId"
+        [class.activo]="enVivo"
+        (click)="alternarVivo()"
+        [title]="enVivo ? 'Actualizando el tráfico cada 10 s. Clic para pausar' : 'Pausado. Clic para reanudar'"
+      ><span class="punto-vivo"></span>{{ enVivo ? 'En vivo' : 'Pausado' }}</button>
+      <button class="btn-secondary" (click)="recargar()" [disabled]="cargando || !dispositivoId">↻ Actualizar</button>
+    </div>
+  </div>
+
+<div class="empty-state text-center py-4" *ngIf="!dispositivos.length && !error">Cargando equipos F5 configurados…</div>
+
+  <div class="empty-state text-center py-4" *ngIf="dispositivos.length && !dispositivoId && !cargando">
+    Elige un equipo F5 arriba para ver sus Virtual Servers.
+  </div>
+
+  <div class="empty-state text-center py-4" *ngIf="cargando">Consultando el F5…</div>
+
+  <div class="error-state" *ngIf="!cargando && error">⚠ {{ error }}</div>
+
+  <!-- RESUMEN GENERAL DEL EQUIPO -->
+  <div class="kpis" *ngIf="!cargando && !error && dispositivoId && virtuales.length">
+    <div class="kpi">
+      <span class="kpi-label">Virtual Servers</span>
+      <span class="kpi-valor">{{ resumen.virtualesTotal }}</span>
+      <span class="kpi-sub">
+        <span class="mini-ok">{{ resumen.arriba }} arriba</span>
+        <span class="mini-mal" *ngIf="resumen.abajo"> · {{ resumen.abajo }} abajo</span>
+        <span class="mini-gris" *ngIf="resumen.desconocido"> · {{ resumen.desconocido }} sin estado</span>
+      </span>
+    </div>
+    <div class="kpi" [class.kpi-alerta]="nodosProblema.length > 0" [class.kpi-click]="nodosProblema.length > 0"
+         [attr.role]="nodosProblema.length ? 'button' : null" [attr.tabindex]="nodosProblema.length ? 0 : null"
+         [attr.aria-expanded]="nodosProblema.length ? verProblemas : null"
+         (click)="alternarProblemas()" (keydown.enter)="alternarProblemas()">
+      <span class="kpi-label">Nodos habilitados</span>
+      <span class="kpi-valor">{{ resumen.nodosArriba }}<span class="kpi-de">/{{ resumen.nodosTotal }}</span></span>
+      <span class="kpi-sub" *ngIf="nodosProblema.length; else todosOk">
+        <strong>{{ nodosProblema.length }} con problema</strong>
+        <span class="kpi-ver"> · {{ verProblemas ? 'ocultar' : 'ver cuáles' }} {{ verProblemas ? '▴' : '▾' }}</span>
+      </span>
+      <ng-template #todosOk><span class="kpi-sub">todos en servicio</span></ng-template>
+    </div>
+    <div class="kpi">
+      <span class="kpi-label">Conexiones abiertas</span>
+      <span class="kpi-valor">{{ formatearNumero(resumen.conexiones) }}</span>
+      <span class="kpi-sub">{{ totalesVivo?.conexionesNuevasPorSeg !== null && totalesVivo?.conexionesNuevasPorSeg !== undefined ? formatearNumero(totalesVivo?.conexionesNuevasPorSeg, 1) + ' nuevas / s' : 'sumando todos los virtuales' }}</span>
+    </div>
+    <div class="kpi">
+      <span class="kpi-label">Entrada ↓</span>
+      <span class="kpi-valor kpi-valor-txt">{{ totalesVivo?.entradaTexto || '…' }}</span>
+      <span class="kpi-sub">tráfico hacia los servidores</span>
+    </div>
+    <div class="kpi">
+      <span class="kpi-label">Salida ↑</span>
+      <span class="kpi-valor kpi-valor-txt">{{ totalesVivo?.salidaTexto || '…' }}</span>
+      <span class="kpi-sub">tráfico hacia los clientes</span>
+    </div>
+    <div class="kpi" *ngIf="totalesVivo?.peticionesPorSeg !== null && totalesVivo?.peticionesPorSeg !== undefined">
+      <span class="kpi-label">Peticiones HTTP</span>
+      <span class="kpi-valor">{{ formatearNumero(totalesVivo?.peticionesPorSeg, 1) }}<span class="kpi-de"> /s</span></span>
+      <span class="kpi-sub">solo virtuales con perfil HTTP</span>
+    </div>
+  </div>
+
+  <!-- DETALLE DE NODOS CON PROBLEMA -->
+  <div class="panel-problemas" *ngIf="verProblemas && nodosProblema.length">
+    <div class="panel-problemas-cab">
+      <strong>Nodos con problema ({{ nodosProblema.length }})</strong>
+      <span class="panel-problemas-resumen">
+        <span *ngIf="problemasMonitor">{{ problemasMonitor }} con monitor caído</span>
+        <span *ngIf="problemasMonitor && problemasDeshabilitados"> · </span>
+        <span *ngIf="problemasDeshabilitados">{{ problemasDeshabilitados }} deshabilitado{{ problemasDeshabilitados === 1 ? '' : 's' }}</span>
+      </span>
+      <button type="button" class="btn-mini" (click)="verProblemas = false" aria-label="Cerrar">✕</button>
+    </div>
+    <p class="panel-problemas-nota">
+      “Habilitado” significa que el nodo está activo en el F5. Un nodo cuenta como problema si alguien lo
+      <strong>deshabilitó</strong> (no recibe tráfico nuevo) o si el <strong>monitor de salud</strong> lo marca caído.
+    </p>
+    <div class="problema-item" *ngFor="let n of nodosProblema; trackBy: trackProblema">
+      <div class="problema-nodo">
+        <span class="punto-estado" [ngClass]="n.monitorCaido ? 'estado-abajo' : 'estado-desconocido'"></span>
+        <strong>{{ n.direccion }}</strong><span class="text-gray" *ngIf="n.puerto">:{{ n.puerto }}</span>
+        <span class="problema-pool" title="Pool">{{ n.pool }}</span>
+      </div>
+      <ul class="problema-motivos">
+        <li *ngFor="let m of n.motivos">{{ m }}</li>
+      </ul>
+      <div class="problema-virtuales">
+        <span class="problema-etq">Afecta a:</span>
+        <button type="button" class="chip-virtual" *ngFor="let v of n.virtuales" (click)="abrirDesdeProblema(v)" [title]="'Ver detalle de ' + nombreVirtual(v)">{{ nombreVirtual(v) }}</button>
+        <button type="button" class="btn-detalle-nodo" (click)="alternarDetalleNodo(n)" [attr.aria-expanded]="!!detalleDe(n)?.abierto">
+          {{ detalleDe(n)?.abierto ? 'Ocultar detalle' : 'Ver detalle del error' }}
+        </button>
+      </div>
+
+      <div class="problema-detalle" *ngIf="detalleDe(n)?.abierto">
+        <p class="detalle-estado" *ngIf="detalleDe(n)?.cargando">Consultando el F5…</p>
+        <p class="detalle-error" *ngIf="detalleDe(n)?.error">
+          {{ detalleDe(n)?.error }}
+          <button type="button" class="btn-mini" (click)="cargarDetalleNodo(n)">Reintentar</button>
+        </p>
+        <ng-container *ngIf="detalleDe(n)?.datos as d">
+          <div class="detalle-grid">
+            <div class="detalle-dato">
+              <span class="detalle-etq">Estado según el F5</span>
+              <span>{{ textoDisponibilidad(d.estadoF5?.disponibilidad) }} · {{ d.estadoF5?.habilitado || '—' }}</span>
+            </div>
+            <div class="detalle-dato">
+              <span class="detalle-etq">Resultado del monitor</span>
+              <span>{{ d.estadoConfig || d.estadoF5?.monitor || '—' }}</span>
+            </div>
+            <div class="detalle-dato">
+              <span class="detalle-etq">Sesión</span>
+              <span>{{ d.sesion || d.estadoF5?.sesion || '—' }}</span>
+            </div>
+            <div class="detalle-dato" *ngIf="d.estadoF5?.razon">
+              <span class="detalle-etq">Razón que informa el F5</span>
+              <span>{{ d.estadoF5?.razon }}</span>
+              <span class="text-gray" *ngIf="d.razonTraducida">{{ d.razonTraducida }}</span>
+            </div>
+            <div class="detalle-dato" *ngIf="d.nodo">
+              <span class="detalle-etq">Nodo (IP) completo</span>
+              <span>{{ textoDisponibilidad(d.nodo.disponibilidad) }} · {{ d.nodo.habilitado || '—' }}</span>
+              <span class="text-gray" *ngIf="d.nodo.razon">{{ d.nodo.razon }}</span>
+            </div>
+          </div>
+
+          <div class="detalle-bloque" *ngIf="d.monitores.length">
+            <span class="detalle-etq">
+              Monitor aplicado
+              <span class="text-gray">({{ d.origenMonitor === 'pool' ? 'heredado del pool' : 'configurado en el miembro' }})</span>
+            </span>
+            <div class="detalle-monitor" *ngFor="let m of d.monitores">
+              <div class="detalle-monitor-cab">
+                <strong>{{ m.nombre }}</strong>
+                <span class="chip-tipo" *ngIf="m.encontrado">{{ textoMonitor(m) }}</span>
+              </div>
+              <span class="text-gray" *ngIf="!m.encontrado">No se pudo leer su configuración.</span>
+              <dl class="detalle-monitor-dl" *ngIf="m.encontrado">
+                <ng-container *ngIf="m.intervalo !== null && m.intervalo !== undefined"><dt>Intervalo</dt><dd>{{ m.intervalo }} s</dd></ng-container>
+                <ng-container *ngIf="m.tiempoLimite !== null && m.tiempoLimite !== undefined"><dt>Tiempo límite</dt><dd>{{ m.tiempoLimite }} s</dd></ng-container>
+                <ng-container *ngIf="m.destino"><dt>Destino</dt><dd>{{ m.destino }}</dd></ng-container>
+                <ng-container *ngIf="m.envia"><dt>Envía</dt><dd><code>{{ m.envia }}</code></dd></ng-container>
+                <ng-container *ngIf="m.espera"><dt>Espera</dt><dd><code>{{ m.espera }}</code></dd></ng-container>
+                <ng-container *ngIf="m.esperaDeshabilitar"><dt>Espera (deshabilita)</dt><dd><code>{{ m.esperaDeshabilitar }}</code></dd></ng-container>
+                <ng-container *ngIf="m.inverso"><dt>Modo</dt><dd>Inverso</dd></ng-container>
+              </dl>
+            </div>
+          </div>
+          <p class="text-gray detalle-sin-monitor" *ngIf="!d.monitores.length">Este nodo no tiene un monitor de salud aplicado (miembro: {{ d.monitorMiembro }}, pool: {{ d.monitorPool || 'ninguno' }}).</p>
+
+          <div class="detalle-bloque">
+            <span class="detalle-etq">Qué puede estar pasando</span>
+            <ul class="detalle-pistas">
+              <li *ngFor="let p of d.diagnostico" [ngClass]="'pista-' + p.nivel">{{ p.texto }}</li>
+            </ul>
+          </div>
+
+          <p class="detalle-pie">
+            El F5 no expone por esta vía el texto exacto del "último error" del monitor; para verlo, en el F5 abre
+            <strong>Local Traffic › Pools › {{ n.pool }} › Members</strong> o ejecuta
+            <code>tmsh show ltm pool {{ n.poolPath }} members field-fmt</code>.
+            Consultado a las {{ d.consultadoEn | date: 'HH:mm:ss' }}
+            <button type="button" class="btn-mini" (click)="cargarDetalleNodo(n)" [disabled]="detalleDe(n)?.cargando">Actualizar</button>
+          </p>
+        </ng-container>
+      </div>
+    </div>
+  </div>
+  <p class="trafico-nota nota-vivo" *ngIf="!cargando && !error && dispositivoId && virtuales.length">
+    <ng-container *ngIf="ultimaVivo">Datos de las {{ ultimaVivo | date: 'HH:mm:ss' }}<span *ngIf="enVivo"> · se actualizan cada 10 s</span>.</ng-container>
+    El F5 no identifica usuarios: lo que mide son conexiones abiertas (cada usuario suele abrir varias), sesiones y peticiones.
+    <span class="error-inline" *ngIf="errorVivo">⚠ {{ errorVivo }}</span>
+  </p>
+
+  <!-- TOP 5 -->
+  <div class="tops" *ngIf="!cargando && !error && dispositivoId && (topTrafico.length || topConexiones.length)">
+    <div class="top-card" *ngIf="topTrafico.length">
+      <h3>Más tráfico ahora</h3>
+      <div class="top-fila" *ngFor="let it of topTrafico" (click)="abrirDetalle(it.v)" title="Ver detalle">
+        <div class="top-nombre" [title]="it.v.nombre">{{ nombreVirtual(it.v) }}</div>
+        <div class="top-barra"><div class="top-relleno" [style.width.%]="it.porcentaje"></div></div>
+        <div class="top-valor">{{ it.texto }}</div>
+      </div>
+    </div>
+    <div class="top-card" *ngIf="topConexiones.length">
+      <h3>Más conexiones abiertas</h3>
+      <div class="top-fila" *ngFor="let it of topConexiones" (click)="abrirDetalle(it.v)" title="Ver detalle">
+        <div class="top-nombre" [title]="it.v.nombre">{{ nombreVirtual(it.v) }}</div>
+        <div class="top-barra"><div class="top-relleno top-relleno-2" [style.width.%]="it.porcentaje"></div></div>
+        <div class="top-valor">{{ it.texto }}</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- RENDIMIENTO DEL EQUIPO -->
+  <div class="rendimiento" *ngIf="!cargando && !error && dispositivoId && sistema?.rendimiento?.length">
+    <button type="button" class="rendimiento-toggle" (click)="mostrarRendimiento = !mostrarRendimiento">
+      <span>{{ mostrarRendimiento ? '▾' : '▸' }} Rendimiento del equipo</span>
+      <span class="text-gray">{{ sistema?.rendimiento?.length }} métricas (actual · promedio · máximo)</span>
+    </button>
+    <div class="rendimiento-tabla" *ngIf="mostrarRendimiento">
+      <div class="rend-fila rend-cab">
+        <span>Métrica</span><span>Actual</span><span>Promedio</span><span>Máximo</span>
+      </div>
+      <div class="rend-fila" *ngFor="let m of sistema?.rendimiento">
+        <span class="rend-nombre">{{ m.nombre }}</span>
+        <span data-label="Actual">{{ m.actual || '—' }}</span>
+        <span data-label="Promedio">{{ m.promedio || '—' }}</span>
+        <span data-label="Máximo">{{ m.maximo || '—' }}</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="toolbar-filtros" *ngIf="!cargando && !error && dispositivoId && virtuales.length">
+    <input
+      type="text"
+      class="input-buscar"
+      [(ngModel)]="filtroTexto"
+      placeholder="Buscar por nombre, alias, pool o IP…"
+    />
+    <select class="select-filtro" [(ngModel)]="filtroEstado" title="Filtrar por estado">
+      <option value="todos">Todos los estados</option>
+      <option value="arriba">Solo arriba ({{ resumen.arriba }})</option>
+      <option value="abajo">Solo abajo ({{ resumen.abajo }})</option>
+      <option value="desconocido">Sin estado ({{ resumen.desconocido }})</option>
+    </select>
+    <select class="select-filtro" [(ngModel)]="orden" title="Ordenar">
+      <option value="nombre">Orden: nombre</option>
+      <option value="conexiones">Orden: más conexiones</option>
+      <option value="trafico">Orden: más tráfico</option>
+      <option value="estado">Orden: problemas primero</option>
+    </select>
+    <label class="chk-ocultos" *ngIf="contarOcultos() as totalOcultos">
+      <input type="checkbox" [(ngModel)]="mostrarOcultos" />
+      Mostrar ocultos ({{ totalOcultos }})
+    </label>
+  </div>
+
+  <div class="tarjetas-virtuales" *ngIf="!cargando && !error && dispositivoId && virtualesFiltrados().length">
+    <div
+      class="tarjeta-virtual"
+      [class.tarjeta-oculta]="v.oculto"
+      *ngFor="let v of virtualesFiltrados()"
+      (click)="abrirDetalle(v)"
+      title="Ver detalle"
+    >
+      <div class="tarjeta-estado">
+        <span class="punto-estado" [ngClass]="claseEstado(v.estado)" [title]="v.motivoEstado || ''"></span>
+        <span class="tarjeta-estado-texto">{{ textoEstado(v.estado) }}</span>
+        <button
+          type="button"
+          class="btn-ocultar"
+          (click)="alternarOculto(v, $event)"
+          [disabled]="guardandoOculto === v.fullPath"
+          [title]="v.oculto ? 'Mostrar de nuevo en mi vista' : 'Ocultar de mi vista'"
+        >{{ v.oculto ? '↺' : '⊘' }}</button>
+      </div>
+
+      <div class="tarjeta-nombre">
+        <ng-container *ngIf="editandoAliasDe !== v.fullPath; else formAlias">
+          <span class="nombre-principal" [title]="v.nombre">{{ v.alias || v.nombre }}</span>
+          <code class="nombre-secundario" *ngIf="v.alias">{{ v.nombre }}</code>
+          <button
+            type="button"
+            class="btn-editar-alias"
+            *ngIf="puedeEditar"
+            (click)="iniciarEdicionAlias(v, $event)"
+            title="Ponerle un nombre para identificarlo"
+          >✎</button>
+        </ng-container>
+        <ng-template #formAlias>
+          <input
+            class="input-alias"
+            type="text"
+            [(ngModel)]="aliasBorrador"
+            (click)="$event.stopPropagation()"
+            (keydown.enter)="confirmarAlias(v)"
+            (keydown.escape)="cancelarEdicionAlias()"
+            placeholder="Nombre para identificarlo…"
+            maxlength="120"
+          />
+          <div class="acciones-alias">
+            <button type="button" class="btn-guardar-alias" [disabled]="guardandoAlias" (click)="confirmarAlias(v, $event)" title="Guardar">✓</button>
+            <button type="button" class="btn-cancelar-alias" (click)="cancelarEdicionAlias($event)" title="Cancelar">✕</button>
+          </div>
+        </ng-template>
+      </div>
+
+      <div class="tarjeta-vivo" *ngIf="traficoDe(v) as t; else vivoPendiente">
+        <span class="vivo-item" title="Conexiones abiertas ahora"><span class="vivo-k">Conex.</span> <strong>{{ formatearNumero(t.conexionesActuales) }}</strong></span>
+        <span class="vivo-item" title="Entrada (hacia los servidores)"><span class="vivo-k">↓</span> <strong>{{ t.entradaTexto || '…' }}</strong></span>
+        <span class="vivo-item" title="Salida (hacia los clientes)"><span class="vivo-k">↑</span> <strong>{{ t.salidaTexto || '…' }}</strong></span>
+      </div>
+      <ng-template #vivoPendiente>
+        <div class="tarjeta-vivo" *ngIf="v.conexionesActuales !== null">
+          <span class="vivo-item"><span class="vivo-k">Conex.</span> <strong>{{ formatearNumero(v.conexionesActuales) }}</strong></span>
+        </div>
+      </ng-template>
+
+      <div class="tarjeta-nodos">
+        <ng-container *ngIf="v.pool; else sinPoolBadge">
+          <ng-container *ngIf="v.nodos && v.nodos.length; else nodosSinDatos">
+            <div class="nodos-chips">
+              <span
+                class="chip-nodo"
+                *ngFor="let n of v.nodos"
+                [ngClass]="claseChipNodo(n)"
+                [title]="tituloChipNodo(n)"
+              >
+                <span class="punto-chip" [ngClass]="claseChipNodo(n)"></span>
+                {{ n.direccion }}
+              </span>
+            </div>
+            <span class="nodos-resumen">{{ textoNodos(v) }}</span>
+          </ng-container>
+          <ng-template #nodosSinDatos>
+            <span class="badge-nodos nodos-desconocido" [title]="v.nodosError || ''">
+              Sin datos de nodos{{ v.nodosError ? ' ⚠' : '' }}
+            </span>
+          </ng-template>
+        </ng-container>
+        <ng-template #sinPoolBadge>
+          <span class="badge-nodos nodos-desconocido">Sin pool</span>
+        </ng-template>
+      </div>
+    </div>
+  </div>
+
+  <div
+    class="empty-state text-center py-4"
+    *ngIf="!cargando && !error && dispositivoId && virtuales.length && !virtualesFiltrados().length"
+  >
+    No se encontró ningún Virtual Server con ese filtro.
+  </div>
+
+  <div class="empty-state text-center py-4" *ngIf="!cargando && !error && dispositivoId && !virtuales.length">
+    Este equipo no tiene Virtual Servers configurados.
+  </div>
+
+  <p class="nota-final" *ngIf="dispositivoId">
+    Vista de solo lectura del F5: refleja el estado que reporta el propio equipo en este momento.
+    Cualquier cambio real (habilitar/deshabilitar nodos, editar pools, etc.) se hace directamente en el F5.
+  </p>
+</div>
+
+<!-- PANEL DE DETALLE DE UN VIRTUAL SERVER -->
+<div class="modal-overlay" *ngIf="detalleAbierto" (click)="cerrarDetalle()">
+  <div class="modal-content modal-ancho" (click)="$event.stopPropagation()" *ngIf="detalleVirtual as v">
+    <header class="detail-header">
+      <div>
+        <h2>{{ v.alias || v.nombre }}</h2>
+        <p class="ip-subtitle"><code>{{ v.nombre }}</code></p>
+      </div>
+      <button class="btn-close" (click)="cerrarDetalle()">✕</button>
+    </header>
+
+    <div class="detalle-grid">
+      <div class="detalle-item">
+        <span class="detalle-label">Estado</span>
+        <span class="badge-estado" [ngClass]="claseEstado(v.estado)">{{ textoEstado(v.estado) }}</span>
+        <span class="text-gray" *ngIf="estadoVirtual?.razon || v.motivoEstado"> · {{ estadoVirtual?.razon || v.motivoEstado }}</span>
+      </div>
+      <div class="detalle-item">
+        <span class="detalle-label">Destino</span>
+        <code>{{ v.destino || '—' }}</code>
+        <span class="text-gray" *ngIf="configVirtual?.protocolo"> · {{ configVirtual?.protocolo | uppercase }}</span>
+      </div>
+      <div class="detalle-item">
+        <span class="detalle-label">Pool</span>
+        <span>{{ v.pool || 'Sin pool asignado' }}</span>
+      </div>
+      <div class="detalle-item" *ngIf="configVirtual?.descripcion">
+        <span class="detalle-label">Descripción</span>
+        <span>{{ configVirtual?.descripcion }}</span>
+      </div>
+    </div>
+
+    <!-- Tráfico del Virtual Server completo -->
+    <div class="metricas-nodo metricas-virtual">
+      <div class="metrica"><span class="metrica-label">Conexiones abiertas</span><span class="metrica-valor">{{ formatearNumero(traficoVirtual?.conexionesActuales ?? v.conexionesActuales) }}</span></div>
+      <div class="metrica"><span class="metrica-label">Entrada ↓</span><span class="metrica-valor">{{ traficoVirtual?.entradaTexto || (poolCargando || refrescandoTrafico ? '…' : '—') }}</span></div>
+      <div class="metrica"><span class="metrica-label">Salida ↑</span><span class="metrica-valor">{{ traficoVirtual?.salidaTexto || (poolCargando || refrescandoTrafico ? '…' : '—') }}</span></div>
+      <div class="metrica"><span class="metrica-label">Conexiones nuevas / s</span><span class="metrica-valor">{{ traficoVirtual?.conexionesNuevasPorSeg === null || traficoVirtual?.conexionesNuevasPorSeg === undefined ? '…' : formatearNumero(traficoVirtual?.conexionesNuevasPorSeg, 1) }}</span></div>
+      <div class="metrica"><span class="metrica-label">Paquetes / s</span><span class="metrica-valor">{{ traficoVirtual?.paquetesPorSeg === null || traficoVirtual?.paquetesPorSeg === undefined ? '…' : formatearNumero(traficoVirtual?.paquetesPorSeg) }}</span></div>
+      <div class="metrica"><span class="metrica-label">Conexiones totales</span><span class="metrica-valor">{{ formatearNumero(traficoVirtual?.conexionesTotales ?? v.conexionesTotales) }}</span></div>
+      <div class="metrica metrica-ancha" *ngIf="traficoVirtual?.datosEntrada"><span class="metrica-label">Datos acumulados desde el último reinicio de contadores</span><span class="metrica-valor">↓ {{ traficoVirtual?.datosEntrada }} · ↑ {{ traficoVirtual?.datosSalida }}</span></div>
+    </div>
+
+    <!-- Gráfica de los últimos minutos del Virtual Server -->
+    <div class="grafica" *ngIf="{ mx: maximoSerie(historialVirtual, ['entrada', 'salida']), mc: maximoSerie(historialVirtual, ['conexiones']) } as g">
+      <ng-container *ngIf="historialVirtual.length > 1">
+        <div class="grafica-bloque">
+          <div class="grafica-titulo">Tráfico <span class="leyenda"><i class="l-in"></i>entrada <i class="l-out"></i>salida</span><span class="grafica-max">máx. {{ textoBps(g.mx) }}</span></div>
+          <svg viewBox="0 0 220 44" preserveAspectRatio="none" class="spark" role="img" aria-label="Tráfico de los últimos minutos">
+            <polyline class="ln-in" [attr.points]="puntosLinea(historialVirtual, 'entrada', g.mx)" />
+            <polyline class="ln-out" [attr.points]="puntosLinea(historialVirtual, 'salida', g.mx)" />
+          </svg>
+        </div>
+        <div class="grafica-bloque">
+          <div class="grafica-titulo">Conexiones abiertas<span class="grafica-max">máx. {{ formatearNumero(g.mc) }}</span></div>
+          <svg viewBox="0 0 220 44" preserveAspectRatio="none" class="spark" role="img" aria-label="Conexiones de los últimos minutos">
+            <polyline class="ln-conn" [attr.points]="puntosLinea(historialVirtual, 'conexiones', g.mc)" />
+          </svg>
+        </div>
+      </ng-container>
+      <p class="trafico-nota" *ngIf="historialVirtual.length <= 1 && v.pool && !poolError">Las gráficas se van dibujando con cada lectura mientras este panel está abierto.</p>
+    </div>
+
+    <ng-container *ngIf="v.pool; else sinPool">
+      <!-- Configuración -->
+      <hr class="detalle-separador" />
+      <h3 class="miembros-titulo">Configuración</h3>
+      <div class="config-grid" *ngIf="configVirtual || configPool; else sinConfig">
+        <div class="config-bloque" *ngIf="configVirtual as c">
+          <h4>Virtual Server</h4>
+          <dl>
+            <dt>Habilitado</dt><dd>{{ c.habilitado ? 'Sí' : 'No (deshabilitado a mano)' }}</dd>
+            <ng-container *ngIf="c.origen"><dt>Origen permitido</dt><dd><code>{{ c.origen }}</code></dd></ng-container>
+            <ng-container *ngIf="c.mascara"><dt>Máscara</dt><dd><code>{{ c.mascara }}</code></dd></ng-container>
+            <dt>Persistencia</dt>
+            <dd>
+              <ng-container *ngIf="c.persistencia.length; else sinPers"><span class="tag" *ngFor="let p of c.persistencia">{{ p }}</span></ng-container>
+              <ng-template #sinPers>Ninguna</ng-template>
+              <span class="text-gray" *ngIf="c.persistenciaRespaldo"> · respaldo: {{ c.persistenciaRespaldo }}</span>
+            </dd>
+            <dt>SNAT</dt><dd>{{ c.snat || '—' }}</dd>
+            <ng-container *ngIf="c.traduceDireccion || c.traducePuerto"><dt>Traducción</dt><dd>dirección: {{ c.traduceDireccion || '—' }} · puerto: {{ c.traducePuerto || '—' }}</dd></ng-container>
+            <dt>Límite de conexiones</dt><dd>{{ c.limiteConexiones ? formatearNumero(c.limiteConexiones) : 'Sin límite' }}</dd>
+            <ng-container *ngIf="c.perfiles.length"><dt>Perfiles</dt><dd><span class="tag" *ngFor="let p of c.perfiles" [title]="p.contexto || ''">{{ p.nombre }}</span></dd></ng-container>
+            <ng-container *ngIf="c.reglas.length"><dt>iRules</dt><dd><span class="tag tag-regla" *ngFor="let r of c.reglas">{{ r }}</span></dd></ng-container>
+            <ng-container *ngIf="c.politicas.length"><dt>Políticas</dt><dd><span class="tag" *ngFor="let p of c.politicas">{{ p }}</span></dd></ng-container>
+          </dl>
+        </div>
+        <div class="config-bloque" *ngIf="configPool as p">
+          <h4>Pool</h4>
+          <dl>
+            <dt>Método de balanceo</dt><dd>{{ etiquetaMetodo(p.metodo) }}</dd>
+            <dt>Monitor de salud</dt><dd>{{ p.monitor || 'Ninguno' }}</dd>
+            <dt>Miembros activos</dt><dd>{{ p.miembrosActivos ?? '—' }} de {{ p.miembrosTotal ?? '—' }}</dd>
+            <ng-container *ngIf="p.minimoActivos"><dt>Mínimo de miembros</dt><dd>{{ p.minimoActivos }}</dd></ng-container>
+            <ng-container *ngIf="p.rampaLenta"><dt>Arranque lento</dt><dd>{{ p.rampaLenta }} s</dd></ng-container>
+            <dt>Conexiones del pool</dt><dd>{{ formatearNumero(p.conexionesActuales) }} actuales · {{ formatearNumero(p.conexionesTotales) }} totales<span *ngIf="p.conexionesMaximas"> · pico {{ formatearNumero(p.conexionesMaximas) }}</span></dd>
+            <ng-container *ngIf="p.sesionesActuales !== null"><dt>Sesiones activas</dt><dd>{{ formatearNumero(p.sesionesActuales) }}</dd></ng-container>
+            <ng-container *ngIf="p.peticionesTotales"><dt>Peticiones totales</dt><dd>{{ formatearNumero(p.peticionesTotales) }}</dd></ng-container>
+            <ng-container *ngIf="p.descripcion"><dt>Descripción</dt><dd>{{ p.descripcion }}</dd></ng-container>
+          </dl>
+        </div>
+      </div>
+      <ng-template #sinConfig>
+        <p class="trafico-nota">{{ poolCargando ? 'Leyendo configuración…' : 'El F5 no entregó la configuración de este Virtual Server.' }}</p>
+      </ng-template>
+
+      <!-- Nodos -->
+      <hr class="detalle-separador" />
+      <div class="miembros-cabecera">
+        <h3 class="miembros-titulo">Nodos del pool y su tráfico</h3>
+        <div class="trafico-controles">
+          <label class="chk-auto" title="Refresca el tráfico cada 5 segundos mientras este panel está abierto">
+            <input type="checkbox" [checked]="autoActualizar" (change)="alternarAutoActualizar()" /> Actualizar cada 5 s
+          </label>
+          <button type="button" class="btn-mini" (click)="actualizarTrafico()" [disabled]="refrescandoTrafico || poolCargando">↻</button>
+        </div>
+      </div>
+      <p class="trafico-nota" *ngIf="!poolCargando && !poolError">
+        Velocidad calculada con las lecturas del F5<span *ngIf="ultimaMuestra"> · última a las {{ ultimaMuestra | date: 'HH:mm:ss' }}</span>.
+        <span class="error-inline" *ngIf="errorRefresco">⚠ {{ errorRefresco }}</span>
+      </p>
+
+      <div class="empty-state text-center py-4" *ngIf="poolCargando">Cargando nodos y leyendo el tráfico…</div>
+      <div class="error-state" *ngIf="!poolCargando && poolError">⚠ {{ poolError }}</div>
+
+      <div class="lista-miembros" *ngIf="!poolCargando && !poolError">
+        <p class="vacio" *ngIf="!miembros.length">Este pool no tiene miembros configurados.</p>
+        <div class="tarjeta-miembro" *ngFor="let m of miembros; trackBy: trackMiembro">
+          <div class="fila-miembro">
+            <div class="miembro-info">
+              <span class="punto-estado" [ngClass]="claseEstado(m.estado)"></span>
+              <strong>{{ m.direccion || m.nombre }}</strong><span class="text-gray" *ngIf="m.puerto">:{{ m.puerto }}</span>
+            </div>
+            <div class="miembro-detalle">
+              <span class="badge-estado" [ngClass]="claseEstado(m.estado)">{{ textoNodo(m.estado) }}</span>
+              <span class="badge-estado" *ngIf="textoEstadoMonitor(m) as tm" [ngClass]="claseMonitor(m)">{{ tm }}</span>
+            </div>
+          </div>
+          <p class="miembro-razon" *ngIf="(m.estadoF5?.razon || m.motivoEstado) && grupoEstado(m.estado) !== 'arriba'">{{ m.estadoF5?.razon || m.motivoEstado }}</p>
+          <p class="miembro-meta">
+            <span *ngIf="m.sesion">Sesión: {{ m.sesion }}</span>
+            <span *ngIf="m.proporcion !== null && m.proporcion !== undefined">Ratio: {{ m.proporcion }}</span>
+            <span *ngIf="m.prioridad !== null && m.prioridad !== undefined">Prioridad: {{ m.prioridad }}</span>
+            <span *ngIf="m.limiteConexiones">Límite: {{ formatearNumero(m.limiteConexiones) }} conex.</span>
+            <span *ngIf="m.monitor" [title]="m.monitor">Monitor: {{ m.monitor }}</span>
+          </p>
+          <p class="miembro-actividad" *ngIf="resumenActividad(m) as act" [ngClass]="act.clase"
+             title="El F5 solo entrega contadores acumulados: el último tráfico se deduce comparando lecturas sucesivas (cada pocos segundos con este panel abierto y cada ~5 min en segundo plano), así que la hora puede ir atrasada unos minutos.">
+            <span class="act-punto"></span>
+            <span>{{ act.texto }}</span>
+            <span class="act-fecha" *ngIf="act.detalle">({{ act.detalle }})</span>
+          </p>
+
+          <ng-container *ngIf="m.trafico as t; else sinTrafico">
+            <div class="metricas-nodo">
+              <div class="metrica"><span class="metrica-label">Conexiones abiertas</span><span class="metrica-valor">{{ formatearNumero(t.conexionesActuales) }}<span class="metrica-sub" *ngIf="m.limiteConexiones && t.conexionesActuales !== null"> ({{ ((t.conexionesActuales || 0) / m.limiteConexiones * 100) | number: '1.0-0' }}% del límite)</span></span></div>
+              <div class="metrica"><span class="metrica-label">Entrada ↓</span><span class="metrica-valor">{{ t.entradaTexto || '…' }}</span></div>
+              <div class="metrica"><span class="metrica-label">Salida ↑</span><span class="metrica-valor">{{ t.salidaTexto || '…' }}</span></div>
+              <div class="metrica"><span class="metrica-label">Nuevas / s</span><span class="metrica-valor">{{ t.conexionesNuevasPorSeg === null ? '…' : formatearNumero(t.conexionesNuevasPorSeg, 1) }}</span></div>
+              <div class="metrica"><span class="metrica-label">Paquetes / s</span><span class="metrica-valor">{{ t.paquetesPorSeg === null ? '…' : formatearNumero(t.paquetesPorSeg) }}</span></div>
+              <div class="metrica"><span class="metrica-label">Conexiones totales</span><span class="metrica-valor">{{ formatearNumero(t.conexionesTotales) }}</span></div>
+              <div class="metrica" *ngIf="t.conexionesMaximas"><span class="metrica-label">Pico de conexiones</span><span class="metrica-valor">{{ formatearNumero(t.conexionesMaximas) }}</span></div>
+              <div class="metrica" *ngIf="t.sesiones !== null && t.sesiones !== undefined"><span class="metrica-label">Sesiones</span><span class="metrica-valor">{{ formatearNumero(t.sesiones) }}</span></div>
+              <div class="metrica" *ngIf="t.peticionesPorSeg !== null && t.peticionesPorSeg !== undefined"><span class="metrica-label">Peticiones / s</span><span class="metrica-valor">{{ formatearNumero(t.peticionesPorSeg, 1) }}</span></div>
+              <div class="metrica" *ngIf="t.peticionesTotales"><span class="metrica-label">Peticiones totales</span><span class="metrica-valor">{{ formatearNumero(t.peticionesTotales) }}</span></div>
+              <div class="metrica metrica-ancha"><span class="metrica-label">Datos acumulados</span><span class="metrica-valor">↓ {{ t.datosEntrada || '—' }} · ↑ {{ t.datosSalida || '—' }}</span></div>
+            </div>
+            <div class="reparto" [title]="porcentajeTrafico(m) + '% ' + baseReparto()">
+              <div class="reparto-barra"><div class="reparto-relleno" [style.width.%]="porcentajeTrafico(m)"></div></div>
+              <span class="reparto-texto">{{ porcentajeTrafico(m) }}% {{ baseReparto() }}</span>
+            </div>
+            <div class="grafica grafica-nodo" *ngIf="{ serie: historialDe(m) } as h">
+              <div class="grafica-bloque" *ngIf="h.serie.length > 1">
+                <div class="grafica-titulo">Tráfico del nodo <span class="leyenda"><i class="l-in"></i>entrada <i class="l-out"></i>salida</span></div>
+                <svg viewBox="0 0 220 44" preserveAspectRatio="none" class="spark spark-chico">
+                  <polyline class="ln-in" [attr.points]="puntosLinea(h.serie, 'entrada', maximoSerie(h.serie, ['entrada', 'salida']))" />
+                  <polyline class="ln-out" [attr.points]="puntosLinea(h.serie, 'salida', maximoSerie(h.serie, ['entrada', 'salida']))" />
+                </svg>
+              </div>
+              <div class="grafica-bloque" *ngIf="h.serie.length > 1">
+                <div class="grafica-titulo">Conexiones del nodo</div>
+                <svg viewBox="0 0 220 44" preserveAspectRatio="none" class="spark spark-chico">
+                  <polyline class="ln-conn" [attr.points]="puntosLinea(h.serie, 'conexiones', maximoSerie(h.serie, ['conexiones']))" />
+                </svg>
+              </div>
+            </div>
+          </ng-container>
+          <ng-template #sinTrafico>
+            <p class="trafico-nota">El F5 no reportó estadísticas de este nodo.</p>
+          </ng-template>
+        </div>
+      </div>
+
+      <hr class="detalle-separador" />
+      <app-f5-historial-nodos [dispositivoId]="dispositivoId" [pool]="v.pool"></app-f5-historial-nodos>
+    </ng-container>
+
+    <ng-template #sinPool>
+      <hr class="detalle-separador" />
+      <p class="vacio">Este Virtual Server no tiene pool asignado.</p>
+    </ng-template>
+  </div>
+</div>

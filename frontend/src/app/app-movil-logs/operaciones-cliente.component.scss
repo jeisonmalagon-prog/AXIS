@@ -1,0 +1,19 @@
+@use './flujo-comun';
+
+$texto:    var(--ax-text, #1e293b);
+$suave:    var(--ax-text-muted, #64748b);
+$surface2: var(--ax-surface-2, #f8fafc);
+$borde:    var(--ax-border, #e2e8f0);
+
+small { display: block; color: $suave; font-size: 11.5px; font-weight: 500; white-space: normal; max-width: 420px; }
+.btn-link { border: none; background: transparent; color: var(--f-brand-ink); font-weight: 700; font-size: 12.5px; cursor: pointer; padding: 2px 0; font-family: inherit; &:hover { text-decoration: underline; } }
+.aviso-linea { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 14px; }
+.barra-filtros { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 14px 18px; margin-bottom: 14px; }
+.campo--inline { min-width: 180px; }
+.fila-op { cursor: pointer; }
+.celda-op { white-space: normal; min-width: 220px; }
+.dur-lenta { color: var(--f-warn-ink); font-weight: 800; }
+.dur-muy-lenta { color: var(--f-err-ink); font-weight: 800; }
+.fila-detalle > td { background: $surface2; padding: 12px 16px 16px; white-space: normal; }
+.detalle-meta { display: flex; flex-wrap: wrap; gap: 6px 18px; font-size: 12px; color: $suave; margin-bottom: 10px; strong { color: $texto; } }
+.detalle-aviso--precision { margin-top: 18px; }

@@ -1,0 +1,283 @@
+<header class="cab">
+  <div>
+    <h1>Consulta de biometría</h1>
+    <p class="sub">Busca un cliente por cédula, nombre, caso o RadNumber y mira todo lo que hay de él en ORQBIOMETRIA y MotorFirma, o consulta directamente al servidor de biometría armando el curl con la cédula.</p>
+  </div>
+  <div class="cab-acciones">
+    <a class="btn btn-ghost btn-sm" routerLink="/biometria/por-fecha">Biometrías por fecha</a>
+    <button type="button" class="btn btn-ghost btn-sm" *ngIf="detalle && detalle.encontrado" (click)="exportarExcel()">Exportar Excel</button>
+  </div>
+</header>
+
+<!-- ================= BUSCADOR ================= -->
+<section class="tarjeta buscador">
+  <div class="modos" role="group" aria-label="Dónde consultar">
+    <span class="modos-et">Consultar en</span>
+    <button type="button" class="modo" *ngFor="let m of modos" [class.activo]="modo === m.id" (click)="cambiarModo(m.id)" [disabled]="buscando || cargandoDetalle || consultandoServidor">{{ m.nombre }}</button>
+  </div>
+  <form class="buscador-fila" (ngSubmit)="buscar()" autocomplete="off">
+    <label class="etiqueta" *ngIf="modo !== 'servidor'">Buscar por
+      <select class="entrada" [(ngModel)]="criterio" name="criterio" (ngModelChange)="cambiarCriterio()" [disabled]="buscando || cargandoDetalle">
+        <option *ngFor="let c of criterios" [ngValue]="c.id">{{ c.nombre }}</option>
+      </select>
+    </label>
+    <label class="etiqueta etiqueta-valor">{{ infoCriterio.nombre }}
+      <input class="entrada" type="text" [(ngModel)]="valor" name="valor" [placeholder]="'Ej. ' + infoCriterio.ejemplo" [disabled]="buscando || cargandoDetalle" maxlength="60" autofocus />
+    </label>
+    <label class="etiqueta etiqueta-tipo" *ngIf="criterio === 'cc' && usaServidor" title="Tipo de documento que recibe el servicio (1 = cédula)">Tipo doc.
+      <input class="entrada" type="number" min="1" max="999" [(ngModel)]="tipoDocumento" name="tipoDocumento" />
+    </label>
+    <button type="submit" class="btn btn-purple" *ngIf="puedeEditar" [disabled]="!puedeBuscar">
+      <span class="spinner chico" *ngIf="buscando || cargandoDetalle || consultandoServidor"></span>{{ buscando || cargandoDetalle || consultandoServidor ? 'Consultando…' : (modo === 'servidor' ? 'Consultar servidor' : 'Buscar') }}
+    </button>
+  </form>
+  <div class="buscador-pie">
+    <p class="ayuda">{{ infoModo.ayuda }} <ng-container *ngIf="modo !== 'servidor'">{{ infoCriterio.ayuda }}</ng-container></p>
+  </div>
+  <p class="ayuda" *ngIf="!puedeEditar">Este módulo no está habilitado para tu usuario.</p>
+</section>
+
+<!-- ================= CURL AL SERVIDOR ================= -->
+<section class="tarjeta curl-card" *ngIf="usaServidor && criterio === 'cc' && (servicio || errorServicio)">
+  <div class="curl-cab">
+    <div>
+      <strong>Consulta directa al servidor de biometría</strong>
+      <span class="gris" *ngIf="servicio"> · {{ servicio.servidor }}:{{ servicio.puertoApi }}</span>
+    </div>
+    <div class="curl-acc">
+      <button type="button" class="btn btn-ghost btn-sm" *ngIf="servicio" (click)="copiar(curlArmado, 'curl')" [disabled]="!cedulaValida">{{ copiadoCurl ? '✓ Copiado' : 'Copiar curl' }}</button>
+      <button type="button" class="btn btn-purple btn-sm" *ngIf="puedeEditar && servicio" (click)="consultarServidor()" [disabled]="!cedulaValida || !tipoValido || consultandoServidor">
+        <span class="spinner chico" *ngIf="consultandoServidor"></span>{{ consultandoServidor ? 'Consultando…' : 'Consultar en el servidor' }}
+      </button>
+    </div>
+  </div>
+  <pre class="curl" *ngIf="servicio">{{ curlArmado }}</pre>
+  <p class="ayuda" *ngIf="servicio">El curl se arma con la cédula que escribes. «Consultar en el servidor» lo ejecuta por ti (conexión SSH ya predefinida) y te muestra la respuesta traducida; «Copiar curl» te sirve para correrlo a mano en el servidor.</p>
+  <div class="error-state" *ngIf="errorServicio">{{ errorServicio }}</div>
+</section>
+
+<div class="error-state" *ngIf="errorBusqueda">{{ errorBusqueda }}</div>
+
+<!-- Servidor de biometría -->
+<section class="tarjeta" *ngIf="servidorBio">
+  <div class="seccion-cab">
+    <h3>Respuesta del servidor de biometría <span class="gris" *ngIf="servidorDoc">· cédula <span class="mono">{{ servidorDoc }}</span></span></h3>
+    <button type="button" class="btn btn-ghost btn-sm" *ngIf="puedeEditar" (click)="consultarServidor(servidorDoc)" [disabled]="consultandoServidor">Consultar de nuevo</button>
+  </div>
+  <section class="resp" [ngClass]="'resp-' + servidorBio.nivel">
+    <div class="resp-titular">
+      <span class="resp-icono" aria-hidden="true"><span class="spinner chico-oscuro" *ngIf="servidorBio.estado === 'consultando'"></span><ng-container *ngIf="servidorBio.estado !== 'consultando'">{{ servidorBio.nivel === 'ok' ? '✓' : servidorBio.nivel === 'aviso' ? '!' : servidorBio.nivel === 'mal' ? '✕' : '–' }}</ng-container></span>
+      <div>
+        <strong>{{ servidorBio.titular }}</strong>
+        <p class="gris resp-meta" *ngIf="servidorBio.httpCodigo !== null">Código de respuesta del servicio: {{ servidorBio.httpCodigo }}<ng-container *ngIf="servidorDuracion"> · {{ servidorDuracion / 1000 | number: '1.1-1' }} s</ng-container></p>
+      </div>
+    </div>
+    <p class="resp-error" *ngIf="servidorBio.error">{{ servidorBio.error }}</p>
+    <p class="resp-resumen" *ngIf="!servidorBio.error && servidorBio.resumen">{{ servidorBio.resumen }}</p>
+  </section>
+  <div class="resp-lista" *ngIf="servidorBio.filas.length">
+    <div class="resp-fila" *ngFor="let fr of servidorBio.filas" [class.resp-grupo]="fr.grupo" [style.paddingLeft.px]="10 + fr.nivel * 18">
+      <span class="resp-et">{{ fr.etiqueta }}</span>
+      <span class="resp-val" *ngIf="fr.valor || !fr.grupo">{{ fr.valor }}</span>
+    </div>
+  </div>
+  <div class="resp-acciones">
+    <button type="button" class="btn btn-ghost btn-sm" *ngIf="servidorBio.cuerpo" (click)="crudoAbierto = !crudoAbierto">{{ crudoAbierto ? '▾ Ocultar' : '▸ Ver' }} la respuesta completa</button>
+    <button type="button" class="btn btn-ghost btn-sm" *ngIf="servidorBio.cuerpo" (click)="copiar(respuestaCompleta(servidorBio), 'respuesta')">{{ copiadoRespuesta ? '✓ Copiado' : 'Copiar respuesta' }}</button>
+    <button type="button" class="btn btn-ghost btn-sm" *ngIf="servidorCurl" (click)="copiar(servidorCurl, 'curl')">{{ copiadoCurl ? '✓ Copiado' : 'Copiar el curl' }}</button>
+  </div>
+  <pre class="crudo" *ngIf="crudoAbierto && servidorBio.cuerpo">{{ respuestaCompleta(servidorBio) }}</pre>
+  <pre class="curl" *ngIf="servidorCurl">{{ servidorCurl }}</pre>
+</section>
+
+<!-- ================= LISTA DE CLIENTES (búsquedas por nombre / caso / RadNumber) ================= -->
+<section class="tarjeta" *ngIf="clientes && !ccAbierta">
+  <p class="aviso-info" *ngIf="notaBusqueda">{{ notaBusqueda }}</p>
+  <div class="vacio" *ngIf="!clientes.length">No se encontró ningún cliente con ese dato en ORQBIOMETRIA.</div>
+  <div class="tabla-wrap" *ngIf="clientes.length">
+    <table class="tabla">
+      <thead><tr><th>Cédula</th><th>Nombre</th><th>Casos</th><th>Último caso</th><th aria-label="Abrir"></th></tr></thead>
+      <tbody>
+        <tr *ngFor="let c of clientes" class="fila-click" (click)="abrirCliente(c.cc)" (keydown.enter)="abrirCliente(c.cc)" tabindex="0">
+          <td class="mono">{{ c.cc || '—' }}</td>
+          <td>{{ c.nombre || '—' }}</td>
+          <td>{{ c.totalCasos }}</td>
+          <td class="mono">{{ c.ultimoCaso || '—' }}</td>
+          <td class="flecha"><button type="button" class="btn btn-ghost btn-sm" (click)="abrirCliente(c.cc); $event.stopPropagation()" [disabled]="!c.cc">Ver</button></td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+  <p class="ayuda" *ngIf="truncadoClientes">Hay más de {{ clientes.length }} coincidencias: escribe más del nombre para acotar.</p>
+</section>
+
+<!-- ================= CLIENTE ABIERTO ================= -->
+<ng-container *ngIf="ccAbierta">
+  <div class="cargando chico-v" *ngIf="cargandoDetalle"><div class="spinner"></div><p>Buscando el cliente, sus casos y sus firmas en las bases de datos… (puede tardar hasta 30 s por consulta)</p></div>
+  <div class="error-state" *ngIf="errorDetalle">{{ errorDetalle }}</div>
+
+  <ng-container *ngIf="detalle && vista">
+    <!-- Encabezado del cliente -->
+    <section class="tarjeta cliente-cab">
+      <div class="cliente-id">
+        <h2>{{ detalle.encontrado ? nombreCliente : 'Cliente no encontrado en ORQBIOMETRIA' }}</h2>
+        <p class="gris">Cédula <span class="mono">{{ detalle.cc }}</span> · consultado {{ detalle.generado | date: 'dd/MM/yyyy HH:mm' }} ({{ detalle.duracionMs / 1000 | number: '1.1-1' }} s)</p>
+      </div>
+      <button type="button" class="btn btn-ghost btn-sm" *ngIf="clientes" (click)="ccAbierta = ''; detalle = null; vista = null">← Volver a la lista</button>
+    </section>
+
+    <p class="ayuda" *ngIf="tiempos">Tiempos de la consulta: {{ tiempos }}</p>
+    <div class="aviso-aviso" *ngIf="!detalle.encontrado">Esa cédula no tiene registro en ORQBIOMETRIA (nunca ha intentado la biometría por ese canal, o está escrita distinta). Abajo puedes ver igual lo que responde el servidor de biometría.</div>
+    <div class="aviso-aviso" *ngFor="let a of detalle.advertencias">{{ a }}</div>
+
+    <div class="kpis kpis-4" *ngIf="detalle.encontrado">
+      <div class="kpi">
+        <span class="kpi-et">Casos de biometría</span>
+        <span class="kpi-v">{{ detalle.resumen.totalCasos }}</span>
+        <span class="kpi-s">{{ detalle.resumen.casosExitosos }} en estado exitoso</span>
+      </div>
+      <div class="kpi" [class.kpi-ok]="detalle.resumen.ultimoCaso?.exitoso">
+        <span class="kpi-et">Último intento</span>
+        <span class="kpi-v mono-v">{{ detalle.resumen.ultimoCaso?.id || '—' }}</span>
+        <span class="kpi-s">{{ detalle.resumen.ultimoCaso?.estado || 'Sin estado' }}</span>
+      </div>
+      <div class="kpi">
+        <span class="kpi-et">Con «Cédula original OK»</span>
+        <span class="kpi-v">{{ detalle.resumen.conCedulaOk }}</span>
+        <span class="kpi-s">casos con ese resultado</span>
+      </div>
+      <div class="kpi">
+        <span class="kpi-et">Solicitudes de firma</span>
+        <span class="kpi-v">{{ detalle.firmas.disponible ? detalle.firmas.filas.length : '—' }}</span>
+        <span class="kpi-s">{{ detalle.firmas.disponible ? 'ligadas a sus casos (MotorFirma)' : 'MotorFirma no respondió' }}</span>
+      </div>
+    </div>
+
+    <section class="tarjeta" *ngIf="!servidorBio && puedeEditar && ccAbierta">
+      <div class="seccion-cab">
+        <h3>Servidor de biometría</h3>
+        <button type="button" class="btn btn-purple btn-sm" (click)="consultarServidor(ccAbierta)" [disabled]="consultandoServidor || !tipoValido">Consultar la biometría de esta cédula</button>
+      </div>
+      <p class="gris">Aún no se ha consultado al servidor para esta cédula.</p>
+    </section>
+
+    <!-- Datos del cliente -->
+    <section class="tarjeta" *ngIf="detalle.encontrado">
+      <div class="seccion-cab">
+        <h3>Datos del cliente (ORQBIOMETRIA)</h3>
+      </div>
+      <div class="clientes-grid">
+        <div class="cliente-bloque" *ngFor="let c of vista.clientes">
+          <h4 *ngIf="vista.clientes.length > 1">Registro de cliente {{ c.id }}</h4>
+          <dl class="kv">
+            <ng-container *ngFor="let f of c.campos">
+              <dt>{{ f.et }}</dt><dd [class.mono]="f.mono">{{ f.val }}</dd>
+            </ng-container>
+          </dl>
+        </div>
+      </div>
+      <div class="chips-estados" *ngIf="detalle.resumen.porEstado.length">
+        <span class="gris">Casos por estado:</span>
+        <span class="chip-filtro" *ngFor="let e of detalle.resumen.porEstado">{{ e.estado }} <span>{{ e.total }}</span></span>
+      </div>
+    </section>
+
+    <!-- Casos -->
+    <section class="tarjeta" *ngIf="detalle.encontrado">
+      <div class="seccion-cab">
+        <h3>Casos de biometría ({{ vista.casos.length }})</h3>
+        <span class="gris">Del más reciente al más antiguo. Pulsa un caso para ver sus capturas y resultados.</span>
+      </div>
+      <div class="vacio" *ngIf="!vista.casos.length">El cliente existe pero no tiene casos.</div>
+      <div class="tabla-wrap tabla-alta" *ngIf="vista.casos.length">
+        <table class="tabla">
+          <thead><tr><th>Caso</th><th>Fecha</th><th>Estado</th><th>Canal</th><th>Capturas</th><th>Resultados</th><th aria-label="Detalle"></th></tr></thead>
+          <tbody>
+            <ng-container *ngFor="let c of vista.casos; trackBy: trackCaso">
+              <tr class="fila-click" [class.fila-abierta]="casoAbierto === c.id" (click)="alternarCaso(c.id)" (keydown.enter)="alternarCaso(c.id)" tabindex="0" [attr.aria-expanded]="casoAbierto === c.id">
+                <td class="mono">{{ c.id }}</td>
+                <td>{{ c.fecha }}</td>
+                <td><span class="est" [ngClass]="claseNivel(c.nivel)">{{ c.estado }}</span></td>
+                <td>{{ c.canal }}</td>
+                <td>{{ c.capturas.length }}</td>
+                <td class="td-resultado" [title]="c.resumenResultados"><span class="cortar">{{ c.resumenResultados }}</span><span class="chip chip-ok chip-mini" *ngIf="c.cedulaOk">Cédula OK</span></td>
+                <td class="flecha" aria-hidden="true">{{ casoAbierto === c.id ? '▾' : '▸' }}</td>
+              </tr>
+              <tr class="detalle" *ngIf="casoAbierto === c.id">
+                <td colspan="7">
+                  <div class="detalle-grid">
+                    <div>
+                      <h4>Caso {{ c.id }}</h4>
+                      <dl class="kv"><ng-container *ngFor="let f of c.campos"><dt>{{ f.et }}</dt><dd [class.mono]="f.mono">{{ f.val }}</dd></ng-container><dt>Estado</dt><dd>{{ c.estado }}</dd></dl>
+                    </div>
+                    <div>
+                      <h4>Capturas y resultados</h4>
+                      <p class="gris" *ngIf="!c.capturas.length">Este caso no tiene capturas.</p>
+                      <div class="captura" *ngFor="let cap of c.capturas">
+                        <strong>Captura {{ cap.id }}</strong>
+                        <dl class="kv kv-chico"><ng-container *ngFor="let f of cap.campos"><dt>{{ f.et }}</dt><dd [class.mono]="f.mono">{{ f.val }}</dd></ng-container></dl>
+                        <p class="gris" *ngIf="!cap.resultados.length">Sin resultados.</p>
+                        <div class="resultado" *ngFor="let r of cap.resultados">
+                          <div class="resultado-cab"><span class="est" [ngClass]="claseNivel(r.nivel)">{{ r.estado }}</span> <strong>{{ r.titulo }}</strong></div>
+                          <dl class="kv kv-chico"><ng-container *ngFor="let f of r.campos"><dt>{{ f.et }}</dt><dd [class.mono]="f.mono">{{ f.val }}</dd></ng-container></dl>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </td>
+              </tr>
+            </ng-container>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- Firmas -->
+    <section class="tarjeta" *ngIf="detalle.encontrado">
+      <div class="seccion-cab">
+        <h3>Solicitudes de firma ligadas a sus casos (MotorFirma)</h3>
+        <span class="gris">Firma.Detalle (IdCasoBiometria) → PendienteFirma.Solicitudes (RadNumber)</span>
+      </div>
+      <div class="aviso-aviso" *ngIf="!detalle.firmas.disponible">No se pudo leer MotorFirma: {{ detalle.firmas.error }}</div>
+      <div class="vacio" *ngIf="detalle.firmas.disponible && !vista.firmas.length">Ninguno de sus casos aparece en Firma.Detalle.</div>
+      <div class="tabla-wrap" *ngIf="vista.firmas.length">
+        <table class="tabla">
+          <thead><tr><th>RadNumber</th><th>Casos</th><th>Estado de firma</th><th>Estado de biometría</th><th>Modificación</th><th aria-label="Detalle"></th></tr></thead>
+          <tbody>
+            <ng-container *ngFor="let f of vista.firmas; trackBy: trackFirma">
+              <tr class="fila-click" [class.fila-abierta]="firmaAbierta === f.radNumber" (click)="alternarFirma(f.radNumber)" (keydown.enter)="alternarFirma(f.radNumber)" tabindex="0" [attr.aria-expanded]="firmaAbierta === f.radNumber">
+                <td class="mono">{{ f.radNumber }}</td>
+                <td class="mono">{{ f.casos }}</td>
+                <td>{{ f.estadoFirma }}</td>
+                <td>{{ f.estadoBiometria }}</td>
+                <td>{{ f.fecha }}</td>
+                <td class="flecha" aria-hidden="true">{{ firmaAbierta === f.radNumber ? '▾' : '▸' }}</td>
+              </tr>
+              <tr class="detalle" *ngIf="firmaAbierta === f.radNumber">
+                <td colspan="6">
+                  <div class="detalle-grid">
+                    <div>
+                      <h4>Solicitud (PendienteFirma.Solicitudes)</h4>
+                      <p class="gris" *ngIf="f.sinSolicitud">No hay solicitud con ese RadNumber.</p>
+                      <dl class="kv"><ng-container *ngFor="let c of f.campos"><dt>{{ c.et }}</dt><dd [class.mono]="c.mono">{{ c.val }}</dd></ng-container></dl>
+                    </div>
+                    <div>
+                      <h4>Detalle (Firma.Detalle)</h4>
+                      <dl class="kv"><ng-container *ngFor="let c of f.camposDetalle"><dt>{{ c.et }}</dt><dd [class.mono]="c.mono">{{ c.val }}</dd></ng-container></dl>
+                    </div>
+                  </div>
+                </td>
+              </tr>
+            </ng-container>
+          </tbody>
+        </table>
+      </div>
+      <p class="ayuda" *ngIf="detalle.firmas.truncado">Se muestran las primeras solicitudes; el cliente tiene más.</p>
+    </section>
+  </ng-container>
+</ng-container>
+
+<section class="tarjeta vacio-inicial" *ngIf="!clientes && !ccAbierta && !buscando && !cargandoDetalle && !servidorBio">
+  <h2>Busca un cliente</h2>
+  <p>Elige dónde consultar: las bases de datos (casos, resultados y firmas del cliente), el servidor de biometría (curl con la cédula) o ambos. Por bases de datos también puedes buscar por nombre, número de caso o RadNumber.</p>
+</section>

@@ -1,0 +1,171 @@
+<div class="pestanas" role="tablist">
+  <button type="button" [class.activa]="vista === 'ramas'" (click)="cambiarVista('ramas')"><app-ico n="rama"></app-ico>Ramas</button>
+  <button type="button" [class.activa]="vista === 'tags'" (click)="cambiarVista('tags')"><app-ico n="etiqueta"></app-ico>Tags</button>
+  <button type="button" [class.activa]="vista === 'comparar'" (click)="cambiarVista('comparar')"><app-ico n="comparar"></app-ico>Comparar</button>
+  <button type="button" [class.activa]="vista === 'pushes'" (click)="cambiarVista('pushes')"><app-ico n="subir"></app-ico>Pushes</button>
+  <button type="button" [class.activa]="vista === 'actividad'" (click)="cambiarVista('actividad')"><app-ico n="tendencia"></app-ico>Actividad y contribuidores</button>
+</div>
+
+<app-azure-fallo [fallo]="falloVista"></app-azure-fallo>
+<div class="cargando" *ngIf="cargandoVista"><div class="spinner"></div>Cargando…</div>
+
+<!-- RAMAS -->
+<ng-container *ngIf="vista === 'ramas' && ramas">
+  <div class="kpis">
+    <div class="kpi"><span class="kpi-et">Ramas</span><span class="kpi-v">{{ ramas.resumen.total }}</span><span class="kpi-s">Por defecto: {{ ramas.ramaPorDefecto }}</span></div>
+    <div class="kpi"><span class="kpi-et">Antiguas</span><span class="kpi-v" [class.t-aviso]="ramas.resumen.antiguas > 0">{{ ramas.resumen.antiguas }}</span><span class="kpi-s">Más de 90 días sin actividad</span></div>
+    <div class="kpi"><span class="kpi-et">Sin cambios nuevos</span><span class="kpi-v">{{ ramas.resumen.sinCambiosNuevos }}</span><span class="kpi-s">Nada por delante de la principal</span></div>
+    <div class="kpi"><span class="kpi-et">Bloqueadas</span><span class="kpi-v">{{ ramas.resumen.bloqueadas }}</span></div>
+  </div>
+  <div class="barra">
+    <label class="buscar"><span aria-hidden="true"><app-ico n="buscar" class="solo"></app-ico></span><input type="text" [(ngModel)]="filtro" placeholder="Buscar rama…" aria-label="Buscar rama" /></label>
+    <label class="campo"><input type="checkbox" [(ngModel)]="soloAntiguas" /> Solo antiguas</label>
+    <span class="espacio"></span>
+    <button type="button" class="btn btn-ghost btn-sm" (click)="exportarRamas()"><app-ico n="descargar"></app-ico>CSV</button>
+  </div>
+  <section class="tarjeta">
+    <div class="tabla-wrap">
+      <table class="tabla">
+        <thead><tr><th>Rama</th><th class="num">Adelante</th><th class="num">Atrás</th><th>Último cambio</th><th>Creada por</th><th></th></tr></thead>
+        <tbody>
+          <tr *ngFor="let r of ramasFiltradas">
+            <td class="td-nombre"><strong class="mono">{{ r.nombre }}</strong>
+              <span class="chip chip-marca" *ngIf="r.esRamaPorDefecto">principal</span>
+              <span class="chip chip-media" *ngIf="r.antigua">antigua</span>
+              <span class="chip" *ngIf="r.bloqueada"><app-ico n="candado"></app-ico>bloqueada</span>
+              <span class="chip" *ngIf="r.sinCambiosNuevos">sin cambios nuevos</span></td>
+            <td class="num t-ok">{{ r.adelante ?? '—' }}</td><td class="num t-aviso">{{ r.atras ?? '—' }}</td>
+            <td class="td-nombre"><ng-container *ngIf="r.commit"><span>{{ r.commit.comentario || '(sin mensaje)' }}</span><div class="gris peq">{{ r.commit.autor }} · {{ fmtRelativo(r.commit.fecha) }}</div></ng-container></td>
+            <td>{{ r.creador || '—' }}</td>
+            <td><div class="acciones">
+              <button type="button" class="btn-mini" (click)="ramaSeleccionada.emit(r.nombre)">Archivos</button>
+              <button type="button" class="btn-mini" *ngIf="!r.esRamaPorDefecto" (click)="compararCon(r.nombre)">Comparar</button>
+              <a class="ext" [href]="r.url" target="_blank" rel="noopener"><app-ico n="externo" class="solo"></app-ico></a>
+            </div></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+</ng-container>
+
+<!-- TAGS -->
+<section class="tarjeta" *ngIf="vista === 'tags' && tags">
+  <div class="tarjeta-cab"><h2>Tags</h2><span class="tarjeta-sub">{{ tags.total }} en total</span></div>
+  <p class="vacio" *ngIf="!tags.tags.length">Este repositorio no tiene tags.</p>
+  <div class="tabla-wrap" *ngIf="tags.tags.length">
+    <table class="tabla">
+      <thead><tr><th>Tag</th><th>Commit</th><th>Mensaje</th><th>Autor</th><th>Fecha</th><th></th></tr></thead>
+      <tbody>
+        <tr *ngFor="let t of tags.tags">
+          <td><strong class="mono">{{ t.nombre }}</strong> <span class="chip" *ngIf="t.anotado">anotado</span></td>
+          <td><code class="sha">{{ t.commit?.idCorto || t.objeto }}</code></td>
+          <td class="td-nombre">{{ t.commit?.comentario || '—' }}</td>
+          <td>{{ t.commit?.autor || t.creador || '—' }}</td>
+          <td [title]="fmtFecha(t.fecha)">{{ fmtRelativo(t.fecha) }}</td>
+          <td><a class="ext" [href]="t.url" target="_blank" rel="noopener"><app-ico n="externo" class="solo"></app-ico></a></td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<!-- COMPARAR -->
+<ng-container *ngIf="vista === 'comparar' && ramas && tags">
+  <div class="barra">
+    <label class="campo">Base
+      <select [(ngModel)]="base" aria-label="Versión base">
+        <option value="" disabled>Elige…</option>
+        <optgroup label="Ramas"><option *ngFor="let r of ramas.ramas" [value]="'branch:' + r.nombre">{{ r.nombre }}</option></optgroup>
+        <optgroup label="Tags" *ngIf="tags.tags.length"><option *ngFor="let t of tags.tags" [value]="'tag:' + t.nombre">{{ t.nombre }}</option></optgroup>
+      </select>
+    </label>
+    <span class="gris"><app-ico n="derecha" class="solo"></app-ico></span>
+    <label class="campo">Destino
+      <select [(ngModel)]="destino" aria-label="Versión destino">
+        <option value="" disabled>Elige…</option>
+        <optgroup label="Ramas"><option *ngFor="let r of ramas.ramas" [value]="'branch:' + r.nombre">{{ r.nombre }}</option></optgroup>
+        <optgroup label="Tags" *ngIf="tags.tags.length"><option *ngFor="let t of tags.tags" [value]="'tag:' + t.nombre">{{ t.nombre }}</option></optgroup>
+      </select>
+    </label>
+    <button type="button" class="btn btn-purple btn-sm" (click)="comparar()" [disabled]="!base || !destino || compCargando">Comparar</button>
+  </div>
+  <app-azure-fallo [fallo]="compFallo"></app-azure-fallo>
+  <div class="cargando" *ngIf="compCargando"><div class="spinner"></div></div>
+  <p class="vacio" *ngIf="!comparacion && !compCargando && !compFallo">Elige dos versiones para ver qué commits y archivos las diferencian.</p>
+  <div class="contenido" *ngIf="comparacion">
+    <div class="kpis">
+      <div class="kpi"><span class="kpi-et">Commits adelante</span><span class="kpi-v t-ok">{{ comparacion.adelante }}</span><span class="kpi-s">En destino, no en base</span></div>
+      <div class="kpi"><span class="kpi-et">Commits atrás</span><span class="kpi-v t-aviso">{{ comparacion.atras }}</span><span class="kpi-s">En base, no en destino</span></div>
+      <div class="kpi"><span class="kpi-et">Archivos</span><span class="kpi-v">{{ comparacion.archivos.resumen.total }}</span><span class="kpi-s">{{ comparacion.archivos.resumen.agregados }} nuevos · {{ comparacion.archivos.resumen.editados }} editados · {{ comparacion.archivos.resumen.eliminados }} borrados</span></div>
+    </div>
+    <div class="grilla g-1-1">
+      <section class="tarjeta">
+        <div class="tarjeta-cab"><h2>Commits del destino</h2></div>
+        <app-azure-fallo [fallo]="comparacion.errorCommits ? { error: comparacion.errorCommits } : null"></app-azure-fallo>
+        <ul class="lista">
+          <li class="item-lista" *ngFor="let c of comparacion.commits"><div class="il-cab"><code class="sha">{{ c.idCorto }}</code><strong>{{ c.comentario || '(sin mensaje)' }}</strong></div><div class="il-sub"><span>{{ c.autor }}</span><span>{{ fmtRelativo(c.fecha) }}</span></div></li>
+          <li class="vacio" *ngIf="!comparacion.commits.length">Sin commits propios.</li>
+        </ul>
+      </section>
+      <section class="tarjeta">
+        <div class="tarjeta-cab"><h2>Archivos distintos</h2></div>
+        <ul class="lista">
+          <li class="item-lista" *ngFor="let a of comparacion.archivos.lista">
+            <div class="il-cab archivo" (click)="verDiff(a)" tabindex="0" (keyup.enter)="verDiff(a)" role="button"><span class="chip" [ngClass]="claseTipo(a.tipo)">{{ a.tipo }}</span><code class="ruta">{{ a.ruta }}</code><span class="espacio"></span><span class="enlace">{{ archivoAbierto === a.ruta ? 'Ocultar' : 'Ver cambios' }}</span></div>
+            <ng-container *ngIf="archivoAbierto === a.ruta">
+              <div class="cargando" *ngIf="diffCargando"><div class="spinner chico"></div></div>
+              <app-azure-fallo [fallo]="diffFallo"></app-azure-fallo>
+              <app-azure-diff [diff]="diff"></app-azure-diff>
+            </ng-container>
+          </li>
+          <li class="vacio" *ngIf="!comparacion.archivos.lista.length">Sin diferencias de archivos.</li>
+        </ul>
+      </section>
+    </div>
+  </div>
+</ng-container>
+
+<!-- PUSHES -->
+<section class="tarjeta" *ngIf="vista === 'pushes' && pushes">
+  <div class="tarjeta-cab"><h2>Últimos pushes</h2><span class="tarjeta-sub">Quién subió cambios y a qué rama</span></div>
+  <p class="vacio" *ngIf="!pushes.pushes.length">Sin pushes recientes.</p>
+  <div class="tabla-wrap" *ngIf="pushes.pushes.length">
+    <table class="tabla">
+      <thead><tr><th>Fecha</th><th>Autor</th><th>Ramas</th><th>Commit final</th></tr></thead>
+      <tbody>
+        <tr *ngFor="let p of pushes.pushes">
+          <td [title]="fmtFecha(p.fecha)">{{ fmtRelativo(p.fecha) }}</td><td>{{ p.autor }}</td>
+          <td><code class="sha" *ngFor="let r of p.ramas" style="margin-right: 6px">{{ r }}</code> <span class="chip chip-ok" *ngIf="p.esNueva">rama nueva</span></td>
+          <td><code class="sha" *ngIf="p.commitFinal">{{ p.commitFinal }}</code></td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<!-- ACTIVIDAD -->
+<ng-container *ngIf="vista === 'actividad' && actividad">
+  <div class="barra">
+    <div class="selector-dias" role="group" aria-label="Periodo"><button type="button" *ngFor="let d of [7, 30, 90, 180]" [class.activo]="dias === d" (click)="cambiarDias(d)">{{ d }} días</button></div>
+  </div>
+  <div class="kpis">
+    <div class="kpi"><span class="kpi-et">Commits</span><span class="kpi-v">{{ fmtNum(actividad.total) }}</span><span class="kpi-s">{{ fmtDec(actividad.promedioPorDia) }} por día</span></div>
+    <div class="kpi"><span class="kpi-et">Autores</span><span class="kpi-v">{{ actividad.autores.length }}</span></div>
+    <div class="kpi"><span class="kpi-et">Merges</span><span class="kpi-v">{{ actividad.merges }}</span></div>
+    <div class="kpi"><span class="kpi-et">Hora pico</span><span class="kpi-v">{{ horaTexto(actividad.horaPico) }}</span><span class="kpi-s">{{ actividad.diaSemanaPico || '—' }} es el día más activo</span></div>
+  </div>
+  <div class="grilla g-1-1">
+    <section class="tarjeta"><div class="tarjeta-cab"><h2>Commits por día</h2></div><app-line-chart [etiquetas]="actEtq" [series]="actSeries"></app-line-chart></section>
+    <section class="tarjeta"><div class="tarjeta-cab"><h2>Día × hora</h2></div><app-heatmap [filas]="actividad.heatmap.filas" [columnas]="colHoras" [valores]="actividad.heatmap.matriz" unidad="commits"></app-heatmap></section>
+  </div>
+  <section class="tarjeta" style="margin-top: 16px">
+    <div class="tarjeta-cab"><h2>Contribuidores</h2></div>
+    <div class="tabla-wrap">
+      <table class="tabla">
+        <thead><tr><th>Autor</th><th class="num">Commits</th><th class="num">Días activos</th><th>Primer commit</th><th>Último commit</th></tr></thead>
+        <tbody><tr *ngFor="let a of actividad.autores"><td>{{ a.nombre }}</td><td class="num">{{ a.commits }}</td><td class="num">{{ a.diasActivos }}</td><td>{{ fmtFecha(a.primero) }}</td><td>{{ fmtFecha(a.ultimo) }}</td></tr></tbody>
+      </table>
+    </div>
+  </section>
+</ng-container>

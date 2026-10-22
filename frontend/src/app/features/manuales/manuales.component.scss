@@ -1,0 +1,138 @@
+@use '../../repositorio/azure/azure-base' as *;
+@use 'manuales-contenido' as mc;
+@include base;
+:host ::ng-deep { @include mc.contenido; }
+
+:host { container: man / inline-size; display: block; }
+.sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+.peq { font-size: 12.5px; }
+.mt { margin-top: 12px; }
+.chico-v { padding: 18px 0; }
+
+.cab { display: flex; justify-content: space-between; align-items: flex-end; gap: 16px; flex-wrap: wrap; margin-bottom: 16px;
+  h1 { font-size: 30px; font-weight: 800; margin: 0; letter-spacing: -0.5px; }
+  .sub { margin: 6px 0 0; font-size: 14px; color: $brand-gray; max-width: 640px; } }
+.cab > div:first-child { flex: 1 1 380px; min-width: 0; }
+.cab-acciones { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; flex: 0 1 auto; }
+.buscar { display: flex; align-items: center; gap: 8px; flex: 1 1 240px; width: min(340px, 100%); color: $brand-gray; background: $surface; border: 1.5px solid $border-light; border-radius: 12px; padding: 0 12px; transition: 0.15s;
+  &:focus-within { border-color: $brand; box-shadow: 0 6px 20px rgba($brand-rgb, 0.15); }
+  input { flex: 1; min-width: 0; border: none; outline: none; background: transparent; font-family: inherit; font-size: 14px; padding: 10px 0; color: $brand-dark; } }
+
+.toast { position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%); z-index: 1200; max-width: min(560px, 92vw); padding: 11px 18px; border-radius: 12px; background: #1e293b; color: #fff; font-size: 13.5px; font-weight: 600; box-shadow: 0 12px 30px rgba(0, 0, 0, 0.3); display: flex; align-items: center; gap: 10px;
+  &.toast-mal { background: #b91c1c; } &.toast-info { background: $brand; } }
+
+// --- Bienvenida / vacíos ---
+.bienvenida { text-align: center; display: flex; flex-direction: column; align-items: center; gap: 10px; padding: 44px 20px; h2 { font-size: 20px; margin: 0; } p { margin: 0; color: $brand-gray; max-width: 520px; } }
+.bien-ico { color: $brand; line-height: 1; opacity: 0.85; }
+.bien-acciones { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; margin-top: 8px; }
+.sin-pagina { text-align: center; color: $brand-gray; padding: 70px 16px; display: flex; flex-direction: column; align-items: center; gap: 8px; p { margin: 0; } }
+
+// --- Barra de libreta ---
+.libreta-barra { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 10px; }
+.libreta-sel { color: $brand; display: inline-flex; align-items: center; gap: 8px; background: $surface; border: 1px solid $border-light; border-radius: 10px; padding: 0 6px 0 12px;
+  select { border: none; background: transparent; font-family: inherit; font-size: 14px; font-weight: 800; padding: 9px 4px; color: $brand-dark; max-width: 280px; cursor: pointer; &:focus-visible { outline: 2px solid $brand; border-radius: 6px; } } }
+.desc { max-width: 420px; }
+
+// --- Menús ---
+.menu-wrap { position: relative; display: inline-block; }
+.menu { position: absolute; top: calc(100% + 6px); left: 0; z-index: 60; min-width: 230px; background: $surface; border: 1px solid $border-light; border-radius: 12px; box-shadow: 0 14px 34px rgba(0, 0, 0, 0.2); padding: 6px; display: flex; flex-direction: column;
+  &.menu-der { left: auto; right: 0; }
+  button { text-align: left; border: none; background: transparent; font-family: inherit; font-size: 13.5px; color: $brand-dark; padding: 9px 12px; border-radius: 8px; cursor: pointer; &:hover, &:focus-visible { background: rgba($brand-rgb, 0.1); outline: none; } &.peligro { color: $danger; } } }
+.btn-icono { padding: 8px 12px; font-size: 18px; line-height: 1; }
+.btn-peligro { background: $danger; color: #fff; }
+
+// --- Pestañas de sección ---
+.secciones { display: flex; align-items: flex-end; justify-content: space-between; gap: 10px; border-bottom: 1px solid $border-light; margin-bottom: 14px; }
+.tabs { display: flex; gap: 4px; overflow-x: auto; flex: 1 1 0; min-width: 0; scrollbar-width: thin; padding-bottom: 0; }
+.tab { --col: var(--ax-brand-primary, #673ab7); flex: none; display: inline-flex; align-items: center; gap: 8px; border: 1px solid transparent; border-bottom: none; border-radius: 10px 10px 0 0; background: transparent; padding: 9px 14px; font-family: inherit; font-size: 13.5px; font-weight: 700; color: $brand-gray; cursor: pointer; border-top: 3px solid transparent; margin-bottom: -1px; white-space: nowrap;
+  .tab-punto { width: 9px; height: 9px; border-radius: 50%; background: var(--col); }
+  small { font-size: 11px; font-weight: 800; background: $surface-bg; border: 1px solid $border-light; border-radius: 999px; padding: 0 7px; color: $brand-gray; }
+  &:hover { color: $brand-dark; background: $surface-bg; }
+  &:focus-visible { outline: 2px solid $brand; outline-offset: -2px; }
+  &.activa { color: $brand-dark; background: $surface; border-color: $border-light; border-top-color: var(--col); }
+  &.tab-nueva { color: $brand; border-top-color: transparent; font-size: 12.5px; } }
+.secciones .menu-wrap { margin-bottom: 6px; flex: none; }
+
+// --- Cuerpo ---
+.cuerpo { display: grid; grid-template-columns: 300px minmax(0, 1fr); gap: 16px; align-items: start; }
+.col-lista { background: $surface; border: 1px solid $border-light; border-radius: 16px; padding: 14px; min-width: 0; position: sticky; top: 8px; max-height: calc(100vh - 140px); overflow-y: auto; }
+.lista-cab { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 10px; flex-wrap: wrap; strong { font-size: 14px; overflow-wrap: anywhere; min-width: 0; } }
+.solo-libreta { display: flex; align-items: center; gap: 6px; font-size: 12px; color: $brand-gray; margin-bottom: 8px; input { accent-color: $brand; } }
+.paginas { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px;
+  li { border-radius: 10px; &.arrastre { opacity: 0.4; } &[draggable='true'] { cursor: grab; } } }
+.pag-item { width: 100%; text-align: left; display: flex; flex-direction: column; gap: 3px; border: 1px solid transparent; border-radius: 10px; background: transparent; padding: 9px 11px; font-family: inherit; color: $brand-dark; cursor: pointer; min-width: 0;
+  &:hover { background: $surface-bg; }
+  &:focus-visible { outline: 2px solid $brand; outline-offset: -2px; }
+  &.activa { background: rgba($brand-rgb, 0.1); border-color: rgba($brand-rgb, 0.4); } }
+.pag-tit { font-size: 13.5px; font-weight: 700; overflow-wrap: anywhere; display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.pag-fecha { font-size: 11.5px; }
+.pista { margin: 10px 4px 0; }
+.ruta { --col: var(--ax-brand-primary, #673ab7); display: inline-flex; align-items: center; gap: 6px; font-size: 11.5px; font-weight: 600; color: $brand-gray; i { width: 8px; height: 8px; border-radius: 50%; background: var(--col); flex: none; } }
+.resultados .pag-item { gap: 4px; }
+.frag { font-size: 12px; color: $brand-gray; line-height: 1.45; overflow-wrap: anywhere; mark { background: #fef08a; color: #1e293b; border-radius: 3px; padding: 0 2px; font-weight: 700; } }
+
+// --- Página ---
+.col-pagina { min-width: 0; }
+.volver { display: none; border: none; background: transparent; color: $brand; font-family: inherit; font-weight: 700; font-size: 13.5px; padding: 4px 0 10px; cursor: pointer; }
+.pagina { padding: 18px 22px 22px; }
+.pag-cab { display: flex; align-items: flex-start; justify-content: space-between; gap: 14px; flex-wrap: wrap; margin-bottom: 14px; padding-bottom: 14px; border-bottom: 1px solid $border-light; }
+.pag-cab-txt { flex: 1 1 320px; min-width: 0; }
+.titulo { margin: 0; font-size: 26px; font-weight: 800; letter-spacing: -0.4px; line-height: 1.25; overflow-wrap: anywhere; }
+.titulo-input { width: 100%; font-family: inherit; font-size: 24px; font-weight: 800; letter-spacing: -0.3px; border: 1.5px solid $border-light; border-radius: 10px; padding: 6px 12px; background: $surface; color: $brand-dark; &:focus { outline: none; border-color: $brand; } }
+.meta { display: flex; flex-wrap: wrap; gap: 4px 14px; margin-top: 8px; font-size: 12.5px; }
+.pag-acciones { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.estado-guardado { display: inline-flex; align-items: center; gap: 6px; font-size: 12.5px; font-weight: 700; color: $brand-gray; &.ok { color: $ok; } &.mal { color: $danger; } }
+.aviso-guardado { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-bottom: 14px; padding: 12px 14px; border-radius: 12px; background: rgba(239, 68, 68, 0.08); border: 1px solid rgba(239, 68, 68, 0.35); font-size: 13.5px;
+  &.conflicto { background: rgba(245, 158, 11, 0.1); border-color: rgba(245, 158, 11, 0.45); } }
+.aviso-botones { display: flex; gap: 8px; flex-wrap: wrap; }
+.lectura { min-height: 120px; }
+.pdf-barra { margin-bottom: 8px; }
+.pdf { width: 100%; height: 72vh; min-height: 420px; border: 1px solid $border-light; border-radius: 10px; background: $surface-bg; }
+
+// --- Diálogos ---
+.modal-card.dlg { max-width: 480px; }
+.campo-v { display: flex; flex-direction: column; gap: 5px; margin-top: 14px; font-size: 12.5px; font-weight: 700; color: $brand-gray;
+  input, select { font-family: inherit; font-size: 14px; padding: 9px 11px; border: 1px solid $border-light; border-radius: 8px; background: $surface; color: $brand-dark; width: 100%; &:focus { outline: none; border-color: $brand; } } }
+.colores { display: flex; gap: 8px; flex-wrap: wrap; }
+.color-op { width: 30px; height: 30px; border-radius: 50%; border: 3px solid $surface; box-shadow: 0 0 0 1px $border-light; cursor: pointer; &.sel { box-shadow: 0 0 0 3px $brand; } &:focus-visible { outline: 2px solid $brand; outline-offset: 3px; } }
+.conf-txt { font-size: 14.5px; overflow-wrap: anywhere; margin: 4px 0 8px; }
+.pie { display: flex; justify-content: flex-end; gap: 10px; flex-wrap: wrap; margin-top: 20px; }
+
+.lightbox { position: fixed; inset: 0; z-index: 1300; background: rgba(2, 6, 23, 0.88); display: flex; align-items: center; justify-content: center; padding: 24px; cursor: zoom-out;
+  img { max-width: 100%; max-height: 100%; border-radius: 8px; box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5); background: #fff; }
+  .lb-cerrar { position: absolute; top: 14px; right: 18px; border: none; background: rgba(255, 255, 255, 0.15); color: #fff; width: 38px; height: 38px; border-radius: 50%; font-size: 16px; cursor: pointer; } }
+
+// --- Pantallas angostas: o la lista o la página ---
+@container man (max-width: 900px) {
+  .cuerpo { grid-template-columns: minmax(0, 1fr); }
+  .col-lista { position: static; max-height: none; }
+  .volver { display: inline-block; }
+  .ver-pagina .col-lista { display: none; }
+  .man:not(.ver-pagina) .col-pagina { display: none; }
+  .pagina { padding: 14px 14px 18px; }
+  .titulo { font-size: 22px; }
+}
+@container man (max-width: 520px) {
+  .cab h1 { font-size: 24px; }
+  .buscar { width: 100%; }
+  .pag-acciones { width: 100%; }
+}
+
+
+// ---- compartir manuales ----
+.solicitud { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; margin: 0 0 12px; padding: 12px 16px;
+  background: #fffbeb; border: 1px solid #fde68a; border-radius: 12px; color: #78350f;
+  strong { display: block; font-size: 14px; } span { font-size: 13px; }
+  .solicitud-acc { display: flex; gap: 8px; } }
+.etq-manual { font-size: 12px; font-weight: 700; padding: 3px 10px; border-radius: 999px; white-space: nowrap;
+  &.etq-mia { background: #f1f5f9; color: #475569; } &.etq-comp { background: var(--ax-brand-soft, #ede9fe); color: var(--ax-brand-ink, #5b21b6); } small { font-weight: 600; opacity: .85; } }
+.dlg-ancho { max-width: 560px; width: calc(100vw - 32px); }
+.permisos { display: flex; flex-direction: column; gap: 8px; margin-top: 6px; label { display: flex; gap: 8px; align-items: baseline; flex-wrap: wrap; font-weight: 600; cursor: pointer; small { font-weight: 400; color: #64748b; } } }
+.campo-v .permisos input[type="radio"] { width: auto; padding: 0; margin: 0; flex: none; accent-color: var(--ax-brand-primary, #673ab7); }
+.pie-inline { justify-content: flex-end; margin: 6px 0 4px; }
+.sub-dlg { margin: 16px 0 6px; font-size: 14px; font-weight: 800; }
+.lista-cmp { list-style: none; margin: 0 0 8px; padding: 0; display: flex; flex-direction: column; gap: 6px;
+  li { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 8px 10px; border: 1px solid #e2e8f0; border-radius: 10px; }
+  .cmp-nombre { font-weight: 700; flex: 1; min-width: 120px; } .btn-mini.peligro { color: #b91c1c; } }
+.chip-cmp { font-size: 11.5px; font-weight: 800; padding: 2px 9px; border-radius: 999px; background: #f1f5f9; color: #475569;
+  &.ok { background: #dcfce7; color: #166534; } &.pend { background: #fef3c7; color: #92400e; } &.no { background: #fee2e2; color: #991b1b; } }

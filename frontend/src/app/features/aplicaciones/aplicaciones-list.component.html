@@ -1,0 +1,164 @@
+<header class="page-header">
+  <div>
+    <h1>Aplicaciones de negocio</h1>
+    <p class="subtitle">Las aplicaciones que ve el negocio y los componentes (servidor + puerto) que las hacen funcionar. Los certificados se asocian a esos componentes.</p>
+  </div>
+
+  <div class="header-actions">
+    <div class="search-box">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <circle cx="11" cy="11" r="8"></circle>
+        <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+      </svg>
+      <input type="text" [(ngModel)]="terminoBusqueda" placeholder="Buscar aplicación, sub-aplicativo, servidor, IP..." />
+    </div>
+    <div class="filtro-servidor">
+      <app-selector-buscable
+        [opciones]="opcionesServidoresFiltro"
+        [valor]="servidorFiltroId"
+        (valorChange)="servidorFiltroId = $event"
+        placeholder="Filtrar por servidor..."
+        textoVacio="No hay servidores en el inventario."
+      ></app-selector-buscable>
+    </div>
+    <button *ngIf="puedeEditar" class="btn btn-primary" (click)="abrirFormulario()">+ Nueva aplicación de negocio</button>
+  </div>
+</header>
+
+<section class="panel">
+  <ng-container *ngIf="aplicacionesFiltradas.length; else vacio">
+
+    <div class="app-card-row" *ngFor="let a of aplicacionesFiltradas">
+
+      <div class="app-card-header">
+        <div class="app-info">
+          <span class="app-icon" [class.has-image]="a.imagenUrl || a.ImagenUrl">
+            <img *ngIf="a.imagenUrl || a.ImagenUrl" [src]="a.imagenUrl || a.ImagenUrl" (error)="onImagenError($event)" alt="" />
+            <span class="app-icon-fallback">{{ (a.nombre || a.Nombre || '?').charAt(0) | uppercase }}</span>
+          </span>
+          <div class="app-info-text">
+            <h3 class="app-name">{{ a.nombre || a.Nombre }}</h3>
+            <span class="server-count-badge">
+              {{ a.totalSubs }} {{ a.totalSubs === 1 ? 'sub-aplicativo' : 'sub-aplicativos' }}
+              <ng-container *ngIf="a.servidores.length"> · {{ a.servidores.length }} {{ a.servidores.length === 1 ? 'servidor' : 'servidores' }}</ng-container>
+            </span>
+          </div>
+        </div>
+
+        <div class="app-actions">
+          <button class="btn btn-outline-purple" [routerLink]="['/esquema', a.id || a.Id]">Diagramar</button>
+          <button *ngIf="puedeEditar" class="btn" (click)="editar(a)">Editar</button>
+          <button *ngIf="puedeEditar" class="btn btn-danger" (click)="eliminar(a)">Eliminar</button>
+        </div>
+      </div>
+
+      <!-- Sub-aplicativos agrupados por el servidor donde corren. Un clic abre su ficha en Inventario. -->
+      <div class="server-grid">
+        <div class="server-node" *ngFor="let s of a.servidores">
+          <div class="node-header">
+            <span class="node-host">
+              <svg class="node-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+                <rect x="3" y="4" width="18" height="12" rx="2"></rect>
+                <line x1="8" y1="20" x2="16" y2="20"></line>
+                <line x1="12" y1="16" x2="12" y2="20"></line>
+              </svg>
+              {{ s.hostname || s.Hostname }}
+            </span>
+            <span class="node-ip mono">{{ s.ip || s.IP }}</span>
+          </div>
+
+          <div class="node-tags" *ngIf="s.roles && s.roles.length">
+            <button type="button" class="tag-chip tag-chip--link" [ngClass]="claseRol(rol.rol)" *ngFor="let rol of s.roles"
+                    [title]="'Ver ' + rol.rol + ' en Inventario'" (click)="abrirSubaplicativo(s.id || s.Id, rol.id)">
+              {{ rol.rol }}
+              <span class="tag-puerto" *ngIf="rol.puerto">:{{ rol.puerto }}</span>
+              <span class="tag-sin-puerto" *ngIf="!rol.puerto" title="Todavía no tiene puerto asignado">· sin puerto</span>
+            </button>
+          </div>
+
+          <div class="node-empty" *ngIf="!s.roles || s.roles.length === 0">
+            Sin sub-aplicativos en este servidor
+          </div>
+        </div>
+
+        <div class="server-node empty-node" *ngIf="!a.servidores || a.servidores.length === 0">
+          Sin sub-aplicativos asociados todavía. Usa «Editar» para elegirlos.
+        </div>
+      </div>
+
+    </div>
+
+  </ng-container>
+
+  <ng-template #vacio>
+    <div class="empty">
+      <p *ngIf="aplicaciones.length === 0; else noResultados">No hay aplicaciones de negocio registradas todavía.</p>
+      <ng-template #noResultados>
+        <p *ngIf="terminoBusqueda">No se encontraron aplicaciones que coincidan con "<strong>{{ terminoBusqueda }}</strong>".</p>
+        <p *ngIf="!terminoBusqueda && servidorFiltroId != null">Ninguna aplicación tiene sub-aplicativos en el servidor seleccionado.</p>
+      </ng-template>
+    </div>
+  </ng-template>
+</section>
+
+<!-- MODAL FORMULARIO -->
+<div class="overlay" *ngIf="mostrarForm" (click)="cerrarFormulario()">
+  <div class="modal" (click)="$event.stopPropagation()">
+    <div class="modal-header">
+      <h2>{{ editando ? 'Editar aplicación de negocio' : 'Nueva aplicación de negocio' }}</h2>
+    </div>
+
+    <div class="modal-body">
+      <label class="form-label">Nombre</label>
+      <input class="form-input" [(ngModel)]="form.nombre" placeholder="Portal Clientes" />
+
+      <label class="form-label">Imagen (URL)</label>
+      <div class="image-input-row">
+        <div class="image-preview" [class.has-image]="form.imagenUrl">
+          <img *ngIf="form.imagenUrl" [src]="form.imagenUrl" (error)="onImagenError($event)" alt="" />
+          <span class="image-preview-fallback" *ngIf="!form.imagenUrl">{{ (form.nombre || '?').charAt(0) | uppercase }}</span>
+        </div>
+        <input class="form-input image-url-input" [(ngModel)]="form.imagenUrl" placeholder="https://ejemplo.com/logo.png" />
+      </div>
+
+      <label class="form-label">Sub-aplicativos que la componen</label>
+      <p class="sub-ayuda">
+        Marca los sub-aplicativos (componentes de los servidores) que hacen funcionar esta aplicación. Un sub-aplicativo puede
+        pertenecer a varias aplicaciones. ¿No aparece? Primero regístralo en
+        <button type="button" class="sub-link" (click)="irARegistrarSub()">Inventario → Sub-aplicativos</button>.
+      </p>
+
+      <div class="sub-elegidos" *ngIf="seleccionados.length">
+        <span class="sub-elegidos__titulo">Elegidos ({{ seleccionados.length }})</span>
+        <span class="chip-rol" [ngClass]="claseRol(s.rol)" *ngFor="let s of seleccionados">
+          {{ s.rol }}<span class="tag-puerto" *ngIf="s.puerto">:{{ s.puerto }}</span>
+          <small class="sub-host">{{ s.hostname }}</small>
+          <button type="button" (click)="quitarSub(s)" title="Quitar">&times;</button>
+        </span>
+      </div>
+
+      <input class="form-input server-search-input" type="text" [(ngModel)]="terminoSub" (ngModelChange)="filtrarSubs()"
+             placeholder="Buscar sub-aplicativo, servidor, IP o puerto..." />
+
+      <div class="server-list-container">
+        <p class="sin-resultados-servidores" *ngIf="gruposSel.length === 0">
+          {{ catalogo ? 'Ningún sub-aplicativo coincide con la búsqueda.' : 'Cargando sub-aplicativos...' }}
+        </p>
+        <div class="server-item" *ngFor="let g of gruposSel">
+          <div class="sub-grupo-titulo">{{ g.hostname }} <small>({{ g.ip }})</small></div>
+          <label class="sub-fila" *ngFor="let s of g.subs" [class.sub-fila--marcada]="seleccion[s.id]">
+            <input type="checkbox" [checked]="seleccion[s.id]" (change)="alternarSub(s)" />
+            <span class="sub-nombre">{{ s.rol }}</span>
+            <span class="sub-puerto" *ngIf="s.puerto">:{{ s.puerto }}</span>
+            <span class="sub-otras" *ngIf="otrasAppsDe(s)">también en {{ otrasAppsDe(s) }}</span>
+          </label>
+        </div>
+      </div>
+    </div>
+
+    <div class="modal-footer">
+      <button class="btn" (click)="cerrarFormulario()">Cancelar</button>
+      <button class="btn btn-primary" [disabled]="guardando" (click)="guardar()">{{ guardando ? 'Guardando...' : 'Guardar aplicación' }}</button>
+    </div>
+  </div>
+</div>

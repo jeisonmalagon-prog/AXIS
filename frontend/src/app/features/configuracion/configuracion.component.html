@@ -1,0 +1,188 @@
+<header class="page-header">
+  <div>
+    <h1>Configuración</h1>
+    <p class="subtitle">Apariencia de AXIS (global, para todos los usuarios) y el correo desde el que la aplicación envía códigos, informes y alertas.</p>
+  </div>
+</header>
+
+<div class="mensaje-error" *ngIf="error">{{ error }}</div>
+<div class="mensaje-ok" *ngIf="mensajeOk">{{ mensajeOk }}</div>
+
+<div class="loading-state" *ngIf="cargando">
+  <div class="spinner"></div>
+  <p>Cargando configuración...</p>
+</div>
+
+<section class="config-card" *ngIf="!cargando">
+  <h2>Tema del sistema</h2>
+
+  <div class="tema-opciones">
+    <button
+      type="button"
+      class="tema-opcion"
+      [class.activa]="tema === 'claro'"
+      [disabled]="guardando"
+      (click)="elegirTema('claro')">
+      <div class="tema-preview tema-preview-claro">
+        <span class="preview-bar"></span>
+        <span class="preview-card"></span>
+      </div>
+      <span class="tema-nombre">☀ Claro</span>
+    </button>
+
+    <button
+      type="button"
+      class="tema-opcion"
+      [class.activa]="tema === 'oscuro'"
+      [disabled]="guardando"
+      (click)="elegirTema('oscuro')">
+      <div class="tema-preview tema-preview-oscuro">
+        <span class="preview-bar"></span>
+        <span class="preview-card"></span>
+      </div>
+      <span class="tema-nombre">● Oscuro</span>
+    </button>
+  </div>
+
+  <p class="nota">El cambio se guarda de inmediato. Los usuarios que ya tengan una sesión abierta lo verán la próxima vez que recarguen la página.</p>
+</section>
+
+<section class="config-card" *ngIf="!cargando">
+  <h2>Color de marca de AXIS</h2>
+  <p class="nota" style="margin: 0 0 16px;">
+    Elige el color de marca de AXIS: se aplica en TODA la aplicación (menú lateral, botones, acentos, degradado del login, asistente, etc.), no solo en la pantalla de inicio de sesión. Es independiente del tema claro/oscuro de arriba.
+  </p>
+
+  <div class="color-login-picker">
+    <input
+      type="color"
+      class="color-swatch"
+      [(ngModel)]="colorLogin"
+      [disabled]="guardandoColor"
+      title="Elegir color">
+    <input
+      type="text"
+      class="color-hex"
+      [(ngModel)]="colorLogin"
+      [disabled]="guardandoColor"
+      maxlength="7"
+      placeholder="#673ab7">
+    <button
+      type="button"
+      class="btn-link"
+      [disabled]="guardandoColor"
+      (click)="restablecerColorLogin()">
+      Restablecer por defecto
+    </button>
+  </div>
+
+  <p class="nota-hex" *ngIf="!colorLoginValido">Formato inválido. Debe ser un color hexadecimal, ej: #673ab7.</p>
+
+  <div
+    class="color-login-preview"
+    [style.--ax-preview-primary]="paletaPreview.primario"
+    [style.--ax-preview-secondary]="paletaPreview.secundario">
+    <span class="preview-titulo">AXIS</span>
+    <span class="preview-boton">Ingresar</span>
+  </div>
+
+  <button
+    type="button"
+    class="btn-guardar-color"
+    [disabled]="!colorLoginModificado || guardandoColor"
+    (click)="guardarColorLogin()">
+    {{ guardandoColor ? 'Guardando...' : 'Guardar color' }}
+  </button>
+
+  <div class="mensaje-error" *ngIf="errorColor">{{ errorColor }}</div>
+  <div class="mensaje-ok" *ngIf="mensajeColorOk">{{ mensajeColorOk }}</div>
+</section>
+
+<section class="config-card config-card--ancha" *ngIf="!cargando">
+  <h2>Correo saliente (SMTP)</h2>
+  <p class="nota nota--sup">
+    Desde esta cuenta AXIS envía el <strong>código de recuperación de contraseña</strong>, los informes programados, los <strong>códigos de aprobación de Soporte Nivel 1</strong> y las alertas. Se guarda en la base de datos (la contraseña va cifrada), así que no hace falta tocar el archivo .env.
+  </p>
+
+  <div class="estado-correo" *ngIf="correoCfg">
+    <span class="chip" [class.chip--ok]="correoCfg.configurado" [class.chip--no]="!correoCfg.configurado">
+      {{ correoCfg.configurado ? 'Configurado' : 'Sin configurar' }}
+    </span>
+    <span class="estado-correo__txt" *ngIf="correoCfg.configurado && correoCfg.origen === 'bd'">Usando lo guardado aquí.</span>
+    <span class="estado-correo__txt" *ngIf="correoCfg.configurado && correoCfg.origen === 'env'">Usando el archivo .env del servidor. Guarda aquí para reemplazarlo.</span>
+    <span class="estado-correo__txt" *ngIf="!correoCfg.configurado">Mientras no lo configures, la recuperación de contraseña por código no estará disponible.</span>
+  </div>
+
+  <div class="mensaje-error" *ngIf="correoCfg?.passIlegible">La contraseña guardada no se pudo leer (cambió la clave del servidor). Escríbela de nuevo y guarda.</div>
+  <div class="mensaje-error" *ngIf="correoCfg && !correoCfg.tablaLista">Falta la tabla ConfiguracionSistema en la base de datos. Pide ejecutar <code>crear_tabla_configuracion_sistema_BIC_CERTI_MARIA.sql</code>.</div>
+  <div class="mensaje-error" *ngIf="errorCorreo">{{ errorCorreo }}</div>
+  <div class="mensaje-ok" *ngIf="mensajeCorreoOk">{{ mensajeCorreoOk }}</div>
+
+  <div class="form-correo">
+    <label class="campo campo--grande">
+      <span>Servidor SMTP</span>
+      <input type="text" [(ngModel)]="cHost" placeholder="smtp.bancofinandina.com" autocomplete="off" spellcheck="false" [disabled]="guardandoCorreo">
+    </label>
+    <label class="campo campo--puerto">
+      <span>Puerto</span>
+      <input type="number" [(ngModel)]="cPort" min="1" max="65535" [disabled]="guardandoCorreo">
+    </label>
+
+    <div class="campo campo--completo">
+      <span>Tipo de conexión</span>
+      <div class="segmento">
+        <button type="button" [class.activo]="cConexion === 'starttls'" (click)="cambiarConexion('starttls')" [disabled]="guardandoCorreo">STARTTLS <small>(587)</small></button>
+        <button type="button" [class.activo]="cConexion === 'ssl'" (click)="cambiarConexion('ssl')" [disabled]="guardandoCorreo">SSL directo <small>(465)</small></button>
+      </div>
+    </div>
+
+    <label class="campo">
+      <span>Usuario (cuenta)</span>
+      <input type="text" [(ngModel)]="cUser" placeholder="axis@bancofinandina.com" autocomplete="off" spellcheck="false" [disabled]="guardandoCorreo">
+    </label>
+    <label class="campo">
+      <span>Contraseña <em *ngIf="correoCfg?.tienePass">(vacía = conservar la guardada)</em></span>
+      <div class="con-ojo">
+        <input [type]="verPass ? 'text' : 'password'" [(ngModel)]="cPass" autocomplete="new-password"
+               [placeholder]="correoCfg?.tienePass ? '•••••••• (guardada)' : 'Contraseña de la cuenta'" [disabled]="guardandoCorreo">
+        <button type="button" class="ojo" (click)="verPass = !verPass" [attr.aria-label]="verPass ? 'Ocultar contraseña' : 'Mostrar contraseña'">{{ verPass ? 'Ocultar' : 'Ver' }}</button>
+      </div>
+    </label>
+
+    <label class="campo">
+      <span>Remitente <em>(opcional)</em></span>
+      <input type="text" [(ngModel)]="cFrom" placeholder="AXIS &lt;axis@bancofinandina.com&gt;" autocomplete="off" spellcheck="false" [disabled]="guardandoCorreo">
+    </label>
+    <label class="campo">
+      <span>Dominios permitidos <em>(opcional)</em></span>
+      <input type="text" [(ngModel)]="cDominios" placeholder="bancofinandina.com" autocomplete="off" spellcheck="false" [disabled]="guardandoCorreo">
+    </label>
+
+    <label class="check campo--completo">
+      <input type="checkbox" [(ngModel)]="cTlsInseguro" [disabled]="guardandoCorreo">
+      <span>Aceptar el certificado del servidor aunque no sea verificable <em>(solo si el servidor interno usa un certificado propio)</em></span>
+    </label>
+  </div>
+
+  <div class="acciones-correo">
+    <button type="button" class="btn-guardar-color" [disabled]="!correoValido || guardandoCorreo" (click)="guardarCorreo()">
+      {{ guardandoCorreo ? 'Guardando...' : 'Guardar correo' }}
+    </button>
+    <button type="button" class="btn-link btn-link--peligro" *ngIf="correoCfg?.origen === 'bd'" [disabled]="restableciendoCorreo" (click)="restablecerCorreo()">
+      Quitar lo guardado
+    </button>
+  </div>
+
+  <div class="prueba-correo">
+    <h3>Enviar un correo de prueba</h3>
+    <p class="nota nota--sup">Usa lo que está guardado. Solo se permiten destinatarios de los dominios indicados arriba.</p>
+    <div class="prueba-correo__fila">
+      <input type="email" [(ngModel)]="destinoPrueba" placeholder="tu.correo@bancofinandina.com" autocomplete="off" [disabled]="probandoCorreo">
+      <button type="button" class="btn-secundario" [disabled]="probandoCorreo || !destinoPrueba.trim() || !correoCfg?.configurado" (click)="probarCorreo()">
+        {{ probandoCorreo ? 'Enviando...' : 'Enviar prueba' }}
+      </button>
+    </div>
+    <div class="mensaje-error" *ngIf="errorPrueba">{{ errorPrueba }}</div>
+    <div class="mensaje-ok" *ngIf="mensajePruebaOk">{{ mensajePruebaOk }}</div>
+  </div>
+</section>

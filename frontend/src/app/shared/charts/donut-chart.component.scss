@@ -1,0 +1,85 @@
+:host {
+  display: block;
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+}
+
+.donut-wrap {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  flex-wrap: wrap;
+}
+
+.donut-svg {
+  width: 140px;
+  height: 140px;
+  flex-shrink: 0;
+}
+
+.donut-segmento {
+  transform: rotate(-90deg);
+  transform-origin: 70px 70px;
+  transition: stroke-dasharray 0.3s ease;
+}
+
+.donut-total {
+  text-anchor: middle;
+  font-size: 26px;
+  font-weight: 800;
+  fill: var(--ax-text, #1e293b);
+}
+
+.donut-total-label {
+  text-anchor: middle;
+  font-size: 10px;
+  font-weight: 600;
+  fill: var(--ax-text-muted, #64748b);
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+}
+
+.donut-leyenda {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 160px;
+}
+
+.donut-leyenda-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+}
+
+.leyenda-swatch {
+  width: 10px;
+  height: 10px;
+  border-radius: 3px;
+  flex-shrink: 0;
+}
+
+.leyenda-etiqueta {
+  color: var(--ax-text-muted, #64748b);
+  font-weight: 600;
+  flex: 1;
+}
+
+.leyenda-valor {
+  color: var(--ax-text, #1e293b);
+  font-weight: 800;
+}
+
+.leyenda-porcentaje {
+  color: var(--ax-text-muted, #94a3b8);
+  font-size: 11.5px;
+  min-width: 38px;
+  text-align: right;
+}
+
+.donut-vacio {
+  padding: 24px 12px;
+  text-align: center;
+  font-size: 13px;
+  color: var(--ax-text-muted, #94a3b8);
+}

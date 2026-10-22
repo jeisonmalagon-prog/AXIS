@@ -1,0 +1,18 @@
+<div class="hm" *ngIf="!sinDatos; else vacio" (mouseleave)="soltar()">
+  <div class="hm-fila hm-cabecera">
+    <span class="hm-etq"></span>
+    <span class="hm-col" *ngFor="let c of columnas; let ci = index">{{ mostrarColumna(ci) ? c : '' }}</span>
+  </div>
+  <div class="hm-fila" *ngFor="let fila of celdas; let fi = index">
+    <span class="hm-etq">{{ filas[fi] }}</span>
+    <span class="hm-celda" *ngFor="let c of fila; let ci = index"
+          [class.vacia]="c.valor === 0"
+          [style.background]="c.valor ? colorVar : null" [style.opacity]="c.valor ? c.opacidad : null"
+          (mouseenter)="enfocar(fi, ci)" [attr.aria-label]="filas[fi] + ' ' + columnas[ci] + ': ' + c.valor"></span>
+  </div>
+  <div class="hm-pie">
+    <span class="hm-foco">{{ foco ? foco.fila + ' ' + foco.columna + ' · ' + foco.valor + ' ' + unidad : 'Pasa el mouse sobre una celda' }}</span>
+    <span class="hm-escala">Menos <span class="hm-grad" [style.background]="'linear-gradient(90deg, transparent, ' + colorVar + ')'"></span> Más</span>
+  </div>
+</div>
+<ng-template #vacio><div class="hm-vacio">Sin ejecuciones en este periodo.</div></ng-template>

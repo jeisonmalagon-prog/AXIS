@@ -1,0 +1,329 @@
+<div class="overlay" (click)="cerrarAsistente()">
+  <div class="asistente" (click)="$event.stopPropagation()" role="dialog" aria-modal="true" [attr.aria-label]="titulo">
+
+    <header class="as-cabecera">
+      <div>
+        <h2>{{ titulo }}</h2>
+        <p class="as-sub" *ngIf="modoActual === 'nuevo'">Te guiamos en 4 pasos: primero el certificado, luego dónde está instalado.</p>
+        <p class="as-sub" *ngIf="modoActual === 'editar'">Los cambios de los datos se aplican a <strong>todas</strong> las ubicaciones donde está instalado.</p>
+        <p class="as-sub" *ngIf="modoActual === 'renovar'">Escribe los datos del certificado nuevo; se aplicarán a <strong>todas</strong> las ubicaciones donde está instalado.</p>
+      </div>
+      <button class="btn-close" type="button" (click)="cerrarAsistente()" aria-label="Cerrar">✕</button>
+    </header>
+
+    <!-- Indicador de pasos -->
+    <ol class="as-pasos">
+      <li *ngFor="let p of pasos" [class.activo]="paso === p.n" [class.hecho]="paso > p.n">
+        <button type="button" (click)="irAPaso(p.n)">
+          <span class="as-num">{{ paso > p.n ? '✓' : p.n }}</span>
+          <span class="as-tit">{{ p.titulo }}</span>
+        </button>
+      </li>
+    </ol>
+
+    <div class="as-cuerpo">
+
+      <!-- ===================================================== PASO 1 -->
+      <section *ngIf="paso === 1">
+        <div class="as-atajo" *ngIf="modoActual === 'nuevo' && opcionesGruposExistentes.length">
+          <label>¿Este certificado ya está registrado en otro servidor?</label>
+          <app-selector-buscable
+            [opciones]="opcionesGruposExistentes"
+            [valor]="null"
+            (valorChange)="agregarAExistente($event)"
+            placeholder="Búscalo aquí para agregarle una nueva ubicación..."
+            textoVacio="Aún no hay certificados registrados."
+          ></app-selector-buscable>
+          <p class="as-ayuda">Si ya existe, elígelo: se abre con sus datos y solo agregas dónde más está instalado. Así no queda duplicado.</p>
+        </div>
+
+        <div class="as-aviso as-aviso--info" *ngIf="modoActual === 'renovar'">
+          Ya dejamos el nombre, el emisor y el responsable. Completa lo que cambia al renovar: serie, thumbprint y fechas.
+        </div>
+
+        <h3>Datos del certificado</h3>
+        <label>Nombre común (CN)</label>
+        <input [(ngModel)]="datos.NombreComun" placeholder="portal.miempresa.com" class="mono" />
+        <p class="as-ayuda">Es el dominio o nombre que identifica el certificado (lo ves al abrirlo en el navegador o con el administrador de certificados).</p>
+
+        <div class="as-fila">
+          <div>
+            <label>Entidad emisora</label>
+            <input [(ngModel)]="datos.EntidadEmisora" placeholder="DigiCert, Sectigo, CA interna..." />
+          </div>
+          <div>
+            <label>Responsable</label>
+            <input [(ngModel)]="datos.Responsable" placeholder="Equipo Infraestructura" />
+          </div>
+        </div>
+
+        <div class="as-fila">
+          <div>
+            <label>Válido desde</label>
+            <input type="date" [(ngModel)]="datos.FechaInicio" />
+          </div>
+          <div>
+            <label>Vence el</label>
+            <input type="date" [(ngModel)]="datos.FechaFin" />
+          </div>
+        </div>
+
+        <details class="as-opcional" [open]="!!(datos.NumeroSerie || datos.Thumbprint || datos.Observaciones) || modoActual === 'renovar'">
+          <summary>Más datos (opcional): número de serie, thumbprint y notas</summary>
+          <div class="as-fila">
+            <div>
+              <label>Número de serie</label>
+              <input [(ngModel)]="datos.NumeroSerie" class="mono" />
+            </div>
+            <div>
+              <label>Thumbprint (huella)</label>
+              <input [(ngModel)]="datos.Thumbprint" class="mono" />
+            </div>
+          </div>
+          <label>Observaciones</label>
+          <textarea [(ngModel)]="datos.Observaciones" rows="3" spellcheck="false"></textarea>
+        </details>
+      </section>
+
+      <!-- ===================================================== PASO 2 -->
+      <section *ngIf="paso === 2">
+        <h3>¿Dónde está instalado?</h3>
+        <p class="as-ayuda as-ayuda--sube">
+          Una <strong>ubicación</strong> es un <strong>servidor</strong> y el <strong>sub-aplicativo</strong> de ese servidor donde se instaló el certificado
+          (un sitio, servicio, API o contenedor con su puerto). Puedes agregar varias.
+        </p>
+
+        <!-- Fila antigua sin ubicación -->
+        <div class="as-aviso as-aviso--warn" *ngFor="let u of pendientesLegado">
+          Este registro es de antes y estaba ligado a
+          <strong>{{ u.legadoApp || 'una aplicación' }}</strong>, pero no dice en qué servidor ni sub-aplicativo está.
+          Elige abajo dónde está instalado: la primera ubicación que agregues lo completa.
+          <button type="button" class="as-link" (click)="quitarUbicacion(u)">Quitar este registro</button>
+        </div>
+
+        <!-- Ubicaciones ya agregadas -->
+        <ul class="as-ubicaciones" *ngIf="ubicaciones.length">
+          <li *ngFor="let u of ubicaciones" [class.quitada]="u.quitar" [class.pendiente]="!u.servidorId">
+            <ng-container *ngIf="u.servidorId; else sinUbicacion">
+              <div class="as-ub-info">
+                <strong class="as-ub-comp">{{ u.componente }}</strong>
+                <span class="as-ub-srv mono">{{ u.hostname }} · {{ u.ip }}</span>
+                <span class="as-ub-estado" *ngIf="u.quitar">Se quitará al guardar</span>
+                <span class="as-ub-estado as-ub-estado--nueva" *ngIf="!u.rowId && !u.quitar">Nueva</span>
+              </div>
+              <label class="as-puerto" *ngIf="!u.quitar">
+                Puerto
+                <input type="number" [(ngModel)]="u.puerto" placeholder="443" />
+              </label>
+            </ng-container>
+            <ng-template #sinUbicacion>
+              <div class="as-ub-info">
+                <strong class="as-ub-comp">Sin ubicación definida</strong>
+                <span class="as-ub-srv">antes: {{ u.legadoApp || '—' }}</span>
+              </div>
+            </ng-template>
+            <button *ngIf="!u.quitar && u.servidorId" type="button" class="as-quitar" (click)="quitarUbicacion(u)" title="Quitar esta ubicación">Quitar</button>
+            <button *ngIf="u.quitar" type="button" class="as-quitar as-quitar--deshacer" (click)="deshacerQuitar(u)">Deshacer</button>
+          </li>
+        </ul>
+
+        <!-- Agregar -->
+        <div class="as-agregar">
+          <h4>{{ ubicaciones.length ? 'Agregar otra ubicación' : 'Agregar la ubicación' }}</h4>
+          <label>1. Servidor</label>
+          <app-selector-buscable
+            [opciones]="opcionesServidores"
+            [valor]="servidorSel"
+            (valorChange)="onServidorChange($event)"
+            placeholder="Busca por nombre o IP del servidor..."
+            textoVacio="No hay servidores en el inventario. Regístralos en Inventario → Servidores."
+          ></app-selector-buscable>
+
+          <ng-container *ngIf="servidorCat as srv">
+            <label>2. Sub-aplicativo(s) del servidor donde está instalado</label>
+
+            <ul class="as-comps" *ngIf="srv.componentes.length; else sinComps">
+              <li *ngFor="let c of srv.componentes"
+                  [class.marcado]="seleccion[c.id]" [class.agregado]="yaAgregado(c)"
+                  (click)="alternarSeleccion(c)">
+                <input type="checkbox" [checked]="seleccion[c.id] || yaAgregado(c)" [disabled]="yaAgregado(c)" (click)="$event.stopPropagation()" (change)="alternarSeleccion(c)" />
+                <span class="as-comp-nombre">{{ c.rol }}</span>
+                <span class="as-comp-det">
+                  <ng-container *ngIf="c.puerto">puerto {{ c.puerto }}</ng-container>
+                  <ng-container *ngIf="c.puerto && c.tipo"> · </ng-container>
+                  <ng-container *ngIf="c.tipo">{{ c.tipo }}</ng-container>
+                </span>
+                <span class="as-comp-apps" *ngIf="c.aplicaciones.length">{{ c.aplicaciones.length }} aplicación(es) de negocio</span>
+                <span class="as-comp-apps as-comp-apps--vacia" *ngIf="!c.aplicaciones.length">sin aplicación de negocio</span>
+                <span class="as-comp-ya" *ngIf="yaAgregado(c)">ya agregado</span>
+              </li>
+            </ul>
+            <ng-template #sinComps>
+              <p class="as-ayuda">Este servidor todavía no tiene sub-aplicativos registrados. Registra el primero aquí mismo.</p>
+            </ng-template>
+
+            <div class="as-acciones-agregar">
+              <button type="button" class="btn btn-primary" [disabled]="!totalSeleccionados" (click)="agregarSeleccionados()">
+                Agregar {{ totalSeleccionados > 1 ? totalSeleccionados + ' sub-aplicativos' : 'seleccionado' }}
+              </button>
+              <button type="button" class="btn" (click)="abrirRegistro()" *ngIf="!registrando">+ Registrar un sub-aplicativo nuevo en este servidor</button>
+            </div>
+
+            <!-- Registro rápido de componente -->
+            <div class="as-registro" *ngIf="registrando">
+              <h4>Registrar sub-aplicativo nuevo en {{ srv.hostname }}</h4>
+              <div class="as-fila">
+                <div>
+                  <label>Nombre del sub-aplicativo</label>
+                  <input [(ngModel)]="nuevoComp.rol" placeholder="Ej. PORTAL_CLIENTES, IIS Default, api-gateway" />
+                </div>
+                <div class="as-corto">
+                  <label>Puerto</label>
+                  <input type="number" [(ngModel)]="nuevoComp.puerto" placeholder="443" />
+                </div>
+              </div>
+              <div class="as-fila">
+                <div>
+                  <label>Tipo (opcional)</label>
+                  <select [(ngModel)]="nuevoComp.tipo">
+                    <option value="">Sin especificar</option>
+                    <option *ngFor="let t of (catalogo?.tipos || [])" [value]="t">{{ t }}</option>
+                  </select>
+                </div>
+                <div>
+                  <label>Aplicaciones de negocio que lo usan (opcional)</label>
+                  <app-selector-buscable
+                    [opciones]="opcionesAppsNuevo"
+                    [valor]="null"
+                    (valorChange)="agregarAppNueva($event)"
+                    placeholder="Buscar aplicación de negocio..."
+                    textoVacio="No hay más aplicaciones de negocio para elegir."
+                  ></app-selector-buscable>
+                </div>
+              </div>
+              <div class="as-chips" *ngIf="nuevoComp.apps.length">
+                <span class="as-chip" *ngFor="let id of nuevoComp.apps">
+                  {{ nombreApp(id) }}
+                  <button type="button" (click)="quitarAppNueva(id)" aria-label="Quitar">✕</button>
+                </span>
+              </div>
+              <div class="as-acciones-agregar">
+                <button type="button" class="btn" (click)="registrando = false">Cancelar</button>
+                <button type="button" class="btn btn-primary" [disabled]="ocupado" (click)="registrarComponenteNuevo()">
+                  {{ ocupado ? 'Guardando...' : 'Registrar sub-aplicativo' }}
+                </button>
+              </div>
+            </div>
+          </ng-container>
+        </div>
+      </section>
+
+      <!-- ===================================================== PASO 3 -->
+      <section *ngIf="paso === 3">
+        <h3>Aplicaciones de negocio que dependen de este certificado</h3>
+        <p class="as-ayuda as-ayuda--sube">
+          No tienes que elegirlas: se deducen del sub-aplicativo donde instalaste el certificado.
+          Si este certificado vence, estas son las aplicaciones que se verían afectadas.
+        </p>
+
+        <div class="as-impacto" *ngIf="appsAfectadas.length; else sinImpacto">
+          <span class="as-impacto__titulo">Se verían afectadas {{ appsAfectadas.length }} aplicación(es) de negocio</span>
+          <div class="as-chips">
+            <span class="as-chip as-chip--app" *ngFor="let a of appsAfectadas">
+              {{ a.nombre }}<small *ngIf="a.ubicaciones > 1"> · {{ a.ubicaciones }} ubicaciones</small>
+            </span>
+          </div>
+        </div>
+        <ng-template #sinImpacto>
+          <div class="as-aviso as-aviso--warn">
+            Ninguna aplicación de negocio está asociada todavía a estos sub-aplicativos. Puedes guardar igual, pero si el certificado vence no sabremos a qué aplicaciones afecta.
+            Asóciala abajo.
+          </div>
+        </ng-template>
+
+        <ul class="as-ubicaciones as-ubicaciones--lectura">
+          <li *ngFor="let u of activas">
+            <div class="as-ub-info">
+              <strong class="as-ub-comp">{{ u.componente }}</strong>
+              <span class="as-ub-srv mono">{{ u.hostname }} · {{ u.ip }}</span>
+              <div class="as-chips as-chips--compacto">
+                <span class="as-chip as-chip--app" *ngFor="let a of appsDe(u)">{{ a.nombre }}</span>
+                <span class="as-chip as-chip--vacia" *ngIf="!appsDe(u).length">Sin aplicación de negocio</span>
+              </div>
+            </div>
+            <div class="as-asociar" *ngIf="u.opcionesApps.length">
+              <app-selector-buscable
+                [opciones]="u.opcionesApps"
+                [valor]="null"
+                (valorChange)="asociarApp(u, $event)"
+                [deshabilitado]="ocupado"
+                placeholder="+ Asociar aplicación de negocio..."
+                [permitirLimpiar]="false"
+              ></app-selector-buscable>
+            </div>
+          </li>
+        </ul>
+        <p class="as-ayuda">
+          Asociar una aplicación aquí actualiza el sub-aplicativo en el Inventario (queda para todos los certificados de ese sub-aplicativo).
+          Para crear una aplicación de negocio nueva o cambiar sus sub-aplicativos ve a
+          <a routerLink="/servidores" [queryParams]="{ vista: 'aplicaciones' }" target="_blank">Inventario → Aplicaciones de negocio</a>.
+        </p>
+      </section>
+
+      <!-- ===================================================== PASO 4 -->
+      <section *ngIf="paso === 4">
+        <h3>Revisa antes de guardar</h3>
+
+        <div class="as-resumen">
+          <div class="as-res-bloque">
+            <span class="as-res-titulo">Certificado</span>
+            <strong class="mono">{{ datos.NombreComun || '(sin nombre común)' }}</strong>
+            <span>{{ datos.EntidadEmisora || 'Emisor no indicado' }}</span>
+            <span>Vigente del <strong>{{ fechaCorta(datos.FechaInicio) }}</strong> al <strong>{{ fechaCorta(datos.FechaFin) }}</strong></span>
+            <span *ngIf="datos.Responsable">Responsable: {{ datos.Responsable }}</span>
+          </div>
+          <div class="as-res-bloque">
+            <span class="as-res-titulo">Instalado en {{ activas.length }} ubicación(es)</span>
+            <span *ngFor="let u of activas" class="as-res-linea">
+              <strong>{{ u.componente }}</strong> <span class="mono">{{ u.hostname }}</span>
+              <small *ngIf="!u.rowId" class="as-ub-estado as-ub-estado--nueva">nueva</small>
+            </span>
+            <span class="as-res-linea as-res-linea--quita" *ngFor="let u of quitadas">
+              Se quitará: <strong>{{ u.componente }}</strong> <span class="mono">{{ u.hostname }}</span>
+            </span>
+          </div>
+          <div class="as-res-bloque">
+            <span class="as-res-titulo">Aplicaciones de negocio relacionadas</span>
+            <span *ngIf="!appsAfectadas.length" class="as-res-vacio">Ninguna asociada todavía.</span>
+            <div class="as-chips" *ngIf="appsAfectadas.length">
+              <span class="as-chip as-chip--app" *ngFor="let a of appsAfectadas">{{ a.nombre }}</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="as-aviso as-aviso--warn" *ngIf="ubicacionesSinApp.length">
+          {{ ubicacionesSinApp.length }} ubicación(es) no tienen aplicación de negocio asociada. Puedes guardar y asociarlas después desde el paso 3.
+        </div>
+
+        <div class="as-aviso as-aviso--error" *ngIf="erroresGuardado.length">
+          <strong>Algunas ubicaciones no se pudieron guardar:</strong>
+          <ul><li *ngFor="let e of erroresGuardado">{{ e }}</li></ul>
+          Lo que sí se guardó no se repite si vuelves a pulsar "Guardar".
+        </div>
+      </section>
+
+      <div class="as-aviso as-aviso--error" *ngIf="errorPaso">{{ errorPaso }}</div>
+      <div class="as-aviso as-aviso--ok" *ngIf="avisoPaso">{{ avisoPaso }}</div>
+    </div>
+
+    <footer class="as-pie">
+      <button type="button" class="btn" (click)="cerrarAsistente()">Cancelar</button>
+      <span class="as-espacio"></span>
+      <button type="button" class="btn" *ngIf="paso > 1" (click)="anterior()" [disabled]="guardando">‹ Atrás</button>
+      <button type="button" class="btn btn-primary" *ngIf="paso < 4" (click)="siguiente()">Siguiente ›</button>
+      <button type="button" class="btn btn-primary" *ngIf="paso === 4" (click)="guardar()" [disabled]="guardando">
+        {{ guardando ? 'Guardando...' : (modoActual === 'nuevo' ? 'Guardar certificado' : 'Guardar cambios') }}
+      </button>
+    </footer>
+  </div>
+</div>

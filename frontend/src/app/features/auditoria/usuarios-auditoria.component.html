@@ -1,0 +1,161 @@
+<header class="page-header">
+  <div>
+    <h1>Auditoría</h1>
+    <p class="subtitle" *ngIf="vista === 'usuarios'">Historial detallado de logins, cambios de contraseña, edición de perfil y toda acción de administrador sobre cuentas.</p>
+    <p class="subtitle" *ngIf="vista === 'general'">Historial de creación, edición y eliminación en cualquier módulo del aplicativo, y de acciones operativas como iniciar/detener contenedores o activar/desactivar workflows de n8n.</p>
+  </div>
+</header>
+
+<div class="selector-vista">
+  <button type="button" class="btn-vista" [class.activo]="vista === 'usuarios'" (click)="seleccionarVista('usuarios')">Usuarios y Accesos</button>
+  <button type="button" class="btn-vista" [class.activo]="vista === 'general'" (click)="seleccionarVista('general')">General (CRUD y operaciones)</button>
+</div>
+
+<section class="filtros">
+  <div class="selector-periodo">
+    <button type="button" class="btn-periodo" [class.activo]="periodo === 'dia'" (click)="seleccionarPeriodo('dia')">Día</button>
+    <button type="button" class="btn-periodo" [class.activo]="periodo === 'semana'" (click)="seleccionarPeriodo('semana')">Semana</button>
+    <button type="button" class="btn-periodo" [class.activo]="periodo === 'mes'" (click)="seleccionarPeriodo('mes')">Mes</button>
+    <button type="button" class="btn-periodo" [class.activo]="periodo === 'rango'" (click)="seleccionarPeriodo('rango')">Rango personalizado</button>
+  </div>
+
+  <div class="buscador">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+    <input type="text" [(ngModel)]="terminoBusqueda" placeholder="Buscar por usuario, IP o detalle…">
+    <button type="button" class="buscador__limpiar" *ngIf="terminoBusqueda" (click)="terminoBusqueda = ''" title="Limpiar búsqueda">×</button>
+  </div>
+
+  <div class="rango-fechas" *ngIf="periodo === 'rango'">
+    <label>
+      Desde
+      <input type="date" [(ngModel)]="desde" [max]="hasta">
+    </label>
+    <label>
+      Hasta
+      <input type="date" [(ngModel)]="hasta" [min]="desde">
+    </label>
+    <button type="button" class="btn-sm" (click)="cargar()">Generar</button>
+  </div>
+
+  <div class="filtros-adicionales" *ngIf="vista === 'usuarios'">
+    <label>
+      Usuario
+      <select [(ngModel)]="usuarioIdFiltro" (change)="cargar()">
+        <option [ngValue]="null">Todos</option>
+        <option *ngFor="let u of usuarios" [ngValue]="u.id">{{ u.nombre_completo }} ({{ u.username }})</option>
+      </select>
+    </label>
+    <label>
+      Acción
+      <select [(ngModel)]="accionFiltro" (change)="cargar()">
+        <option [ngValue]="null">Todas</option>
+        <option *ngFor="let a of acciones" [ngValue]="a">{{ etiquetaAccion(a) }}</option>
+      </select>
+    </label>
+  </div>
+
+  <div class="filtros-adicionales" *ngIf="vista === 'general'">
+    <label>
+      Módulo
+      <select [(ngModel)]="moduloFiltro" (change)="cargar()">
+        <option [ngValue]="null">Todos</option>
+        <option *ngFor="let m of modulos" [ngValue]="m">{{ etiquetaModulo(m) }}</option>
+      </select>
+    </label>
+    <label>
+      Acción
+      <select [(ngModel)]="accionGeneralFiltro" (change)="cargar()">
+        <option [ngValue]="null">Todas</option>
+        <option *ngFor="let a of accionesGeneral" [ngValue]="a">{{ etiquetaAccionGeneral(a) }}</option>
+      </select>
+    </label>
+    <label>
+      Realizado por
+      <select [(ngModel)]="usuarioGeneralFiltro" (change)="cargar()">
+        <option [ngValue]="null">Todos</option>
+        <option *ngFor="let u of usuariosGeneral" [ngValue]="u">{{ u }}</option>
+      </select>
+    </label>
+    <label class="filtro-consulta" title="Pruebas, certificados y peticiones hechos con rol Consulta: se auditan con más detalle (URL completa, cabeceras, resultado y cuerpo sin secretos)">
+      <input type="checkbox" [(ngModel)]="soloConsulta" (change)="cargar()">
+      Solo rol Consulta
+    </label>
+  </div>
+</section>
+
+<div class="mensaje-error" *ngIf="error">{{ error }}</div>
+
+<div class="loading-state" *ngIf="cargando">
+  <div class="spinner"></div>
+  <p>Cargando auditoría...</p>
+</div>
+
+<ng-container *ngIf="!cargando && !error && vista === 'usuarios'">
+  <div class="mensaje-aviso" *ngIf="limitado">
+    Se muestran los últimos 1000 eventos del periodo — reduce el rango o filtra por usuario/acción para ver todo el detalle.
+  </div>
+
+  <div class="mensaje-aviso" *ngIf="!eventos.length">No hay eventos de auditoría para el periodo y filtros seleccionados.</div>
+  <div class="mensaje-aviso" *ngIf="eventos.length && !eventosFiltrados().length">Ningún evento coincide con "{{ terminoBusqueda }}".</div>
+
+  <div class="tabla-scroll" *ngIf="eventosFiltrados().length">
+  <table class="tabla-auditoria">
+    <thead>
+      <tr>
+        <th>Fecha</th>
+        <th>Acción</th>
+        <th>Usuario afectado</th>
+        <th>Realizado por</th>
+        <th>Detalle / cambios</th>
+        <th>IP</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr *ngFor="let e of eventosFiltrados()">
+        <td class="col-fecha" data-label="Fecha">{{ e.FechaEvento | date:'dd/MM/yyyy HH:mm:ss' }}</td>
+        <td data-label="Acción"><span class="badge-accion" [ngClass]="claseAccion(e.Accion)">{{ etiquetaAccion(e.Accion) }}</span></td>
+        <td data-label="Usuario afectado">{{ e.UsuarioNombreActual || e.UsernameIntentado || '—' }}</td>
+        <td data-label="Realizado por">{{ e.RealizadoPorUsername || 'Sistema / el propio usuario' }}</td>
+        <td class="col-detalle" data-label="Detalle / cambios">{{ resumenCambio(e) }}</td>
+        <td class="col-ip" data-label="IP">{{ e.IP || '—' }}</td>
+      </tr>
+    </tbody>
+  </table>
+  </div>
+</ng-container>
+
+<ng-container *ngIf="!cargando && !error && vista === 'general'">
+  <div class="mensaje-aviso" *ngIf="limitadoGeneral">
+    Se muestran los últimos 1000 eventos del periodo — reduce el rango o filtra por módulo/acción para ver todo el detalle.
+  </div>
+
+  <div class="mensaje-aviso" *ngIf="!eventosGeneral.length">No hay eventos de auditoría para el periodo y filtros seleccionados.</div>
+  <div class="mensaje-aviso" *ngIf="eventosGeneral.length && !eventosGeneralFiltrados().length">Ningún evento coincide con "{{ terminoBusqueda }}".</div>
+
+  <div class="tabla-scroll" *ngIf="eventosGeneralFiltrados().length">
+  <table class="tabla-auditoria">
+    <thead>
+      <tr>
+        <th>Fecha</th>
+        <th>Módulo</th>
+        <th>Acción</th>
+        <th>Entidad</th>
+        <th>Realizado por</th>
+        <th>Detalle / cambios</th>
+        <th>IP</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr *ngFor="let e of eventosGeneralFiltrados()" [class.fila-consulta]="esConsulta(e)">
+        <td class="col-fecha" data-label="Fecha">{{ e.FechaEvento | date:'dd/MM/yyyy HH:mm:ss' }}</td>
+        <td data-label="Módulo">{{ etiquetaModulo(e.Modulo) }}</td>
+        <td data-label="Acción"><span class="badge-accion" [ngClass]="claseAccionGeneral(e.Accion)">{{ etiquetaAccionGeneral(e.Accion) }}</span></td>
+        <td data-label="Entidad">{{ e.Entidad }}{{ e.EntidadNombre ? ' — ' + e.EntidadNombre : '' }}</td>
+        <td data-label="Realizado por">{{ e.RealizadoPorUsername || '—' }} <span class="badge-consulta" *ngIf="esConsulta(e)" title="Hecho con rol Consulta: auditado con más detalle">Consulta</span></td>
+        <td class="col-detalle" [class.col-detalle--multi]="esConsulta(e)" data-label="Detalle / cambios">{{ resumenCambioGeneral(e) }}</td>
+        <td class="col-ip" data-label="IP">{{ e.IP || '—' }}</td>
+      </tr>
+    </tbody>
+  </table>
+  </div>
+</ng-container>

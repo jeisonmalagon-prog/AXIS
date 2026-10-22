@@ -1,0 +1,6 @@
+@use './azure-base' as *;
+@include base;
+.msg { white-space: normal; overflow-wrap: anywhere; font-weight: 600; }
+.meta { display: flex; flex-wrap: wrap; gap: 6px 12px; align-items: center; margin-top: 6px; font-size: 12px; color: $brand-gray; }
+.resumen-ar { font-size: 12.5px; margin: 0 0 10px; }
+.archivo { cursor: pointer; .ruta { font-family: 'JetBrains Mono', monospace; font-size: 12px; overflow-wrap: anywhere; } .espacio { flex: 1; } }

@@ -1,0 +1,192 @@
+<div class="barra">
+  <div class="selector-dias" role="group" aria-label="Estado">
+    <button type="button" [class.activo]="estado === 'active'" (click)="estado = 'active'; filtrar()">Activos</button>
+    <button type="button" [class.activo]="estado === 'completed'" (click)="estado = 'completed'; filtrar()">Completados</button>
+    <button type="button" [class.activo]="estado === 'abandoned'" (click)="estado = 'abandoned'; filtrar()">Abandonados</button>
+    <button type="button" [class.activo]="estado === 'all'" (click)="estado = 'all'; filtrar()">Todos</button>
+  </div>
+  <label class="buscar"><span aria-hidden="true"><app-ico n="buscar" class="solo"></app-ico></span><input type="text" [(ngModel)]="texto" (keyup.enter)="filtrar()" placeholder="Título, número o rama…" aria-label="Buscar pull requests" /></label>
+  <label class="campo">Autor<input type="text" [(ngModel)]="autor" (keyup.enter)="filtrar()" placeholder="Nombre" /></label>
+  <label class="campo">Destino
+    <select [(ngModel)]="destino" (change)="filtrar()"><option value="">Todas</option><option *ngFor="let r of ramas" [value]="r">{{ r }}</option></select>
+  </label>
+  <label class="campo">Periodo
+    <select [(ngModel)]="dias" (change)="filtrar()"><option value="">Sin límite</option><option value="30">30 días</option><option value="90">90 días</option><option value="180">180 días</option></select>
+  </label>
+  <button type="button" class="btn btn-ghost btn-sm" (click)="limpiar()">Limpiar</button>
+  <span class="espacio"></span>
+  <button type="button" class="btn btn-ghost btn-sm" (click)="alternarEstadisticas()"><app-ico n="resumen"></app-ico>{{ verEstadisticas ? 'Ocultar' : 'Ver' }} estadísticas</button>
+  <button type="button" class="btn btn-ghost btn-sm" (click)="exportar()" [disabled]="!prs.length"><app-ico n="descargar"></app-ico>CSV</button>
+</div>
+
+<!-- ESTADÍSTICAS -->
+<section class="tarjeta" *ngIf="verEstadisticas" style="margin-bottom: 16px">
+  <div class="tarjeta-cab"><h2>Estadísticas de pull requests</h2><span class="tarjeta-sub">Últimos 90 días</span></div>
+  <div class="cargando" *ngIf="estCargando"><div class="spinner"></div></div>
+  <app-azure-fallo [fallo]="estFallo"></app-azure-fallo>
+  <ng-container *ngIf="est">
+    <div class="kpis kpis-6">
+      <div class="kpi"><span class="kpi-et">Total</span><span class="kpi-v">{{ est.total }}</span></div>
+      <div class="kpi"><span class="kpi-et">Ciclo mediano</span><span class="kpi-v">{{ horas(est.cicloHoras.p50) }}</span><span class="kpi-s">p90: {{ horas(est.cicloHoras.p90) }}</span></div>
+      <div class="kpi"><span class="kpi-et">Completados</span><span class="kpi-v">{{ fmtPct(est.tasaCompletados) }}</span></div>
+      <div class="kpi"><span class="kpi-et">Sin revisor</span><span class="kpi-v" [class.t-aviso]="est.activosSinRevisor > 0">{{ est.activosSinRevisor }}</span></div>
+      <div class="kpi"><span class="kpi-et">Más de 7 días</span><span class="kpi-v" [class.t-aviso]="est.activosAntiguos > 0">{{ est.activosAntiguos }}</span></div>
+      <div class="kpi"><span class="kpi-et">Con conflictos</span><span class="kpi-v" [class.t-mal]="est.conConflictos > 0">{{ est.conConflictos }}</span></div>
+    </div>
+    <div class="grilla g-2-1">
+      <app-stacked-bar-chart [etiquetas]="estEtq" [series]="estSeries" [alto]="170" unidad="PRs"></app-stacked-bar-chart>
+      <div><div class="titulo-sec" style="margin-top: 0">Quién abre más</div><app-bar-list [items]="estAutores"></app-bar-list></div>
+    </div>
+    <div class="titulo-sec">Revisores</div>
+    <div class="tabla-wrap">
+      <table class="tabla">
+        <thead><tr><th>Revisor</th><th class="num">Asignados</th><th class="num">Aprobados</th><th class="num">Rechazos</th></tr></thead>
+        <tbody><tr *ngFor="let r of est.porRevisor"><td>{{ r.nombre }}</td><td class="num">{{ r.asignados }}</td><td class="num t-ok">{{ r.aprobados }}</td><td class="num t-mal">{{ r.rechazados }}</td></tr></tbody>
+      </table>
+    </div>
+  </ng-container>
+</section>
+
+<app-azure-fallo [fallo]="fallo"></app-azure-fallo>
+<div class="cargando" *ngIf="cargando"><div class="spinner"></div>Cargando pull requests…</div>
+
+<section class="tarjeta" *ngIf="!cargando && !fallo">
+  <p class="vacio" *ngIf="!prs.length">No hay pull requests con esos filtros.</p>
+  <div class="tabla-wrap" *ngIf="prs.length">
+    <table class="tabla">
+      <thead><tr><th>PR</th><th>Autor</th><th>Ramas</th><th>Estado</th><th>Revisión</th><th>Merge</th><th class="num">Abierto</th></tr></thead>
+      <tbody>
+        <tr class="fila-click" *ngFor="let p of prs" (click)="abrir(p)" tabindex="0" (keyup.enter)="abrir(p)">
+          <td class="td-nombre"><span class="chip">#{{ p.id }}</span> <strong>{{ p.titulo }}</strong> <span class="chip chip-marca" *ngFor="let e of p.etiquetas">{{ e }}</span></td>
+          <td><span class="persona"><span class="avatar">{{ iniciales(p.autor) }}</span>{{ p.autor }}</span></td>
+          <td><code class="sha">{{ p.ramaOrigen }}</code><app-ico n="derecha" class="sep"></app-ico><code class="sha">{{ p.ramaDestino }}</code></td>
+          <td><span class="est" [ngClass]="claseEstadoPr(p)">{{ textoEstadoPr(p) }}</span></td>
+          <td><span class="t-ok" title="Aprobaciones"><app-ico n="check"></app-ico>{{ p.resumenRevision.aprobados }}</span> <span class="t-mal" *ngIf="p.resumenRevision.rechazos" title="Rechazos o esperando al autor"><app-ico n="x"></app-ico>{{ p.resumenRevision.rechazos }}</span> <span class="gris">/ {{ p.resumenRevision.total }}</span></td>
+          <td><span class="chip" [class.chip-alta]="p.mergeEstado === 'conflicts'" *ngIf="p.estado === 'active'">{{ p.mergeTexto || '—' }}</span></td>
+          <td class="num" [title]="fmtFecha(p.creado)">{{ horas(p.horasAbierto) }}</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+  <div class="paginador">
+    <button type="button" class="btn-mini" (click)="cambiarPagina(-1)" [disabled]="pagina === 1"><app-ico n="izquierda"></app-ico>Anterior</button>
+    <span>Página {{ pagina }}</span>
+    <button type="button" class="btn-mini" (click)="cambiarPagina(1)" [disabled]="!hayMas">Siguiente<app-ico n="derecha" class="fin"></app-ico></button>
+  </div>
+</section>
+
+<!-- DETALLE -->
+<div class="modal-overlay" *ngIf="abierto" (click)="cerrar()">
+  <div class="modal-card" role="dialog" aria-modal="true" (click)="$event.stopPropagation()">
+    <div class="modal-header">
+      <div>
+        <h2>#{{ abierto.id }} · {{ abierto.titulo }}</h2>
+        <div class="meta">
+          <span class="est" [ngClass]="claseEstadoPr(abierto)">{{ textoEstadoPr(abierto) }}</span>
+          <span>{{ abierto.autor }}</span><span><code class="sha">{{ abierto.ramaOrigen }}</code><app-ico n="derecha" class="sep"></app-ico><code class="sha">{{ abierto.ramaDestino }}</code></span>
+          <span>{{ fmtFecha(abierto.creado) }}</span>
+          <a class="ext" *ngIf="abierto.url" [href]="abierto.url" target="_blank" rel="noopener">Ver en Azure DevOps<app-ico n="externo" class="fin"></app-ico></a>
+        </div>
+      </div>
+      <button type="button" class="close-btn" (click)="cerrar()" aria-label="Cerrar"><app-ico n="cerrar" class="solo"></app-ico></button>
+    </div>
+
+    <div class="cargando" *ngIf="detalleCargando"><div class="spinner"></div>Cargando…</div>
+    <app-azure-fallo [fallo]="detalleFallo"></app-azure-fallo>
+
+    <ng-container *ngIf="detalle">
+      <div class="pestanas" role="tablist">
+        <button type="button" [class.activa]="vista === 'resumen'" (click)="vista = 'resumen'">Resumen</button>
+        <button type="button" [class.activa]="vista === 'archivos'" (click)="vista = 'archivos'">Archivos <span class="chip">{{ detalle.archivos?.resumen?.total ?? '—' }}</span></button>
+        <button type="button" [class.activa]="vista === 'commits'" (click)="vista = 'commits'">Commits <span class="chip">{{ detalle.commits.length }}</span></button>
+        <button type="button" [class.activa]="vista === 'conversaciones'" (click)="vista = 'conversaciones'">Conversaciones <span class="chip">{{ detalle.hilos?.hilos?.length ?? '—' }}</span></button>
+      </div>
+
+      <!-- Resumen -->
+      <ng-container *ngIf="vista === 'resumen'">
+        <pre class="texto-bloque" *ngIf="detalle.pr.descripcion">{{ detalle.pr.descripcion }}</pre>
+        <div class="grilla g-1-1" style="margin-top: 14px">
+          <div>
+            <h3 class="titulo-sec" style="margin-top: 0">Revisores</h3>
+            <ul class="lista">
+              <li class="item-lista" *ngFor="let r of detalle.pr.revisores">
+                <div class="il-cab"><span class="avatar">{{ iniciales(r.nombre) }}</span><strong>{{ r.nombre }}</strong><span class="est" [ngClass]="claseVoto(r.voto)">{{ r.votoTexto }}</span><span class="chip chip-media" *ngIf="r.requerido">requerido</span></div>
+              </li>
+              <li class="vacio" *ngIf="!detalle.pr.revisores.length">Sin revisores asignados.</li>
+            </ul>
+            <h3 class="titulo-sec">Estado</h3>
+            <dl class="kv">
+              <dt>Merge</dt><dd>{{ detalle.pr.mergeTexto || '—' }}</dd>
+              <dt>Abierto</dt><dd>{{ horas(detalle.pr.horasAbierto) }}</dd>
+              <dt *ngIf="detalle.pr.cerrado">Cerrado</dt><dd *ngIf="detalle.pr.cerrado">{{ fmtFecha(detalle.pr.cerrado) }} por {{ detalle.pr.cerradoPor || '—' }}</dd>
+              <dt *ngIf="detalle.commitFusion">Commit de merge</dt><dd *ngIf="detalle.commitFusion"><code class="sha">{{ detalle.commitFusion }}</code></dd>
+              <dt *ngIf="detalle.pr.autoCompletar">Auto-completar</dt><dd *ngIf="detalle.pr.autoCompletar">Activado por {{ detalle.pr.autoCompletarPor || '—' }}</dd>
+            </dl>
+          </div>
+          <div>
+            <h3 class="titulo-sec" style="margin-top: 0">Políticas de la rama</h3>
+            <app-azure-fallo [fallo]="detalle.errorPoliticas ? { error: detalle.errorPoliticas } : null"></app-azure-fallo>
+            <ul class="lista">
+              <li class="item-lista" *ngFor="let p of detalle.politicas"><div class="il-cab"><strong>{{ p.tipo }}</strong><span class="est" [ngClass]="clasePolitica(p.estado)">{{ textoPolitica(p.estado) }}</span><span class="chip chip-media" *ngIf="p.requerida">bloquea</span></div></li>
+              <li class="vacio" *ngIf="!detalle.politicas.length">Sin políticas evaluadas.</li>
+            </ul>
+            <h3 class="titulo-sec">Verificaciones externas</h3>
+            <ul class="lista">
+              <li class="item-lista" *ngFor="let s of detalle.estados"><div class="il-cab"><strong>{{ s.nombre }}</strong><span class="est" [ngClass]="s.estado === 'succeeded' ? 'est-ok' : s.estado === 'failed' || s.estado === 'error' ? 'est-mal' : 'est-info'">{{ s.estado }}</span></div><div class="il-sub"><span>{{ s.descripcion }}</span><a class="ext" *ngIf="s.enlace" [href]="s.enlace" target="_blank" rel="noopener">Abrir<app-ico n="externo" class="fin"></app-ico></a></div></li>
+              <li class="vacio" *ngIf="!detalle.estados.length">Sin verificaciones.</li>
+            </ul>
+            <h3 class="titulo-sec">Work items vinculados</h3>
+            <app-azure-fallo [fallo]="detalle.errorWorkItems ? { error: detalle.errorWorkItems } : null"></app-azure-fallo>
+            <ul class="lista">
+              <li class="item-lista" *ngFor="let w of detalle.workItems"><div class="il-cab"><span class="chip">#{{ w.id }}</span><strong>{{ w.titulo }}</strong></div><div class="il-sub"><span>{{ w.tipo }}</span><span>{{ w.estado }}</span><span>{{ w.asignado || 'Sin asignar' }}</span></div></li>
+              <li class="vacio" *ngIf="!detalle.workItems.length">Ninguno vinculado.</li>
+            </ul>
+          </div>
+        </div>
+      </ng-container>
+
+      <!-- Archivos -->
+      <ng-container *ngIf="vista === 'archivos'">
+        <app-azure-fallo [fallo]="detalle.errorArchivos ? { error: detalle.errorArchivos } : null"></app-azure-fallo>
+        <ng-container *ngIf="detalle.archivos as ar">
+          <p class="gris" style="font-size: 12.5px"><span class="t-ok">{{ ar.resumen.agregados }} agregados</span> · <span class="t-aviso">{{ ar.resumen.editados }} editados</span> · <span class="t-mal">{{ ar.resumen.eliminados }} eliminados</span> · {{ ar.total }} iteración(es)</p>
+          <ul class="lista">
+            <li class="item-lista" *ngFor="let a of ar.archivos">
+              <div class="il-cab archivo" (click)="verDiff(a)" tabindex="0" (keyup.enter)="verDiff(a)" role="button">
+                <span class="chip" [ngClass]="claseTipo(a.tipo)">{{ a.tipo }}</span><code class="ruta">{{ a.ruta }}</code><span class="espacio"></span><span class="enlace">{{ archivoAbierto === a.ruta ? 'Ocultar cambios' : 'Ver cambios' }}</span>
+              </div>
+              <ng-container *ngIf="archivoAbierto === a.ruta">
+                <div class="cargando" *ngIf="diffCargando"><div class="spinner chico"></div></div>
+                <app-azure-fallo [fallo]="diffFallo"></app-azure-fallo>
+                <app-azure-diff [diff]="diff"></app-azure-diff>
+              </ng-container>
+            </li>
+          </ul>
+        </ng-container>
+      </ng-container>
+
+      <!-- Commits -->
+      <ng-container *ngIf="vista === 'commits'">
+        <ul class="lista">
+          <li class="item-lista" *ngFor="let c of detalle.commits"><div class="il-cab"><code class="sha">{{ c.idCorto }}</code><strong>{{ c.comentario || '(sin mensaje)' }}</strong></div><div class="il-sub"><span>{{ c.autor }}</span><span>{{ fmtFecha(c.fecha) }}</span></div></li>
+          <li class="vacio" *ngIf="!detalle.commits.length">Sin commits.</li>
+        </ul>
+      </ng-container>
+
+      <!-- Conversaciones -->
+      <ng-container *ngIf="vista === 'conversaciones'">
+        <app-azure-fallo [fallo]="detalle.errorHilos ? { error: detalle.errorHilos } : null"></app-azure-fallo>
+        <ng-container *ngIf="detalle.hilos as h">
+          <p class="gris" style="font-size: 12.5px" *ngIf="h.eventosSistema">{{ h.eventosSistema }} eventos automáticos ocultos.</p>
+          <ul class="lista">
+            <li class="item-lista" *ngFor="let t of h.hilos">
+              <div class="il-cab"><span class="est" [ngClass]="t.resuelto ? 'est-ok' : 'est-aviso'">{{ t.estadoTexto }}</span><code class="sha" *ngIf="t.archivo">{{ t.archivo }}<ng-container *ngIf="t.linea">:{{ t.linea }}</ng-container></code></div>
+              <div class="comentario" *ngFor="let c of t.comentarios"><strong>{{ c.autor }}</strong> <span class="gris">{{ fmtRelativo(c.fecha) }}</span><div class="texto-c">{{ c.texto }}</div></div>
+            </li>
+            <li class="vacio" *ngIf="!h.hilos.length">Sin conversaciones.</li>
+          </ul>
+        </ng-container>
+      </ng-container>
+    </ng-container>
+  </div>
+</div>

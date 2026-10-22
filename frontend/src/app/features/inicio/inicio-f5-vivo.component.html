@@ -1,0 +1,52 @@
+<p class="vacio" *ngIf="datos && !datos.configurado">No hay balanceadores F5 configurados en el servidor.</p>
+<div class="cargando chico" *ngIf="cargando && !datos"><div class="spinner"></div></div>
+<div class="aviso-aviso" *ngIf="error">{{ error }}</div>
+
+<ng-container *ngIf="datos && datos.configurado">
+  <div class="ctl-fila">
+    <app-inicio-selector *ngIf="itemsDisp.length > 1" etiqueta="Equipo" [unico]="true" [sinTodos]="true" [items]="itemsDisp" [seleccion]="dispSel" (cambio)="elegirDispositivo($event)"></app-inicio-selector>
+    <app-inicio-selector etiqueta="Virtual Servers" todosTexto="Automático (los 3 con más tráfico)" [items]="itemsVs" [seleccion]="vsSel" (cambio)="elegirVs($event)"></app-inicio-selector>
+    <div class="selector-dias" role="tablist" aria-label="Ventana de tiempo">
+      <button type="button" *ngFor="let r of rangos" [class.activo]="op.minutos === r.v" (click)="cambiar({ minutos: r.v })">{{ r.t }}</button>
+    </div>
+    <div class="selector-dias" role="tablist" aria-label="Métrica de la gráfica">
+      <button type="button" *ngFor="let m of metricas" [class.activo]="op.metrica === m.v" (click)="cambiar({ metrica: m.v })">{{ m.t }}</button>
+    </div>
+    <button type="button" class="ctl-reset" *ngIf="hayFiltro" (click)="limpiar()">Restablecer</button>
+    <span class="estado-vivo">
+      <span class="vivo" [class.pausa]="pausado"></span>
+      <ng-container *ngIf="!pausado">En vivo · cada 5 s<ng-container *ngIf="horaActualizado"> · {{ horaActualizado }}</ng-container></ng-container>
+      <ng-container *ngIf="pausado">En pausa</ng-container>
+      <button type="button" class="btn btn-ghost btn-sm" (click)="alternarPausa()">{{ pausado ? 'Reanudar' : 'Pausar' }}</button>
+    </span>
+  </div>
+
+  <div class="aviso-aviso" *ngIf="datos.automatico">Mostrando automáticamente los 3 Virtual Servers con más tráfico de {{ datos.dispositivoNombre }} ({{ datos.totalVirtuales }} en total). Elige los que quieras en «Virtual Servers» y tu elección se recordará.</div>
+  <div class="aviso-aviso" *ngIf="datos.noEncontrados?.length">No se encontraron en {{ datos.dispositivoNombre }}: {{ datos.noEncontrados?.join(', ') }}. Pudieron renombrarse o eliminarse.</div>
+  <div class="aviso-aviso" *ngIf="errorVirtuales">{{ errorVirtuales }}</div>
+
+  <ng-container *ngIf="datos.seleccion?.length; else sinVs">
+    <div class="tarjetas-vs">
+      <article class="vs" *ngFor="let v of datos.seleccion; let i = index; trackBy: trackV">
+        <div class="vs-cab">
+          <span class="muestra" [style.background]="color(i)"></span>
+          <span class="nombre" [title]="v.fullPath">{{ v.nombre }}</span>
+          <span class="chip" [ngClass]="claseEstado(v)" [title]="v.motivo || ''">{{ textoEstado(v) }}</span>
+          <button type="button" class="quitar" *ngIf="!datos.automatico" (click)="quitarVs(v.fullPath)" [attr.aria-label]="'Quitar ' + v.nombre" title="Quitar de la vista">✕</button>
+        </div>
+        <div class="vs-datos">
+          <div><span>↓ Entrada</span><b>{{ bps(v.actual.entradaBps) }}</b></div>
+          <div><span>↑ Salida</span><b>{{ bps(v.actual.salidaBps) }}</b></div>
+          <div><span>Conexiones</span><b>{{ num(v.actual.conexiones) }}</b></div>
+          <div><span>Peticiones/s</span><b>{{ num(v.actual.peticionesPorSeg) }}</b></div>
+          <div><span>Conex. nuevas/s</span><b>{{ num(v.actual.conexionesNuevasPorSeg) }}</b></div>
+          <div *ngIf="v.actual.conexionesMaximas"><span>Máx. conexiones</span><b>{{ num(v.actual.conexionesMaximas) }}</b></div>
+        </div>
+      </article>
+    </div>
+    <p class="vacio-vs" *ngIf="!hayHistoria">Reuniendo lecturas… la gráfica aparece en unos segundos (hace falta más de una lectura).</p>
+    <app-inicio-linea *ngIf="hayHistoria" [series]="series" [fmt]="fmt" [alto]="210" [etiqueta]="'Tráfico en vivo de los Virtual Servers: ' + tituloMetrica"></app-inicio-linea>
+    <p class="nota">{{ tituloMetrica }} de cada Virtual Server en los últimos {{ op.minutos }} minutos{{ op.metrica === 'trafico' ? ' (entrada + salida)' : '' }}. La historia se acumula mientras alguien tiene este cuadro abierto.</p>
+  </ng-container>
+  <ng-template #sinVs><p class="vacio-vs">No hay Virtual Servers para mostrar en {{ datos.dispositivoNombre }}.</p></ng-template>
+</ng-container>

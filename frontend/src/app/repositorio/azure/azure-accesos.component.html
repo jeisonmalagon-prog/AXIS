@@ -1,0 +1,186 @@
+<div class="modal-overlay" (click)="intentarCerrar()">
+  <div class="modal-card modal-accesos" (click)="$event.stopPropagation()" role="dialog" aria-modal="true" aria-label="Accesos al Repositorio">
+    <div class="modal-header">
+      <div>
+        <h2>Accesos al Repositorio</h2>
+        <p class="sub">Elige qué secciones y qué repositorios de Azure DevOps ve cada usuario de AXIS. El ADMIN_POD siempre ve todo.</p>
+      </div>
+      <button type="button" class="close-btn" (click)="intentarCerrar()" aria-label="Cerrar"><app-ico n="cerrar" class="solo"></app-ico></button>
+    </div>
+
+    <div class="cargando" *ngIf="cargando"><div class="spinner"></div><p>Cargando accesos…</p></div>
+    <div class="error-state" *ngIf="error">{{ error }}</div>
+
+    <ng-container *ngIf="!cargando && !error">
+      <div class="aviso-aviso" *ngIf="errorRepositorios">
+        No se pudo leer la lista de repositorios de Azure DevOps ({{ errorRepositorios }}). Puedes seguir editando las secciones.
+      </div>
+
+      <!-- Control de acceso aún sin activar -->
+      <div class="aviso-aviso" *ngIf="!estricto">
+        <strong>El control de acceso todavía no está activado.</strong> Hoy todos los usuarios con el módulo ven todo el Repositorio.
+        Para activarlo, ejecuta una sola vez en la base de datos el script <code>crear_tabla_repositorio_permisos.sql</code>.
+        <br>El script deja a cada usuario que hoy tiene el módulo con todas las secciones y repositorios (para que nadie pierda acceso de golpe);
+        después vienes aquí a cerrar lo que no corresponda.
+      </div>
+
+      <ng-container *ngIf="estricto">
+        <div class="resumen-acc">
+          <span class="chip chip-ok">Control de acceso activo</span>
+          <span class="chip">{{ usuarios.length }} usuario(s) de AXIS</span>
+          <span class="chip" [ngClass]="sinModuloTotal ? 'chip-media' : 'chip-ok'" title="Usuarios que aún no tienen habilitado el módulo Repositorio">{{ sinModuloTotal }} sin el módulo</span>
+          <span class="chip">{{ secciones.length }} secciones</span>
+          <span class="chip">{{ repositorios.length }} repositorio(s)</span>
+        </div>
+
+        <div class="aviso-aviso" *ngIf="!usuarios.length">No hay usuarios activos (distintos de ADMIN_POD) en AXIS para asignar.</div>
+
+        <ng-container *ngIf="usuarios.length">
+          <div class="pestanas" role="tablist">
+            <button type="button" role="tab" [class.activa]="vista === 'usuario'" [attr.aria-selected]="vista === 'usuario'" (click)="cambiarVista('usuario')">Por usuario</button>
+            <button type="button" role="tab" [class.activa]="vista === 'seccion'" [attr.aria-selected]="vista === 'seccion'" (click)="cambiarVista('seccion')">Por sección</button>
+          </div>
+
+          <!-- ============ POR USUARIO ============ -->
+          <div class="panel" *ngIf="vista === 'usuario'">
+            <aside class="lado">
+              <input class="entrada" type="search" placeholder="Buscar usuario…" [(ngModel)]="busquedaUsuarios" (ngModelChange)="recalcular()" aria-label="Buscar usuario">
+              <select class="entrada" [(ngModel)]="filtroUsuarios" (ngModelChange)="recalcular()" aria-label="Filtrar usuarios por módulo">
+                <option value="todos">Todos los usuarios</option>
+                <option value="con-modulo">Con módulo Repositorio</option>
+                <option value="sin-modulo">Sin módulo Repositorio</option>
+              </select>
+              <ul class="lista-u">
+                <li *ngFor="let u of usuariosVisibles; trackBy: trackUsuario">
+                  <button type="button" class="item-u" [class.sel]="u.id === usuarioSel" (click)="elegirUsuario(u.id)">
+                    <span class="u-nombre">{{ u.nombre }}<span class="punto-sucio" *ngIf="sucios.has(u.id)" title="Cambios sin guardar"></span></span>
+                    <span class="u-meta">{{ u.username }} · {{ u.rol }}<span class="chip chip-media chip-sin-modulo" *ngIf="!u.tieneModulo" title="Este usuario no tiene habilitado el módulo Repositorio">Sin módulo</span></span>
+                    <span class="u-cant" [class.cero]="!cantSecciones(u.id)">{{ cantSecciones(u.id) }} de {{ secciones.length }} secciones · {{ textoRepos(u.id) }}</span>
+                  </button>
+                </li>
+                <li class="vacio" *ngIf="!usuariosVisibles.length">Sin resultados.</li>
+              </ul>
+            </aside>
+
+            <section class="centro" *ngIf="usuario as u">
+              <div class="centro-cab">
+                <div><strong>{{ u.nombre }}</strong> <span class="u-meta">verá {{ cantSecciones(u.id) }} de {{ secciones.length }} secciones</span></div>
+                <div class="copiar">
+                  <select class="entrada" [(ngModel)]="copiarDeId" aria-label="Copiar accesos de otro usuario">
+                    <option value="">Copiar los accesos de…</option>
+                    <ng-container *ngFor="let o of usuarios; trackBy: trackUsuario"><option *ngIf="o.id !== u.id" [value]="o.id">{{ o.nombre }}</option></ng-container>
+                  </select>
+                  <button type="button" class="btn-mini" [disabled]="!copiarDeId" (click)="copiarDesde()">Copiar</button>
+                </div>
+              </div>
+
+              <div class="aviso-aviso" *ngIf="!u.tieneModulo">
+                {{ u.nombre }} no tiene habilitado el módulo Repositorio: puedes dejarle los accesos listos, pero no podrá entrar hasta que se lo asignes en Gestión de Usuarios.
+              </div>
+              <div class="aviso-aviso" *ngIf="sinRepos(u.id)">
+                {{ u.nombre }} tiene secciones de código pero ningún repositorio: no verá contenido. Elige "Todos los repositorios" o marca al menos uno.
+              </div>
+
+              <div class="bloque">
+                <div class="bloque-cab">
+                  <strong>Secciones</strong>
+                  <span class="grupo-acc">
+                    <button type="button" class="btn-mini" (click)="marcarSecciones(u.id, true)">Todas</button>
+                    <button type="button" class="btn-mini" (click)="marcarSecciones(u.id, false)">Ninguna</button>
+                  </span>
+                </div>
+                <label class="fila" *ngFor="let s of secciones; trackBy: trackSeccion" [class.marcada]="tiene(u.id, s.id)">
+                  <input type="checkbox" [checked]="tiene(u.id, s.id)" (change)="alternarSeccion(u.id, s.id)">
+                  <span class="f-texto">
+                    <span class="f-nombre">{{ s.nombre }}</span>
+                    <span class="f-meta">{{ s.descripcion }}</span>
+                  </span>
+                  <span class="chip" *ngIf="!s.porRepo" title="Esta sección muestra datos de todo el proyecto, no de un repositorio concreto">Proyecto</span>
+                </label>
+              </div>
+
+              <div class="bloque" *ngIf="seccionesPorRepo">
+                <div class="bloque-cab">
+                  <strong>Repositorios</strong>
+                  <span class="u-meta">Aplica a Resumen, Archivos, Commits, Pull Requests, Ramas y Buscar.</span>
+                </div>
+                <label class="fila" [class.marcada]="todosRepos(u.id)">
+                  <input type="checkbox" [checked]="todosRepos(u.id)" (change)="ponerTodosRepos(u.id, !todosRepos(u.id))">
+                  <span class="f-texto">
+                    <span class="f-nombre">Todos los repositorios</span>
+                    <span class="f-meta">Incluye los que se creen más adelante en Azure DevOps.</span>
+                  </span>
+                </label>
+
+                <ng-container *ngIf="!todosRepos(u.id)">
+                  <div class="filtros" *ngIf="hayRepos">
+                    <input class="entrada" type="search" placeholder="Buscar repositorio…" [(ngModel)]="busquedaRepos" (ngModelChange)="recalcular()" aria-label="Buscar repositorio">
+                    <button type="button" class="btn-mini" (click)="marcarReposVisibles(u.id, true)" [disabled]="!reposVisibles.length">Marcar visibles ({{ reposVisibles.length }})</button>
+                    <button type="button" class="btn-mini" (click)="marcarReposVisibles(u.id, false)" [disabled]="!reposVisibles.length">Quitar visibles</button>
+                  </div>
+                  <div class="lista-repos">
+                    <label class="fila" *ngFor="let r of reposVisibles; trackBy: trackRepo" [class.marcada]="tieneRepo(u.id, r.nombre)">
+                      <input type="checkbox" [checked]="tieneRepo(u.id, r.nombre)" (change)="alternarRepo(u.id, r.nombre)">
+                      <span class="f-texto">
+                        <span class="f-nombre mono">{{ r.nombre }}</span>
+                        <span class="f-meta" *ngIf="r.ramaPorDefecto">Rama por defecto: {{ r.ramaPorDefecto }}</span>
+                      </span>
+                      <span class="chip chip-media" *ngIf="r.huerfano" title="Ya no aparece en Azure DevOps (renombrado o eliminado)">No encontrado</span>
+                      <span class="chip" *ngIf="r.deshabilitado">Deshabilitado</span>
+                    </label>
+                    <p class="vacio" *ngIf="!reposVisibles.length">{{ hayRepos ? 'Ningún repositorio coincide.' : 'No hay repositorios para mostrar.' }}</p>
+                  </div>
+                </ng-container>
+              </div>
+            </section>
+          </div>
+
+          <!-- ============ POR SECCIÓN ============ -->
+          <div class="panel" *ngIf="vista === 'seccion'">
+            <aside class="lado">
+              <ul class="lista-u">
+                <li *ngFor="let s of secciones; trackBy: trackSeccion">
+                  <button type="button" class="item-u" [class.sel]="s.id === seccionSel" (click)="elegirSeccion(s.id)">
+                    <span class="u-nombre">{{ s.nombre }}</span>
+                    <span class="u-cant" [class.cero]="!conteoSeccion(s.id)">{{ conteoSeccion(s.id) ? conteoSeccion(s.id) + ' usuario(s)' : 'Nadie' }}</span>
+                  </button>
+                </li>
+              </ul>
+            </aside>
+
+            <section class="centro" *ngIf="seccion as s">
+              <div class="centro-cab">
+                <div><strong>{{ s.nombre }}</strong> <span class="u-meta">{{ conteoSeccion(s.id) }} de {{ usuarios.length }} usuarios la ven</span></div>
+                <div class="copiar">
+                  <button type="button" class="btn-mini" (click)="darSeccionATodos(s.id, true)">Dar a todos</button>
+                  <button type="button" class="btn-mini" (click)="darSeccionATodos(s.id, false)">Quitar a todos</button>
+                </div>
+              </div>
+              <p class="u-meta descripcion">{{ s.descripcion }}</p>
+              <div class="lista-repos">
+                <label class="fila" *ngFor="let u of usuarios; trackBy: trackUsuario" [class.marcada]="tiene(u.id, s.id)">
+                  <input type="checkbox" [checked]="tiene(u.id, s.id)" (change)="alternarSeccion(u.id, s.id)">
+                  <span class="f-texto">
+                    <span class="f-nombre">{{ u.nombre }}<span class="punto-sucio" *ngIf="sucios.has(u.id)" title="Cambios sin guardar"></span></span>
+                    <span class="f-meta">{{ u.username }} · {{ u.rol }}</span>
+                  </span>
+                  <span class="chip chip-media" *ngIf="!u.tieneModulo">Sin módulo</span>
+                </label>
+              </div>
+            </section>
+          </div>
+        </ng-container>
+
+        <div class="error-state" *ngIf="errorGuardar">{{ errorGuardar }}</div>
+        <div class="aviso-ok" *ngIf="mensaje">{{ mensaje }}</div>
+      </ng-container>
+    </ng-container>
+
+    <div class="modal-footer">
+      <span class="pendiente" *ngIf="hayCambios">{{ sucios.size }} usuario(s) con cambios sin guardar</span>
+      <button type="button" class="btn btn-ghost" (click)="descartar()" *ngIf="hayCambios" [disabled]="guardando">Descartar</button>
+      <button type="button" class="btn btn-purple" (click)="guardar()" *ngIf="estricto" [disabled]="!hayCambios || guardando">{{ guardando ? 'Guardando…' : 'Guardar cambios' }}</button>
+      <button type="button" class="btn btn-ghost" (click)="intentarCerrar()">Cerrar</button>
+    </div>
+  </div>
+</div>

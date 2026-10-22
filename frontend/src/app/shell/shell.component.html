@@ -1,0 +1,287 @@
+<div class="shell" [class.dark-theme]="tema === 'oscuro'" [class.es-movil]="esMovil">
+
+  <a class="saltar" href="#contenido" (click)="$event.preventDefault(); contenidoRef.focus()">Saltar al contenido</a>
+
+  <!-- Fondo atenuado cuando el menú se abre como cajón en pantallas chicas -->
+  <div class="telon" *ngIf="esMovil && movilAbierto" (click)="cerrarMovil()"></div>
+
+  <!-- ===================================================== BARRA LATERAL -->
+  <aside class="sidebar" [class.collapsed]="isCollapsed" [class.movil-abierto]="movilAbierto" aria-label="Menú principal">
+
+    <div class="brand">
+      <button type="button" class="toggle-btn" (click)="toggleSidebar()"
+              [attr.aria-label]="esMovil ? 'Cerrar menú' : (isCollapsed ? 'Expandir menú' : 'Contraer menú')"
+              [title]="esMovil ? 'Cerrar menú' : (isCollapsed ? 'Expandir menú' : 'Contraer menú')">
+        <span class="hamburger-icon" aria-hidden="true"><span></span><span></span><span></span></span>
+      </button>
+      <!-- Pagoda · logo · torii, parados sobre una línea de horizonte -->
+      <a routerLink="/inicio" class="brand-enlace" title="Ir al inicio" aria-label="AXIS, ir al inicio">
+        <app-jp-ico tipo="pagoda" class="brand-jp brand-jp--pagoda"></app-jp-ico>
+        <span class="brand-centro">
+          <img src="https://segurosfinandina.cardif.com.co/documents/1227672/1234990/favicon.ico" alt="" class="brand-logo-small">
+          <span class="brand-name">AXIS</span>
+        </span>
+        <app-jp-ico tipo="torii" class="brand-jp brand-jp--torii"></app-jp-ico>
+      </a>
+    </div>
+
+    <nav aria-label="Navegación principal">
+
+      <!-- FAVORITOS -->
+      <ng-container *ngIf="itemsFavoritos.length">
+        <p class="nav-seccion__titulo">Tus favoritos</p>
+        <div class="nav-fila" *ngFor="let f of itemsFavoritos">
+          <a class="nav-link" [routerLink]="f.item.ruta" routerLinkActive="active" [title]="f.item.descripcion">
+            <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" [innerHTML]="icono(f.area?.id || 'inicio')"></svg>
+            <span class="nav-text">{{ f.item.titulo }}</span>
+          </a>
+          <button type="button" class="estrella on" (click)="alternarFavorito(f.item.id, $event)"
+                  [attr.aria-label]="'Quitar ' + f.item.titulo + ' de favoritos'" title="Quitar de favoritos">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+          </button>
+        </div>
+      </ng-container>
+
+      <!-- SECCIONES -->
+      <ng-container *ngFor="let sec of secciones">
+        <p class="nav-seccion__titulo" *ngIf="sec.seccion.titulo">{{ sec.seccion.titulo }}</p>
+
+        <ng-container *ngFor="let area of sec.areas">
+
+          <!-- Pantalla única: enlace directo -->
+          <div class="nav-fila" *ngIf="!esGrupo(area)">
+            <a class="nav-link" [routerLink]="area.items[0].ruta" routerLinkActive="active" [title]="area.items[0].descripcion">
+              <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" [innerHTML]="icono(area.id)"></svg>
+              <span class="nav-text">{{ area.titulo }}</span>
+            </a>
+            <button type="button" class="estrella" *ngIf="area.id !== 'inicio'" [class.on]="esFavorito(area.items[0].id)"
+                    (click)="alternarFavorito(area.items[0].id, $event)"
+                    [attr.aria-label]="(esFavorito(area.items[0].id) ? 'Quitar de favoritos ' : 'Fijar en favoritos ') + area.titulo"
+                    [title]="esFavorito(area.items[0].id) ? 'Quitar de favoritos' : 'Fijar en favoritos'">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+            </button>
+          </div>
+
+          <!-- Área con varias pantallas: se despliega (una abierta a la vez) -->
+          <div class="nav-group" *ngIf="esGrupo(area)" (mouseenter)="fijarPosicionFlyout($event)" (focusin)="fijarPosicionFlyout($event)">
+            <button type="button" class="nav-group-header" [class.contiene-activa]="areaActiva(area)"
+                    (click)="toggleArea(area.id)" [attr.aria-expanded]="openArea === area.id" [title]="area.descripcion">
+              <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" [innerHTML]="icono(area.id)"></svg>
+              <span class="nav-text">{{ area.titulo }}</span>
+              <svg class="chevron-icon" [class.rotated]="openArea === area.id" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                <polyline points="6 9 12 15 18 9"/>
+              </svg>
+            </button>
+            <div class="sub-nav" *ngIf="isCollapsed || openArea === area.id" [style.top.px]="flyoutTopPx">
+              <span class="sub-nav__titulo">{{ area.titulo }}</span>
+              <div class="nav-fila sub" *ngFor="let it of area.items">
+                <a [routerLink]="it.ruta" routerLinkActive="active" [title]="it.descripcion">{{ it.titulo }}</a>
+                <button type="button" class="estrella" [class.on]="esFavorito(it.id)"
+                        (click)="alternarFavorito(it.id, $event)"
+                        [attr.aria-label]="(esFavorito(it.id) ? 'Quitar de favoritos ' : 'Fijar en favoritos ') + it.titulo"
+                        [title]="esFavorito(it.id) ? 'Quitar de favoritos' : 'Fijar en favoritos'">
+                  <svg viewBox="0 0 24 24" aria-hidden="true"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+                </button>
+              </div>
+            </div>
+          </div>
+
+        </ng-container>
+      </ng-container>
+    </nav>
+
+    <!-- USUARIO -->
+    <div class="usuario pop-host">
+      <div class="menu-usuario" *ngIf="menuUsuarioAbierto" role="menu">
+        <div class="menu-usuario__cab">
+          <strong>{{ usuarioActual?.nombre }}</strong>
+          <span>{{ usuarioActual?.username }} · {{ etiquetaRol }}</span>
+        </div>
+        <a role="menuitem" routerLink="/perfil">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+          Mi perfil y contraseña
+        </a>
+        <button type="button" role="menuitem" (click)="abrirGuia()">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+          Guía de bienvenida
+        </button>
+        <button type="button" role="menuitem" class="peligro" (click)="cerrarSesion()">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+          Cerrar sesión
+        </button>
+      </div>
+      <button type="button" class="usuario-btn" (click)="alternarMenuUsuario()" [attr.aria-expanded]="menuUsuarioAbierto" aria-haspopup="menu" [title]="usuarioActual?.nombre || 'Mi cuenta'">
+        <span class="avatar">
+          <img *ngIf="usuarioActual?.fotoPerfil" [src]="usuarioActual?.fotoPerfil" alt="">
+          <ng-container *ngIf="!usuarioActual?.fotoPerfil">{{ iniciales }}</ng-container>
+        </span>
+        <span class="usuario-datos">
+          <strong>{{ usuarioActual?.nombre }}</strong>
+          <small>{{ etiquetaRol }}</small>
+        </span>
+        <svg class="chevron-icon usuario-chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><polyline points="6 15 12 9 18 15"/></svg>
+      </button>
+    </div>
+  </aside>
+
+  <!-- ============================================================ CONTENIDO -->
+  <main class="content" id="contenido" tabindex="-1" #contenidoRef>
+
+    <header class="topbar">
+      <button type="button" class="icon-btn topbar-menu" *ngIf="esMovil" (click)="toggleSidebar()" aria-label="Abrir menú" title="Abrir menú">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+      </button>
+
+      <nav class="migas" aria-label="Dónde estás" *ngIf="migas.length">
+        <ng-container *ngFor="let m of migas; let ult = last; let i = index">
+          <a *ngIf="m.ruta && !ult" [routerLink]="m.ruta">{{ m.texto }}</a>
+          <span *ngIf="!m.ruta || ult" class="migas__actual" [attr.aria-current]="ult ? 'page' : null">{{ m.texto }}</span>
+          <svg *ngIf="!ult" class="migas__sep" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><polyline points="9 6 15 12 9 18"/></svg>
+        </ng-container>
+      </nav>
+
+      <button type="button" class="topbar-buscar" (click)="abrirPaleta()" title="Buscar una pantalla o una tarea (Ctrl + K)">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+        <span class="topbar-buscar__texto">¿Qué necesitas hacer? Escríbelo aquí…</span>
+        <kbd>Ctrl K</kbd>
+      </button>
+
+      <button type="button" class="icon-btn" *ngIf="paginaActual && paginaActual.item.id !== 'inicio'"
+              [class.on]="esFavorito(paginaActual.item.id)" (click)="alternarFavorito(paginaActual.item.id)"
+              [attr.aria-pressed]="esFavorito(paginaActual.item.id)"
+              [title]="esFavorito(paginaActual.item.id) ? 'Quitar esta pantalla de tus favoritos' : 'Fijar esta pantalla en tus favoritos'"
+              [attr.aria-label]="esFavorito(paginaActual.item.id) ? 'Quitar de favoritos' : 'Fijar en favoritos'">
+        <svg viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" stroke-linejoin="round" aria-hidden="true"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+      </button>
+
+      <div class="pop-host">
+        <button type="button" class="icon-btn campana" (click)="alternarNotificaciones()" [attr.aria-expanded]="notifAbiertas" [class.on-notif]="notifNoLeidas > 0"
+                [title]="notifNoLeidas ? notifNoLeidas + ' notificación(es) sin leer' : 'Notificaciones'" [attr.aria-label]="notifNoLeidas ? 'Notificaciones: ' + notifNoLeidas + ' sin leer' : 'Notificaciones'">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+          <span class="campana__num" *ngIf="notifNoLeidas > 0" [class.pide-respuesta]="notifPendientes > 0">{{ notifNoLeidas > 9 ? '9+' : notifNoLeidas }}</span>
+        </button>
+        <div class="notif" *ngIf="notifAbiertas" role="dialog" aria-label="Notificaciones">
+          <div class="notif__cab">
+            <strong>Notificaciones</strong>
+            <button type="button" (click)="verTodasNotificaciones()">Ver todas</button>
+          </div>
+          <p class="notif__vacio" *ngIf="notifCargando && !notifItems.length">Cargando…</p>
+          <p class="notif__vacio" *ngIf="notifMensaje">{{ notifMensaje }}</p>
+          <p class="notif__vacio" *ngIf="!notifCargando && !notifItems.length && !notifMensaje">No tienes notificaciones.</p>
+          <ul class="notif__lista" *ngIf="notifItems.length">
+            <li *ngFor="let n of notifItems; trackBy: trackNotif" class="notif__item" [class.sin-leer]="!n.leida" [ngClass]="'sev-' + n.severidad.toLowerCase()"
+                (click)="abrirNotificacion(n)" (keydown.enter)="abrirNotificacion(n)" tabindex="0">
+              <strong>{{ n.titulo }}</strong>
+              <span *ngIf="n.mensaje">{{ n.mensaje }}</span>
+              <small>{{ n.fecha | date: 'dd/MM HH:mm' }}</small>
+              <div class="notif__acciones" *ngIf="n.tipo === 'MANUAL_COMPARTIR' && n.accion === 'PENDIENTE'">
+                <button type="button" class="ok" [disabled]="notifRespondiendo === n.id" (click)="responderNotificacion(n, true, $event)">Aceptar</button>
+                <button type="button" class="no" [disabled]="notifRespondiendo === n.id" (click)="responderNotificacion(n, false, $event)">Rechazar</button>
+              </div>
+              <div class="notif__acciones" *ngIf="n.tipo === 'BITACORA_COMPARTIR' && n.accion === 'PENDIENTE'">
+                <button type="button" class="ok" [disabled]="notifRespondiendo === n.id" (click)="responderNotificacion(n, true, $event)">Aceptar</button>
+                <button type="button" class="no" [disabled]="notifRespondiendo === n.id" (click)="responderNotificacion(n, false, $event)">Rechazar</button>
+              </div>
+              <div class="notif__acciones" *ngIf="n.tipo === 'BITACORA_SOLICITUD' && n.accion === 'PENDIENTE'">
+                <button type="button" class="ok" [disabled]="notifRespondiendo === n.id" (click)="responderNotificacion(n, true, $event, 'LECTURA')">Aprobar lectura</button>
+                <button type="button" class="ok" [disabled]="notifRespondiendo === n.id" (click)="responderNotificacion(n, true, $event, 'EDICION')">Aprobar edición</button>
+                <button type="button" class="no" [disabled]="notifRespondiendo === n.id" (click)="responderNotificacion(n, false, $event)">Rechazar</button>
+              </div>
+            </li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="pop-host">
+        <button type="button" class="icon-btn" (click)="alternarAyuda()" [attr.aria-expanded]="ayudaAbierta" title="¿Para qué sirve esta pantalla?" aria-label="Ayuda sobre esta pantalla">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+        </button>
+        <div class="ayuda" *ngIf="ayudaAbierta" role="dialog" aria-label="Ayuda de esta pantalla">
+          <h4>{{ paginaActual?.item?.titulo || 'AXIS' }}</h4>
+          <p>{{ paginaActual?.item?.descripcion || 'Usa el menú de la izquierda o el buscador para ir a donde necesites.' }}</p>
+          <ul>
+            <li><kbd>Ctrl K</kbd> abre el buscador: escribe lo que quieres hacer.</li>
+            <li>La estrella fija una pantalla en tus favoritos.</li>
+            <li>Si no ves un área, pide acceso a un administrador.</li>
+          </ul>
+          <div class="ayuda__acciones">
+            <a routerLink="/asistente" (click)="ayudaAbierta = false">Preguntar al asistente</a>
+            <button type="button" (click)="abrirGuia()">Ver la guía de bienvenida</button>
+          </div>
+        </div>
+      </div>
+    </header>
+
+    <router-outlet></router-outlet>
+  </main>
+
+</div>
+
+<!-- ============================================================== BUSCADOR -->
+<div class="paleta-fondo" *ngIf="paletaAbierta" (mousedown)="cerrarPaleta()">
+  <div class="paleta" role="dialog" aria-modal="true" aria-label="Buscar en AXIS" (mousedown)="$event.stopPropagation()">
+    <div class="paleta-cab">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+      <input #inputPaleta type="text" autocomplete="off" spellcheck="false"
+             placeholder="Escribe lo que necesitas: por ejemplo “certificados por vencer”"
+             role="combobox" aria-expanded="true" aria-controls="paleta-lista" aria-label="Buscar"
+             [value]="consulta" (input)="alEscribir($any($event.target).value)" (keydown)="teclaPaleta($event)">
+      <button type="button" class="paleta-cerrar" (click)="cerrarPaleta()" aria-label="Cerrar buscador">Esc</button>
+    </div>
+
+    <ul class="paleta-lista" id="paleta-lista" role="listbox">
+      <ng-container *ngFor="let r of resultados; let i = index">
+        <li class="paleta-grupo" *ngIf="mostrarGrupo(i)" role="presentation">{{ r.grupo }}</li>
+        <li class="paleta-item" role="option" [class.activo]="i === indiceActivo" [attr.aria-selected]="i === indiceActivo"
+            (mouseenter)="indiceActivo = i" (click)="elegir(r)">
+          <span class="paleta-ico">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" [innerHTML]="icono(r.icono)"></svg>
+          </span>
+          <span class="paleta-txt">
+            <strong>{{ r.titulo }}</strong>
+            <small>{{ r.subtitulo }}</small>
+          </span>
+          <span class="paleta-ir" aria-hidden="true">Enter ↵</span>
+        </li>
+      </ng-container>
+      <li class="paleta-vacio" *ngIf="sugerenciasVacias" role="presentation">
+        No encontramos nada para “{{ consulta }}”. Prueba con otra palabra (por ejemplo “certificado”, “servidor”, “cliente”) o pregúntale al asistente.
+      </li>
+    </ul>
+
+    <div class="paleta-pie">
+      <span><kbd>↑</kbd><kbd>↓</kbd> moverte</span>
+      <span><kbd>Enter</kbd> abrir</span>
+      <span><kbd>Esc</kbd> cerrar</span>
+    </div>
+  </div>
+</div>
+
+<!-- ===================================================== GUÍA DE BIENVENIDA -->
+<div class="guia-fondo" *ngIf="guiaAbierta">
+  <div class="guia" role="dialog" aria-modal="true" aria-labelledby="guia-titulo">
+    <div class="guia-ico">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" [innerHTML]="icono(pasosGuia[pasoGuia].icono)"></svg>
+    </div>
+    <h3 id="guia-titulo">{{ pasosGuia[pasoGuia].titulo }}</h3>
+    <p>{{ pasosGuia[pasoGuia].texto }}</p>
+    <div class="guia-puntos" aria-hidden="true">
+      <span *ngFor="let p of pasosGuia; let i = index" [class.on]="i === pasoGuia"></span>
+    </div>
+    <div class="guia-botones">
+      <button type="button" class="btn-sec" (click)="cerrarGuia()">{{ pasoGuia === pasosGuia.length - 1 ? 'Cerrar' : 'Omitir' }}</button>
+      <span class="grow"></span>
+      <button type="button" class="btn-sec" *ngIf="pasoGuia > 0" (click)="anteriorGuia()">Atrás</button>
+      <button type="button" class="btn-pri" (click)="siguienteGuia()">{{ pasoGuia === pasosGuia.length - 1 ? 'Empezar' : 'Siguiente' }}</button>
+    </div>
+  </div>
+</div>
+
+<!-- AVISO DE INACTIVIDAD: aparece 1 minuto antes de cerrar sesión sola -->
+<div class="inactividad-overlay" *ngIf="mostrarAvisoInactividad">
+  <div class="inactividad-modal">
+    <h3>¿Sigues ahí?</h3>
+    <p>Por seguridad, tu sesión se va a cerrar en 1 minuto por inactividad.</p>
+    <button (click)="continuarSesion()">Seguir conectado</button>
+  </div>
+</div>

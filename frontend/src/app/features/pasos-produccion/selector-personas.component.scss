@@ -1,0 +1,12 @@
+@use './bitacora-comun' as *;
+
+.sp__barra { display: flex; gap: 8px; flex-wrap: wrap; }
+.sp__buscar, .sp__equipo { padding: 9px 12px; border: 1px solid var(--ax-border-2, #cbd5e1); border-radius: 8px; font-size: 13px; font-family: inherit; color: $brand-dark; background: var(--ax-surface, white); &:focus { outline: none; border-color: $brand; } }
+.sp__buscar { flex: 1 1 200px; min-width: 0; }
+.sp__equipo { flex: 0 1 220px; }
+.sp__lista { margin-top: 8px; max-height: 190px; overflow-y: auto; border: 1px solid $border-light; border-radius: 10px; background: var(--ax-surface, white); }
+.sp__fila { display: flex; align-items: center; gap: 8px; padding: 7px 12px; font-size: 13px; cursor: pointer; font-weight: 500; &:hover { background: $surface-bg; } small { color: $brand-gray; font-size: 11.5px; } input { margin: 0; accent-color: $brand; } }
+.sp__nombre { font-weight: 600; }
+.sp__vacio { padding: 12px; font-size: 12.5px; color: $brand-gray; text-align: center; }
+.sp__limpiar { border: none; background: transparent; color: $brand-gray; font-size: 12px; cursor: pointer; text-decoration: underline; font-family: inherit; }
+.sp--off { opacity: 0.6; pointer-events: none; }

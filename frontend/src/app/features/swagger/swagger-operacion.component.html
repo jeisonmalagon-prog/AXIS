@@ -1,0 +1,294 @@
+<div class="op-panel" (keydown.control.enter)="enviar()">
+  <!-- ============ Descripción ============ -->
+  <div class="op-intro" *ngIf="op">
+    <div class="aviso-aviso" *ngIf="op.deprecado"><strong>Endpoint deprecado.</strong> El servicio indica que ya no debería usarse.</div>
+    <p class="op-descripcion" *ngIf="op.descripcion">{{ op.descripcion }}</p>
+    <div class="op-meta" *ngIf="op.operationId || op.docExterna || op.etiquetas.length">
+      <span class="chip" *ngFor="let t of op.etiquetas">{{ t }}</span>
+      <span class="chip mono" *ngIf="op.operationId" title="Identificador de la operación (operationId)">{{ op.operationId }}</span>
+      <a class="enlace-ext" *ngIf="op.docExterna" [href]="op.docExterna.url" target="_blank" rel="noopener noreferrer">{{ op.docExterna.descripcion || 'Documentación externa' }}</a>
+    </div>
+  </div>
+
+  <div class="manual-cab" *ngIf="manual">
+    <select class="entrada metodo-sel" [ngClass]="claseMetodo(pet.metodo)" [(ngModel)]="pet.metodo" aria-label="Método HTTP">
+      <option *ngFor="let m of metodos" [value]="m">{{ m }}</option>
+    </select>
+    <input class="entrada mono" [(ngModel)]="pet.ruta" (ngModelChange)="actualizarClavesPath()" placeholder="/ruta/{id}" aria-label="Ruta" />
+  </div>
+
+  <div class="aviso-aviso" *ngIf="!puedeEditar">Tu rol en este módulo es de Consulta: puedes leer el Swagger y los consumos guardados, pero ejecutar y guardar requiere permiso de edición.</div>
+  <div class="aviso-info" *ngIf="consumoNombre">Consumo guardado cargado: <strong>{{ consumoNombre }}</strong></div>
+
+  <!-- ============ Parámetros ============ -->
+  <section class="sec">
+    <div class="sec-cab">
+      <h3>Parámetros</h3>
+      <span class="espacio"></span>
+      <button type="button" class="btn-mini" (click)="agregarFila(queryFilas)" title="Agregar un parámetro de query">+ Query</button>
+      <button type="button" class="btn-mini" (click)="agregarFila(headerFilas)" title="Agregar un encabezado">+ Encabezado</button>
+    </div>
+    <p class="vacio-sec" *ngIf="!clavesPath.length && !queryFilas.length && !headerFilas.length">Este endpoint no tiene parámetros.</p>
+
+    <div class="tabla-param" *ngIf="clavesPath.length || queryFilas.length || headerFilas.length">
+      <div class="tp-cab"><span>Nombre</span><span>Valor y descripción</span></div>
+
+      <div class="tp-fila" *ngFor="let k of clavesPath" [class.tp-error]="errorPath.has(k)">
+        <div class="tp-nombre">
+          <span class="pn mono">{{ k }}<span class="req-txt">* obligatorio</span></span>
+          <span class="pt">{{ tipoDeRuta(k) }}</span>
+          <span class="pd">(ruta)</span>
+        </div>
+        <div class="tp-valor">
+          <p class="pdesc" *ngIf="descripcionDeRuta(k)">{{ descripcionDeRuta(k) }}</p>
+          <select class="entrada mono" *ngIf="opcionesDeRuta(k).length; else rutaLibre" [(ngModel)]="pathParams[k]" (ngModelChange)="errorPath.delete(k)" [attr.aria-label]="'Parámetro de ruta ' + k">
+            <option value=""></option><option *ngFor="let o of opcionesDeRuta(k)" [value]="o">{{ o }}</option>
+          </select>
+          <ng-template #rutaLibre><input class="entrada mono" [(ngModel)]="pathParams[k]" (ngModelChange)="errorPath.delete(k)" [attr.aria-label]="'Parámetro de ruta ' + k" placeholder="Obligatorio" /></ng-template>
+          <button type="button" class="enlace-chico" *ngIf="ejemploDeRuta(k) !== undefined && pathParams[k] !== ejemploDeRuta(k)" (click)="pathParams[k] = ejemploDeRuta(k) || ''">Usar ejemplo: {{ ejemploDeRuta(k) }}</button>
+        </div>
+      </div>
+
+      <ng-container *ngTemplateOutlet="filas; context: { lista: queryFilas, donde: 'query' }"></ng-container>
+      <ng-container *ngTemplateOutlet="filas; context: { lista: headerFilas, donde: 'encabezado' }"></ng-container>
+    </div>
+  </section>
+
+  <ng-template #filas let-lista="lista" let-donde="donde">
+    <div class="tp-fila" *ngFor="let f of lista; let i = index; trackBy: trackIndice" [class.tp-error]="f.error">
+      <div class="tp-nombre">
+        <ng-container *ngIf="f.declarado; else nombreLibre">
+          <span class="pn mono">{{ f.k }}<span class="req-txt" *ngIf="f.requerido">* obligatorio</span></span>
+          <span class="pt">{{ f.tipo }}</span>
+          <span class="pd">({{ donde }})</span>
+        </ng-container>
+        <ng-template #nombreLibre>
+          <input class="entrada mono" [(ngModel)]="f.k" placeholder="nombre" [attr.aria-label]="'Nombre del ' + donde" />
+          <span class="pd">({{ donde }})</span>
+        </ng-template>
+      </div>
+      <div class="tp-valor">
+        <p class="pdesc" *ngIf="f.descripcion">{{ f.descripcion }}</p>
+        <div class="pin">
+          <select class="entrada mono" *ngIf="f.opciones?.length; else valorLibre" [(ngModel)]="f.v" (ngModelChange)="f.error = false" [attr.aria-label]="'Valor de ' + f.k">
+            <option value=""></option><option *ngFor="let o of f.opciones" [value]="o">{{ o }}</option>
+          </select>
+          <ng-template #valorLibre><input class="entrada mono" [(ngModel)]="f.v" (ngModelChange)="f.error = false" [placeholder]="f.requerido ? 'Obligatorio' : (f.declarado ? 'Opcional (vacío: no se envía)' : 'valor')" [attr.aria-label]="'Valor de ' + f.k" /></ng-template>
+          <button type="button" class="quitar" *ngIf="!f.declarado" (click)="quitarFila(lista, i)" aria-label="Quitar">&#10005;</button>
+        </div>
+        <button type="button" class="enlace-chico" *ngIf="f.ejemplo !== undefined && f.v !== f.ejemplo" (click)="usarEjemplo(f)">Usar ejemplo: {{ f.ejemplo }}</button>
+      </div>
+    </div>
+  </ng-template>
+
+  <!-- ============ Cuerpo ============ -->
+  <section class="sec" *ngIf="llevaCuerpo">
+    <div class="sec-cab">
+      <h3>Cuerpo de la petición<span class="req-txt" *ngIf="op?.cuerpo?.requerido">* obligatorio</span></h3>
+      <span class="espacio"></span>
+      <span class="tipo-contenido">
+        <input class="entrada mono" *ngIf="!tiposDeCuerpo.length" [(ngModel)]="pet.tipoContenido" list="tipos-contenido" aria-label="Tipo de contenido" (ngModelChange)="validarCuerpo()" />
+        <datalist id="tipos-contenido"><option value="application/json"></option><option value="application/xml"></option><option value="text/plain"></option><option value="application/x-www-form-urlencoded"></option></datalist>
+        <select class="entrada" *ngIf="tiposDeCuerpo.length" [ngModel]="pet.tipoContenido" (ngModelChange)="cambiarTipoContenido($event)" aria-label="Tipo de contenido">
+          <option *ngFor="let t of tiposDeCuerpo" [value]="t">{{ t }}</option>
+        </select>
+      </span>
+    </div>
+    <p class="ayuda-chica" *ngIf="op?.cuerpo?.descripcion">{{ op?.cuerpo?.descripcion }}</p>
+    <div class="mini-tabs" *ngIf="modeloCuerpo">
+      <button type="button" [class.activo]="vistaPeticion === 'editar'" (click)="vistaPeticion = 'editar'">Valor a enviar</button>
+      <button type="button" [class.activo]="vistaPeticion === 'modelo'" (click)="vistaPeticion = 'modelo'">Modelo</button>
+    </div>
+    <ng-container *ngIf="vistaPeticion === 'editar' || !modeloCuerpo">
+      <div class="barra-herr">
+        <button type="button" class="btn-mini" *ngIf="op?.cuerpo" (click)="restaurarEjemplo()" title="Volver al cuerpo de ejemplo del Swagger">Restaurar ejemplo</button>
+        <button type="button" class="btn-mini" (click)="formatearCuerpo()" [disabled]="!!cuerpoError" title="Dar formato (sangría) al JSON">Formatear</button>
+        <button type="button" class="btn-mini" (click)="minificarCuerpo()" [disabled]="!!cuerpoError" title="Quitar espacios y saltos de línea">Minificar</button>
+        <button type="button" class="btn-mini" (click)="copiar(pet.cuerpo, 'cuerpo-pet')" [disabled]="!pet.cuerpo">{{ copiado === 'cuerpo-pet' ? '✓ Copiado' : 'Copiar' }}</button>
+      </div>
+      <textarea class="entrada mono cuerpo" [class.cuerpo-mal]="!!cuerpoError" rows="10" spellcheck="false" [(ngModel)]="pet.cuerpo" (ngModelChange)="validarCuerpo()" aria-label="Cuerpo de la petición" placeholder="Cuerpo de la petición"></textarea>
+      <p class="ayuda-chica t-aviso" *ngIf="cuerpoError">El cuerpo no es un JSON válido: {{ cuerpoError }}</p>
+      <p class="ayuda-chica t-aviso" *ngIf="esMultipart">multipart/form-data (subir archivos) no está soportado desde aquí; si el endpoint acepta otro tipo, elígelo en la lista.</p>
+    </ng-container>
+    <div class="modelo-caja" *ngIf="vistaPeticion === 'modelo' && modeloCuerpo as m">
+      <app-swagger-modelo [modelo]="m" [raiz]="true"></app-swagger-modelo>
+    </div>
+  </section>
+
+  <!-- ============ Autenticación ============ -->
+  <section class="sec sec-auth" *ngIf="op?.seguridad || esquemasSeg.length">
+    <div class="auth-linea">
+      <h3>Autenticación</h3>
+      <label class="check-chico" *ngIf="esquemasSeg.length"><input type="checkbox" [(ngModel)]="usarAuth" /> Enviar credenciales</label>
+      <span class="chip chip-ok" *ngIf="usarAuth && authResumen">Se enviará: {{ authResumen }}</span>
+      <span class="chip chip-media" *ngIf="faltaAutenticacion">Este endpoint requiere autenticación y no hay credenciales</span>
+      <span class="espacio"></span>
+      <button type="button" class="btn-mini" (click)="abrirAutorizar.emit()">Authorize</button>
+    </div>
+  </section>
+
+  <!-- ============ Acciones ============ -->
+  <div class="error-state" *ngIf="errorEjec">{{ errorEjec }}</div>
+  <div class="op-acciones">
+    <button type="button" class="btn btn-purple btn-ejecutar" [disabled]="enviando || !puedeEditar" (click)="enviar()" [title]="puedeEditar ? 'Ejecutar la petición (Ctrl + Enter)' : 'Necesitas permiso de edición del módulo para ejecutar'">
+      <span class="spinner chico" *ngIf="enviando"></span>{{ enviando ? 'Ejecutando…' : 'Ejecutar' }}
+    </button>
+    <button type="button" class="btn btn-ghost" (click)="limpiar()" title="Volver a los valores iniciales y limpiar la respuesta">Limpiar</button>
+    <button type="button" class="btn btn-ghost" *ngIf="puedeEditar && puedeGuardar" (click)="abrirGuardar()">{{ consumoId ? 'Guardar cambios / como nuevo' : 'Guardar consumo' }}</button>
+    <button type="button" class="btn btn-ghost" (click)="copiar(curl(), 'curl')">{{ copiado === 'curl' ? '✓ Copiado' : 'Copiar cURL' }}</button>
+    <span class="atajo">Ctrl + Enter</span>
+  </div>
+  <p class="ayuda-chica" *ngIf="puedeEditar && !puedeGuardar">Este Swagger te lo compartieron: puedes ejecutar las peticiones, pero solo su dueño puede guardar consumos.</p>
+  <p class="url-final mono" [title]="urlResultante"><span class="url-etiqueta">Se llamará a</span>{{ pet.metodo }} {{ urlResultante }}</p>
+
+  <!-- ============ Resultado de la ejecución ============ -->
+  <section class="sec sec-resp" [id]="'resp-' + idUnico" *ngIf="enviando || respuesta || errorRespuesta">
+    <div class="sec-cab">
+      <h3>Respuesta del servidor</h3>
+      <span class="espacio"></span>
+      <div class="corridas" *ngIf="corridas.length > 1">
+        <span class="ayuda-chica">Ejecuciones:</span>
+        <button type="button" class="corrida" *ngFor="let c of corridas; let i = index" [class.activa]="i === corridaVista" (click)="verCorrida(i)" [title]="(c.hora | date: 'HH:mm:ss') + ' · ' + c.respuesta.duracionMs + ' ms'">
+          <span class="est" [ngClass]="claseEstado(c.respuesta.estado)">{{ c.respuesta.estado }}</span> {{ c.hora | date: 'HH:mm:ss' }}
+        </button>
+      </div>
+    </div>
+    <div class="cargando chico-v" *ngIf="enviando"><div class="spinner"></div><p>Esperando la respuesta…</p></div>
+    <div class="error-state" *ngIf="errorRespuesta">
+      {{ errorRespuesta }}
+      <div class="acc-error" *ngIf="errorDeServidor && doc?.servidores?.length">
+        <button type="button" class="btn btn-ghost btn-sm" (click)="usarServidorDelSwagger()">Usar el servidor del Swagger ({{ doc?.servidores?.[0] }})</button>
+      </div>
+    </div>
+
+    <ng-container *ngIf="respuesta as r">
+      <div class="oscuro">
+        <div class="oscuro-cab"><span>cURL</span><button type="button" class="btn-claro" (click)="copiar(curl(), 'curl-resp')">{{ copiado === 'curl-resp' ? '✓ Copiado' : 'Copiar' }}</button></div>
+        <pre class="mono">{{ curl() }}</pre>
+      </div>
+      <div class="oscuro">
+        <div class="oscuro-cab"><span>URL de la petición</span><button type="button" class="btn-claro" (click)="copiar(urlRespuesta, 'url-resp')">{{ copiado === 'url-resp' ? '✓ Copiado' : 'Copiar' }}</button></div>
+        <pre class="mono">{{ urlRespuesta }}</pre>
+      </div>
+
+      <div class="resp-tabla">
+        <div class="rt-cab"><span>Código</span><span>Detalles</span></div>
+        <div class="rt-fila">
+          <div class="rt-codigo">
+            <span class="est est-grande" [ngClass]="claseEstado(r.estado)">{{ r.estado }}</span>
+            <span class="rt-texto">{{ r.estadoTexto }}</span>
+          </div>
+          <div class="rt-detalle">
+            <div class="resumen-resp">
+              <span class="chip">{{ r.duracionMs }} ms</span>
+              <span class="chip">{{ tamano(r.bytes) }}</span>
+              <span class="chip" *ngIf="r.tipoContenido">{{ r.tipoContenido }}</span>
+              <span class="chip chip-media" *ngIf="r.truncado">Respuesta truncada</span>
+            </div>
+
+            <div class="barra-cuerpo">
+              <div class="mini-tabs">
+                <button type="button" [class.activo]="vistaCuerpo === 'formateado'" (click)="cambiarVistaCuerpo('formateado')">Formateado</button>
+                <button type="button" [class.activo]="vistaCuerpo === 'crudo'" (click)="cambiarVistaCuerpo('crudo')">Crudo</button>
+                <button type="button" *ngIf="tabla" [class.activo]="vistaCuerpo === 'tabla'" (click)="cambiarVistaCuerpo('tabla')">Tabla ({{ tabla.total }})</button>
+              </div>
+              <span class="espacio"></span>
+              <button type="button" class="btn-mini" (click)="copiar(cuerpoMostrado, 'cuerpo')" [disabled]="!cuerpoMostrado || vistaCuerpo === 'tabla'">{{ copiado === 'cuerpo' ? '✓ Copiado' : 'Copiar cuerpo' }}</button>
+              <button type="button" class="btn-mini" (click)="descargarRespuesta()" [disabled]="r.binario || !r.cuerpo">Descargar</button>
+              <button type="button" class="btn-mini" (click)="mostrarHeaders = !mostrarHeaders">{{ mostrarHeaders ? 'Ocultar' : 'Ver' }} encabezados ({{ headersRespuesta.length }})</button>
+            </div>
+
+            <p class="vacio-sec" *ngIf="r.binario">Respuesta binaria ({{ tamano(r.bytes) }}): no se puede mostrar como texto.</p>
+            <ng-container *ngIf="!r.binario">
+              <pre class="oscuro-cuerpo mono" *ngIf="vistaCuerpo !== 'tabla' && cuerpoHtml" [innerHTML]="cuerpoHtml"></pre>
+              <pre class="oscuro-cuerpo mono" *ngIf="vistaCuerpo !== 'tabla' && !cuerpoHtml && cuerpoMostrado">{{ cuerpoMostrado }}</pre>
+              <p class="vacio-sec" *ngIf="vistaCuerpo !== 'tabla' && !cuerpoMostrado">La respuesta no trae cuerpo.</p>
+              <div class="tabla-json" *ngIf="vistaCuerpo === 'tabla' && tabla as t">
+                <p class="ayuda-chica" *ngIf="t.origen || t.total > t.filas.length">
+                  <ng-container *ngIf="t.origen">Lista «{{ t.origen }}». </ng-container>
+                  <ng-container *ngIf="t.total > t.filas.length">Se muestran las primeras {{ t.filas.length }} de {{ t.total }} filas.</ng-container>
+                </p>
+                <div class="tabla-scroll">
+                  <table>
+                    <thead><tr><th *ngFor="let c of t.columnas">{{ c }}</th></tr></thead>
+                    <tbody><tr *ngFor="let fila of t.filas"><td *ngFor="let v of fila" [title]="v">{{ v }}</td></tr></tbody>
+                  </table>
+                </div>
+              </div>
+            </ng-container>
+
+            <div class="oscuro" *ngIf="mostrarHeaders">
+              <div class="oscuro-cab"><span>Encabezados de la respuesta</span></div>
+              <dl class="kv-oscuro mono"><ng-container *ngFor="let h of headersRespuesta"><dt>{{ h.k }}</dt><dd>{{ h.v }}</dd></ng-container></dl>
+            </div>
+          </div>
+        </div>
+      </div>
+    </ng-container>
+  </section>
+
+  <!-- ============ Respuestas documentadas ============ -->
+  <section class="sec" *ngIf="op?.respuestas?.length">
+    <div class="sec-cab"><h3>Respuestas documentadas</h3></div>
+    <div class="rd-tabla">
+      <div class="rd-cab"><span>Código</span><span>Descripción</span></div>
+      <div class="rd-fila" *ngFor="let rd of op?.respuestas || []" [class.rd-actual]="coincideCodigo(rd.codigo)">
+        <div class="rd-cod"><span class="est" [ngClass]="claseCodigo(rd.codigo)">{{ rd.codigo }}</span></div>
+        <div class="rd-det">
+          <p class="rd-desc">{{ rd.descripcion || 'Sin descripción' }}</p>
+          <ng-container *ngIf="rd.tipos?.length">
+            <div class="barra-cuerpo">
+              <div class="mini-tabs">
+                <button type="button" [class.activo]="vistaDocResp(rd.codigo) === 'ejemplo'" (click)="respVistaDoc[rd.codigo] = 'ejemplo'">Ejemplo</button>
+                <button type="button" [class.activo]="vistaDocResp(rd.codigo) === 'modelo'" (click)="respVistaDoc[rd.codigo] = 'modelo'" [disabled]="!rd.modelos?.[tipoDocResp(rd)]">Modelo</button>
+              </div>
+              <span class="espacio"></span>
+              <select class="entrada entrada-chica" *ngIf="(rd.tipos?.length || 0) > 1" [ngModel]="tipoDocResp(rd)" (ngModelChange)="respTipoDoc[rd.codigo] = $event" aria-label="Tipo de contenido de la respuesta">
+                <option *ngFor="let t of rd.tipos || []" [value]="t">{{ t }}</option>
+              </select>
+              <span class="chip mono" *ngIf="(rd.tipos?.length || 0) === 1">{{ rd.tipos?.[0] }}</span>
+            </div>
+            <pre class="ejemplo mono" *ngIf="vistaDocResp(rd.codigo) === 'ejemplo' && rd.ejemplos?.[tipoDocResp(rd)]">{{ rd.ejemplos?.[tipoDocResp(rd)] }}</pre>
+            <p class="vacio-sec" *ngIf="vistaDocResp(rd.codigo) === 'ejemplo' && !rd.ejemplos?.[tipoDocResp(rd)]">Sin ejemplo disponible.</p>
+            <div class="modelo-caja" *ngIf="vistaDocResp(rd.codigo) === 'modelo' && rd.modelos?.[tipoDocResp(rd)] as mod">
+              <app-swagger-modelo [modelo]="mod" [raiz]="true"></app-swagger-modelo>
+            </div>
+          </ng-container>
+          <div class="rd-cabeceras" *ngIf="rd.cabeceras?.length">
+            <span class="ayuda-chica">Encabezados:</span>
+            <span class="chip mono" *ngFor="let h of rd.cabeceras || []" [title]="h.descripcion">{{ h.nombre }}: {{ h.tipo }}</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+</div>
+
+<!-- ============ Guardar consumo ============ -->
+<div class="modal-overlay" *ngIf="mostrarGuardar" (click)="mostrarGuardar = false">
+  <div class="modal-card modal-chico" (click)="$event.stopPropagation()" role="dialog" aria-modal="true" aria-label="Guardar consumo">
+    <div class="modal-header">
+      <h2>Guardar consumo</h2>
+      <button type="button" class="close-btn" (click)="mostrarGuardar = false" aria-label="Cerrar">✕</button>
+    </div>
+    <div class="resumen-resp"><span class="metodo" [ngClass]="claseMetodo(pet.metodo)">{{ pet.metodo }}</span><span class="mono">{{ pet.ruta }}</span></div>
+
+    <label class="etiqueta">Nombre *</label>
+    <input class="entrada" [(ngModel)]="formGuardar.Nombre" maxlength="150" aria-label="Nombre del consumo" />
+    <label class="etiqueta">Grupo</label>
+    <input class="entrada" [(ngModel)]="formGuardar.Grupo" maxlength="100" placeholder="Opcional (por defecto, la etiqueta del endpoint)" aria-label="Grupo" />
+    <label class="etiqueta">Notas</label>
+    <input class="entrada" [(ngModel)]="formGuardar.Notas" maxlength="500" placeholder="Opcional" aria-label="Notas" />
+
+    <div class="opciones-guardar" *ngIf="consumoId">
+      <label class="check-chico"><input type="radio" name="modoGuardar" [value]="true" [(ngModel)]="formGuardar.actualizar" /> Actualizar el consumo guardado «{{ consumoNombre }}»</label>
+      <label class="check-chico"><input type="radio" name="modoGuardar" [value]="false" [(ngModel)]="formGuardar.actualizar" /> Guardar como un consumo nuevo (usa otro nombre)</label>
+    </div>
+    <p class="ayuda-chica">Se guardan la ruta, los parámetros, los encabezados y el cuerpo. Los valores sensibles (Authorization, tokens, contraseñas) se guardan vacíos.</p>
+    <div class="error-state" *ngIf="errorGuardar">{{ errorGuardar }}</div>
+    <div class="pie-form">
+      <button type="button" class="btn btn-ghost" (click)="mostrarGuardar = false">Cancelar</button>
+      <button type="button" class="btn btn-purple" [disabled]="guardando || !formGuardar.Nombre.trim()" (click)="guardarConsumo()">{{ guardando ? 'Guardando…' : 'Guardar' }}</button>
+    </div>
+  </div>
+</div>

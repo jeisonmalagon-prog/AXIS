@@ -1,0 +1,33 @@
+<div class="escena" aria-hidden="true">
+  <div class="cielo"></div>
+
+  <!-- Estrellas (solo de noche, en modo oscuro) -->
+  @if (oscuro) {
+    <div class="estrellas">
+      @for (e of estrellas; track $index) {
+        <span [style.left.%]="e.x" [style.top.%]="e.y" [style.--tam.px]="e.s" [style.--ret.s]="e.d"></span>
+      }
+    </div>
+  }
+
+  <div class="sol"></div>
+
+  <svg class="montanas lejos" viewBox="0 0 1600 300" preserveAspectRatio="none" focusable="false">
+    <path d="M0 200C150 110 250 110 400 190S650 120 800 180 1100 90 1250 170 1500 130 1600 170V300H0Z"/>
+  </svg>
+  <svg class="montanas medio" viewBox="0 0 1600 300" preserveAspectRatio="none" focusable="false">
+    <path d="M0 240C200 170 340 190 520 230S820 170 1000 220 1360 180 1600 230V300H0Z"/>
+  </svg>
+
+  <div class="bruma b1"></div>
+  <div class="bruma b2"></div>
+
+  <app-jp-ico tipo="pagoda" class="esc-pagoda"></app-jp-ico>
+  <app-jp-ico tipo="torii" class="esc-torii"></app-jp-ico>
+
+  <svg class="montanas suelo" viewBox="0 0 1600 300" preserveAspectRatio="none" focusable="false">
+    <path d="M0 205C300 180 520 192 800 198S1300 182 1600 198V300H0Z"/>
+  </svg>
+
+  <app-hojas-cayendo [cantidad]="hojas" [semilla]="11"></app-hojas-cayendo>
+</div>

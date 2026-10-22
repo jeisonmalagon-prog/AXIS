@@ -1,0 +1,181 @@
+<div class="gc-overlay" (click)="cerrar.emit()">
+  <div class="gc-modal" (click)="$event.stopPropagation()" role="dialog" aria-modal="true" aria-label="Casos del equipo en GLPI">
+    <div class="gc-header">
+      <div>
+        <h2>Casos del equipo en GLPI</h2>
+        <p class="gc-sub">Consulta de solo lectura en la mesa de ayuda. Filtra, copia solo los números o importa un caso como registro de paso a producción.</p>
+      </div>
+      <button type="button" class="gc-x" (click)="cerrar.emit()" aria-label="Cerrar">✕</button>
+    </div>
+
+    <div class="gc-body">
+      <!-- FILTROS -->
+      <form class="gc-filtros" (ngSubmit)="buscar()">
+        <div class="gc-campo">
+          <label for="gc-alcance">Casos de</label>
+          <select id="gc-alcance" name="alcance" [(ngModel)]="f.alcance">
+            <option value="yo" [disabled]="!yo">Mis casos{{ yo ? ' (' + yo.nombre + ')' : '' }}</option>
+            <option value="grupo" [disabled]="!grupos.length">Un equipo (grupo técnico)</option>
+            <option value="tecnico">Un técnico por nombre</option>
+            <option value="todos">Todos los que puedo ver</option>
+          </select>
+        </div>
+        <div class="gc-campo gc-ancho" *ngIf="f.alcance === 'grupo'">
+          <label for="gc-grupo">Equipo</label>
+          <select id="gc-grupo" name="grupo" [(ngModel)]="f.grupoId">
+            <option value="" disabled>Elige un equipo…</option>
+            <option *ngFor="let g of grupos" [value]="g.id">{{ g.mio ? '★ ' : '' }}{{ g.nombre }}</option>
+          </select>
+        </div>
+        <div class="gc-campo gc-ancho" *ngIf="f.alcance === 'tecnico'">
+          <label for="gc-tecnico">Técnico</label>
+          <app-selector-buscable *ngIf="opcionesTecnicos.length; else tecnicoTexto"
+            [opciones]="opcionesTecnicos" [valor]="f.tecnicoId || null" (valorChange)="cambiarTecnico($event)"
+            [permitirLimpiar]="true" placeholder="Busca y elige el técnico…"></app-selector-buscable>
+          <ng-template #tecnicoTexto>
+            <input id="gc-tecnico" name="tecnico" [(ngModel)]="f.tecnico" maxlength="80" placeholder="Nombre o apellido del técnico" autocomplete="off" />
+            <small class="gc-gris" *ngIf="avisoUsuarios">{{ avisoUsuarios }} Escribe el nombre.</small>
+          </ng-template>
+        </div>
+        <div class="gc-campo">
+          <label for="gc-estado">Estado</label>
+          <select id="gc-estado" name="estado" [(ngModel)]="f.estado">
+            <option *ngFor="let e of estados" [value]="e.v">{{ e.t }}</option>
+          </select>
+        </div>
+        <div class="gc-campo">
+          <label for="gc-texto">Número o título</label>
+          <input id="gc-texto" name="texto" [(ngModel)]="f.texto" maxlength="120" placeholder="Ej. 4079 o Flexidigital" autocomplete="off" />
+        </div>
+        <div class="gc-campo">
+          <label for="gc-solicitante">Solicitante</label>
+          <input id="gc-solicitante" name="solicitante" [(ngModel)]="f.solicitante" maxlength="80" placeholder="Nombre o apellido" autocomplete="off" />
+        </div>
+        <div class="gc-campo gc-corto">
+          <label for="gc-desde">Abierto desde</label>
+          <input id="gc-desde" name="desde" type="date" [(ngModel)]="f.desde" />
+        </div>
+        <div class="gc-campo gc-corto">
+          <label for="gc-hasta">Abierto hasta</label>
+          <input id="gc-hasta" name="hasta" type="date" [(ngModel)]="f.hasta" />
+        </div>
+        <div class="gc-campo">
+          <label for="gc-orden">Ordenar por</label>
+          <select id="gc-orden" name="orden" [(ngModel)]="ordenSeleccionado">
+            <option *ngFor="let o of ordenes" [value]="o.v">{{ o.t }}</option>
+          </select>
+        </div>
+        <div class="gc-campo gc-corto">
+          <label for="gc-limite">Cantidad máx.</label>
+          <select id="gc-limite" name="limite" [(ngModel)]="f.limite">
+            <option *ngFor="let l of limites" [ngValue]="l">{{ l }}</option>
+          </select>
+        </div>
+        <div class="gc-checks">
+          <label class="gc-check"><input type="checkbox" name="vencidos" [(ngModel)]="f.soloVencidos" /><span>Solo con tiempo de solución vencido</span></label>
+          <label class="gc-check"><input type="checkbox" name="ocultar" [(ngModel)]="ocultarRegistrados" /><span>Ocultar los que ya tienen registro en AXIS</span></label>
+        </div>
+        <div class="gc-acciones-filtro">
+          <button type="button" class="gc-btn" (click)="limpiar()" [disabled]="cargando">Limpiar filtros</button>
+          <button type="submit" class="gc-btn gc-btn-primario" [disabled]="!puedeBuscar">{{ cargando ? 'Consultando GLPI…' : 'Buscar' }}</button>
+        </div>
+      </form>
+
+      <div class="gc-error" *ngIf="error">{{ error }}</div>
+      <div class="gc-cargando" *ngIf="cargando && !listado"><div class="gc-spinner"></div><p>Consultando la mesa de ayuda…</p></div>
+
+      <ng-container *ngIf="listado">
+        <!-- BARRA DE RESULTADOS -->
+        <div class="gc-barra">
+          <div class="gc-conteo">
+            <strong>{{ casos.length }}</strong> caso(s)
+            <span class="gc-gris" *ngIf="listado.truncado">· hay {{ listado.total }} en GLPI, se muestran los primeros {{ listado.devueltos }} (afina los filtros o sube la cantidad)</span>
+            <span class="gc-gris" *ngIf="!listado.truncado && ocultarRegistrados">· de {{ listado.devueltos }} en GLPI</span>
+            <span class="gc-pill gc-pill-rojo" *ngIf="totalVencidos">{{ totalVencidos }} vencido(s)</span>
+            <span class="gc-pill" *ngIf="sinRegistro !== casos.length">{{ sinRegistro }} sin registro en AXIS</span>
+          </div>
+          <div class="gc-vistas" role="tablist" aria-label="Vista del listado">
+            <button type="button" role="tab" [class.gc-activa]="vista === 'tabla'" [attr.aria-selected]="vista === 'tabla'" (click)="vista = 'tabla'">Tabla</button>
+            <button type="button" role="tab" [class.gc-activa]="vista === 'numeros'" [attr.aria-selected]="vista === 'numeros'" (click)="vista = 'numeros'">Solo números</button>
+            <button type="button" role="tab" [class.gc-activa]="vista === 'resumen'" [attr.aria-selected]="vista === 'resumen'" (click)="vista = 'resumen'">Resumen</button>
+          </div>
+        </div>
+
+        <p class="gc-vacio" *ngIf="!casos.length">No hay casos con estos filtros.</p>
+
+        <!-- SOLO NÚMEROS -->
+        <div class="gc-numeros" *ngIf="vista === 'numeros' && casos.length">
+          <div class="gc-numeros-barra">
+            <label for="gc-formato">Formato</label>
+            <select id="gc-formato" [(ngModel)]="formato" name="formato">
+              <option value="linea">Uno por línea</option>
+              <option value="coma">Separados por coma</option>
+              <option value="numeral">Con # y coma (#407934, #406416)</option>
+              <option value="titulo">Número y título</option>
+            </select>
+            <span class="gc-gris">{{ casosParaSalida.length }} {{ seleccion.size ? 'seleccionado(s)' : 'caso(s)' }}</span>
+            <span class="gc-espacio"></span>
+            <button type="button" class="gc-btn gc-btn-primario" (click)="copiarNumeros()">{{ copiado === 'numeros' ? '¡Copiado!' : 'Copiar números' }}</button>
+          </div>
+          <textarea class="gc-area" readonly rows="9" [value]="textoNumeros" (focus)="$any($event.target).select()" aria-label="Números de caso"></textarea>
+          <p class="gc-ayuda">Si marcas casos en la tabla, aquí salen solo los marcados.</p>
+        </div>
+
+        <!-- RESUMEN -->
+        <div class="gc-resumen" *ngIf="vista === 'resumen' && casos.length">
+          <div>
+            <h3>Por estado</h3>
+            <ul>
+              <li *ngFor="let r of resumenEstados"><span class="gc-estado" [ngClass]="claseResumen(r.estado)">{{ r.estado }}</span><strong>{{ r.total }}</strong><span class="gc-pill gc-pill-rojo" *ngIf="r.vencidos">{{ r.vencidos }} vencido(s)</span></li>
+            </ul>
+          </div>
+          <div>
+            <h3>Por técnico asignado</h3>
+            <ul>
+              <li *ngFor="let r of resumenTecnicos"><span class="gc-nombre">{{ r.tecnico }}</span><strong>{{ r.total }}</strong></li>
+            </ul>
+          </div>
+        </div>
+
+        <!-- TABLA -->
+        <ng-container *ngIf="vista === 'tabla' && casos.length">
+          <div class="gc-tabla-barra">
+            <span class="gc-gris" *ngIf="seleccion.size">{{ seleccion.size }} marcado(s)</span>
+            <span class="gc-espacio"></span>
+            <button type="button" class="gc-btn gc-btn-sm" (click)="copiarNumeros()">{{ copiado === 'numeros' ? '¡Copiado!' : 'Copiar números' }}</button>
+            <button type="button" class="gc-btn gc-btn-sm" (click)="copiarTabla()" title="Se pega directo en Excel">{{ copiado === 'tabla' ? '¡Copiado!' : 'Copiar tabla' }}</button>
+            <button type="button" class="gc-btn gc-btn-sm" (click)="descargarCsv()">Descargar CSV</button>
+          </div>
+          <div class="gc-tabla-wrap">
+            <table class="gc-tabla">
+              <thead>
+                <tr>
+                  <th class="gc-col-chk"><input type="checkbox" [checked]="todosMarcados" (change)="alternarTodos()" aria-label="Marcar todos" /></th>
+                  <th>Caso</th><th>Título</th><th>Estado</th><th>Apertura</th><th>Vence</th><th>Técnico</th><th>Solicitante</th><th>AXIS</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr *ngFor="let c of casos; trackBy: trackCaso" [class.gc-fila-marcada]="seleccion.has(c.id)">
+                  <td class="gc-col-chk"><input type="checkbox" [checked]="seleccion.has(c.id)" (change)="alternar(c)" [attr.aria-label]="'Marcar caso ' + c.id" /></td>
+                  <td class="gc-mono"><a [href]="c.url" target="_blank" rel="noopener" title="Abrir en GLPI">{{ c.id }}</a></td>
+                  <td class="gc-titulo" [title]="c.titulo + (c.categoria ? ' · ' + c.categoria : '')">{{ c.titulo }}<small *ngIf="c.categoria">{{ c.categoria }}</small></td>
+                  <td><span class="gc-estado" [ngClass]="claseEstado(c)">{{ c.estado }}</span></td>
+                  <td class="gc-fecha">{{ fecha(c.apertura) }}</td>
+                  <td class="gc-fecha" [class.gc-vencido]="c.vencido">{{ fecha(c.vence) }}<small *ngIf="c.vencido">vencido</small></td>
+                  <td [title]="c.tecnicos.join(', ')">{{ primeros(c.tecnicos, 1) || '—' }}</td>
+                  <td [title]="c.solicitantes.join(', ')">{{ primeros(c.solicitantes, 1) || '—' }}</td>
+                  <td class="gc-col-axis">
+                    <span class="gc-pill gc-pill-ok" *ngIf="c.registroAxis" [title]="'Ya hay un registro en AXIS (estado ' + c.registroAxis.estado + ')'">Registro #{{ c.registroAxis.pasoId }}</span>
+                    <button type="button" class="gc-btn gc-btn-sm" *ngIf="!c.registroAxis" (click)="importar.emit('' + c.id)" title="Lee el caso y propone el registro con checklist">Importar</button>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </ng-container>
+      </ng-container>
+    </div>
+
+    <div class="gc-pie"><button type="button" class="gc-btn" (click)="cerrar.emit()">Cerrar</button></div>
+  </div>
+</div>

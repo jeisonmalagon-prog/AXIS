@@ -1,0 +1,399 @@
+<header class="page-header">
+  <div class="header-content">
+    <h1>Centro de Analítica n8n</h1>
+    <p class="subtitle">Ejecuciones, flujos, errores y rendimiento del orquestador<span *ngIf="acceso?.restringido"> · solo los flujos asignados a tu usuario</span></p>
+  </div>
+
+  <div class="health-indicator" *ngIf="datos">
+    <div class="health-text">
+      <span class="health-label">Salud ({{ textoPeriodo }})</span>
+      <span class="health-value" [ngClass]="'t-' + claseSalud">{{ g.tasaExito === null ? '—' : fmtPct(g.tasaExito) }}</span>
+    </div>
+    <svg viewBox="0 0 24 24" class="health-icon" [class.pulse-danger]="claseSalud === 'mal'" fill="none" stroke="currentColor" stroke-width="2">
+      <path stroke-linecap="round" stroke-linejoin="round" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
+    </svg>
+  </div>
+</header>
+
+<!-- Barra de herramientas: periodo, actualizar y administración -->
+<section class="barra-herramientas">
+  <div class="selector-dias" role="group" aria-label="Periodo de análisis">
+    <button *ngFor="let o of opcionesDias" type="button" [class.activo]="dias === o.dias" [attr.aria-pressed]="dias === o.dias" (click)="cambiarDias(o.dias)">{{ o.etiqueta }}</button>
+  </div>
+
+  <button type="button" class="btn btn-sm btn-ghost" (click)="cargar()" [disabled]="cargando">{{ cargando ? 'Actualizando…' : 'Actualizar' }}</button>
+  <label class="auto"><input type="checkbox" [(ngModel)]="autoActualizar" (ngModelChange)="alternarAuto()"> Auto cada 60 s</label>
+  <span class="actualizado" *ngIf="actualizadoEn">Actualizado {{ actualizadoEn | date:'HH:mm:ss' }}</span>
+
+  <span class="espacio"></span>
+
+  <button *ngIf="esAdminPod" type="button" class="btn btn-sm btn-purple" (click)="abrirAccesos()">
+    Accesos
+    <span class="insignia" *ngIf="acceso?.estricto && acceso?.sinAsignar" [title]="acceso?.sinAsignar + ' flujo(s) sin asignar a nadie'">{{ acceso?.sinAsignar }}</span>
+  </button>
+  <button *ngIf="esAdminPod" type="button" class="btn btn-sm btn-ghost" (click)="abrirCuentas()">API keys</button>
+</section>
+
+<!-- Avisos -->
+<div class="aviso-cuentas" *ngIf="errorCarga">{{ errorCarga }}</div>
+<div class="aviso-cuentas" *ngFor="let c of cuentasConError; trackBy: trackCuenta">
+  <strong>{{ c.nombre }}:</strong> {{ c.error }}
+  <span *ngIf="esAdminPod && !c.sistema"> Revisa o reemplaza su key en "API keys".</span>
+</div>
+<div class="aviso-aviso" *ngIf="datos?.cobertura?.truncado">
+  Hay tantas ejecuciones en este periodo que el análisis se limitó a las más recientes: algunas cifras pueden estar incompletas. Prueba con un periodo más corto.
+</div>
+<div class="aviso-info" *ngIf="esAdminPod && acceso?.estricto === false">
+  <strong>Control de acceso por flujo sin activar:</strong> hoy todos los usuarios con este módulo ven todos los flujos.
+  Abre <strong>Accesos</strong> para ver cómo activarlo.
+</div>
+<div class="aviso-aviso" *ngIf="esAdminPod && acceso?.estricto && acceso?.sinAsignar">
+  Hay <strong>{{ acceso?.sinAsignar }}</strong> flujo(s) que ningún usuario puede ver todavía (solo tú).
+  <button type="button" class="enlace" (click)="filtroEstado = 'sin-asignar'; aplicarFiltros(); irA('flujos')">Verlos</button> ·
+  <button type="button" class="enlace" (click)="abrirAccesos()">Asignarlos</button>
+</div>
+
+<div class="cargando" *ngIf="cargando && !datos"><div class="spinner"></div><p>Analizando ejecuciones…</p></div>
+
+<!-- Sin flujos -->
+<div class="tarjeta vacio-grande" *ngIf="sinFlujos && !cargando">
+  <ng-container *ngIf="acceso?.restringido; else sinFlujosAdmin">
+    <h2>Aún no tienes flujos asignados</h2>
+    <p>El administrador debe autorizar los flujos de n8n que puedes ver. Cuando lo haga aparecerán aquí.</p>
+  </ng-container>
+  <ng-template #sinFlujosAdmin>
+    <h2>No se encontraron flujos</h2>
+    <p>n8n no devolvió flujos con las API keys configuradas.</p>
+  </ng-template>
+</div>
+
+<ng-container *ngIf="datos && !sinFlujos">
+
+  <!-- Pestañas -->
+  <nav class="pestanas" role="tablist">
+    <button type="button" role="tab" [class.activa]="pestana === 'resumen'" [attr.aria-selected]="pestana === 'resumen'" (click)="irA('resumen')">Resumen</button>
+    <button type="button" role="tab" [class.activa]="pestana === 'flujos'" [attr.aria-selected]="pestana === 'flujos'" (click)="irA('flujos')">
+      Flujos <span class="cuenta">{{ workflows.length }}</span><span class="cuenta cuenta-alerta" *ngIf="g.conAtencion" [title]="g.conAtencion + ' con alertas'">{{ g.conAtencion }}</span>
+    </button>
+    <button type="button" role="tab" [class.activa]="pestana === 'ejecuciones'" [attr.aria-selected]="pestana === 'ejecuciones'" (click)="irA('ejecuciones')">Ejecuciones <span class="cuenta">{{ datos.recientes.length }}</span></button>
+    <span class="cargando-mini" *ngIf="cargando"><span class="spinner chico"></span></span>
+  </nav>
+
+  <!-- ====================== RESUMEN ====================== -->
+  <div *ngIf="pestana === 'resumen'" class="pestana-contenido">
+
+    <section class="kpis">
+      <div class="kpi"><span class="kpi-et">Flujos activos</span><span class="kpi-v">{{ g.activos }}<small> / {{ g.flujosTotal }}</small></span><span class="kpi-s">{{ g.detenidos }} detenido(s)</span></div>
+      <div class="kpi"><span class="kpi-et">Ejecuciones</span><span class="kpi-v">{{ fmtNum(g.ejecuciones) }}</span><span class="kpi-s">≈ {{ fmtDec(g.ejecucionesPorDiaProm) }} por día</span></div>
+      <div class="kpi"><span class="kpi-et">Tasa de éxito</span><span class="kpi-v" [ngClass]="'t-' + claseTasa(g.tasaExito)">{{ fmtPct(g.tasaExito) }}</span><span class="kpi-s">{{ fmtNum(g.exitosas) }} exitosas</span></div>
+      <div class="kpi"><span class="kpi-et">Fallos</span><span class="kpi-v" [class.t-mal]="g.fallidas > 0">{{ fmtNum(g.fallidas) }}</span><span class="kpi-s">{{ fmtNum(g.canceladas) }} canceladas</span></div>
+      <div class="kpi"><span class="kpi-et">Duración promedio</span><span class="kpi-v">{{ fmtDuracion(g.duracion.prom) }}</span><span class="kpi-s">mediana {{ fmtDuracion(g.duracion.p50) }}</span></div>
+      <div class="kpi"><span class="kpi-et">Duración P95</span><span class="kpi-v">{{ fmtDuracion(g.duracion.p95) }}</span><span class="kpi-s">máx. {{ fmtDuracion(g.duracion.max) }}</span></div>
+      <div class="kpi kpi-click" (click)="verAtencion()" tabindex="0" (keydown.enter)="verAtencion()"><span class="kpi-et">Con alertas</span><span class="kpi-v" [class.t-aviso]="g.conAtencion > 0">{{ g.conAtencion }}</span><span class="kpi-s">ver flujos</span></div>
+      <div class="kpi"><span class="kpi-et">Tiempo de cómputo</span><span class="kpi-v">{{ fmtDuracion(g.tiempoTotalMs) }}</span><span class="kpi-s">{{ g.sinEjecutar }} activo(s) sin ejecutar</span></div>
+    </section>
+
+    <section class="grilla g-2-1">
+      <div class="tarjeta">
+        <div class="tarjeta-cab"><h2>Ejecuciones en el tiempo</h2><span class="tarjeta-sub">{{ unidadSerieTexto }} · {{ textoPeriodo }}</span></div>
+        <app-stacked-bar-chart [etiquetas]="etiquetasSerie" [series]="seriesSerie" [alto]="210" unidad="ejecuciones"></app-stacked-bar-chart>
+      </div>
+      <div class="tarjeta">
+        <div class="tarjeta-cab"><h2>Resultado de las ejecuciones</h2></div>
+        <app-donut-chart [segmentos]="donutEjecuciones" centroEtiqueta="Ejecuciones"></app-donut-chart>
+      </div>
+    </section>
+
+    <section class="grilla g-1-1">
+      <div class="tarjeta">
+        <div class="tarjeta-cab"><h2>Actividad por hora del día</h2><span class="tarjeta-sub">en tu hora local</span></div>
+        <app-stacked-bar-chart [etiquetas]="etiquetasHora" [series]="seriesHora" [alto]="170" unidad="ejecuciones"></app-stacked-bar-chart>
+      </div>
+      <div class="tarjeta">
+        <div class="tarjeta-cab"><h2>Mapa de calor semanal</h2><span class="tarjeta-sub">día de la semana × hora</span></div>
+        <app-heatmap [filas]="diasSemana" [columnas]="horas" [valores]="datos.mapaCalor"></app-heatmap>
+      </div>
+    </section>
+
+    <section class="grilla g-2-1">
+      <div class="tarjeta">
+        <div class="tarjeta-cab"><h2>Requieren atención</h2><span class="tarjeta-sub">{{ datos.atencion.length }} flujo(s)</span></div>
+        <ul class="atencion" *ngIf="datos.atencion.length; else sinAtencion">
+          <li *ngFor="let a of datos.atencion | slice:0:8" (click)="abrirDetalleAtencion(a.workflowId)" tabindex="0" (keydown.enter)="abrirDetalleAtencion(a.workflowId)">
+            <div class="at-cab">
+              <strong>{{ a.nombre }}</strong>
+              <span class="chip chip-marca" *ngIf="variasCuentas">{{ a.cuentaNombre }}</span>
+              <span class="status-badge status-inactive" *ngIf="!a.activo">Detenido</span>
+            </div>
+            <div class="at-motivos"><span class="chip" *ngFor="let m of a.motivos" [ngClass]="'chip-' + m.severidad">{{ m.texto }}</span></div>
+          </li>
+        </ul>
+        <ng-template #sinAtencion><p class="vacio">Todo en orden: ningún flujo con alertas en este periodo.</p></ng-template>
+        <button type="button" class="enlace" *ngIf="datos.atencion.length > 8" (click)="verAtencion()">Ver los {{ datos.atencion.length }} flujos con alertas</button>
+      </div>
+      <div class="tarjeta">
+        <div class="tarjeta-cab"><h2>Estado de los flujos</h2></div>
+        <app-donut-chart [segmentos]="donutFlujos" centroEtiqueta="Flujos"></app-donut-chart>
+      </div>
+    </section>
+
+    <section class="grilla g-2x2">
+      <div class="tarjeta"><div class="tarjeta-cab"><h2>Más ejecutados</h2></div>
+        <app-bar-list [items]="rankEjecutados" colorVar="var(--ax-chart-series-1)"></app-bar-list><p class="vacio" *ngIf="!rankEjecutados.length">Sin ejecuciones.</p></div>
+      <div class="tarjeta"><div class="tarjeta-cab"><h2>Más fallos</h2></div>
+        <app-bar-list anchoValor="86px" [items]="rankFallos" colorVar="var(--ax-chart-danger)"></app-bar-list><p class="vacio" *ngIf="!rankFallos.length">Sin fallos en el periodo.</p></div>
+      <div class="tarjeta"><div class="tarjeta-cab"><h2>Más lentos</h2><span class="tarjeta-sub">duración promedio</span></div>
+        <app-bar-list anchoValor="86px" [items]="rankLentos" colorVar="var(--ax-chart-series-2)"></app-bar-list><p class="vacio" *ngIf="!rankLentos.length">Sin datos de duración.</p></div>
+      <div class="tarjeta"><div class="tarjeta-cab"><h2>Menor tasa de éxito</h2><span class="tarjeta-sub">con al menos 3 ejecuciones</span></div>
+        <app-bar-list anchoValor="86px" [items]="rankTasa" colorVar="var(--ax-chart-warn)"></app-bar-list><p class="vacio" *ngIf="!rankTasa.length">Todos los flujos con ejecuciones tienen 100% de éxito.</p></div>
+    </section>
+
+    <section class="grilla g-1-1">
+      <div class="tarjeta">
+        <div class="tarjeta-cab"><h2>Cómo se inician las ejecuciones</h2><span class="tarjeta-sub">modo de ejecución</span></div>
+        <app-bar-list [items]="rankModos" colorVar="var(--ax-chart-series-1)"></app-bar-list>
+        <p class="vacio" *ngIf="!rankModos.length">Sin ejecuciones.</p>
+      </div>
+      <div class="tarjeta" *ngIf="variasCuentas || esAdminPod; else porEtiquetaSolo">
+        <div class="tarjeta-cab"><h2>Por propietario</h2><span class="tarjeta-sub">cuenta de n8n</span></div>
+        <div class="tabla-wrap">
+          <table class="tabla">
+            <thead><tr><th>Propietario</th><th class="num">Flujos</th><th class="num">Ejec.</th><th class="num">Fallos</th><th class="num">Éxito</th></tr></thead>
+            <tbody>
+              <tr *ngFor="let c of datos.porCuenta">
+                <td>{{ c.cuentaNombre }}</td><td class="num">{{ c.activos }}/{{ c.flujos }}</td><td class="num">{{ fmtNum(c.ejecuciones) }}</td>
+                <td class="num" [class.t-mal]="c.fallidas">{{ fmtNum(c.fallidas) }}</td><td class="num" [ngClass]="'t-' + claseTasa(c.tasaExito)">{{ fmtPct(c.tasaExito) }}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+      <ng-template #porEtiquetaSolo><span></span></ng-template>
+    </section>
+
+    <section class="tarjeta" *ngIf="datos.porEtiqueta.length">
+      <div class="tarjeta-cab"><h2>Por etiqueta</h2><span class="tarjeta-sub">agrupación de flujos en n8n</span></div>
+      <div class="tabla-wrap">
+        <table class="tabla">
+          <thead><tr><th>Etiqueta</th><th class="num">Flujos</th><th class="num">Ejecuciones</th><th class="num">Fallos</th></tr></thead>
+          <tbody>
+            <tr *ngFor="let e of datos.porEtiqueta">
+              <td><button type="button" class="enlace" (click)="filtroEtiqueta = e.etiqueta; aplicarFiltros(); irA('flujos')">{{ e.etiqueta }}</button></td>
+              <td class="num">{{ e.flujos }}</td><td class="num">{{ fmtNum(e.ejecuciones) }}</td><td class="num" [class.t-mal]="e.fallidas">{{ fmtNum(e.fallidas) }}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <p class="cobertura">
+      Datos de {{ textoPeriodo }} · {{ fmtNum(datos.cobertura.ejecucionesAnalizadas) }} ejecuciones analizadas
+      <ng-container *ngIf="datos.cobertura.primeraEjecucion"> · la más antigua: {{ fmtFecha(datos.cobertura.primeraEjecucion) }}</ng-container>.
+      n8n conserva un historial limitado: si la primera ejecución es posterior al inicio del periodo, el historial más antiguo ya fue depurado por n8n.
+      Tasa de éxito = exitosas / (exitosas + fallidas); canceladas y en curso no cuentan.
+      <ng-container *ngIf="esAdminPod"><div class="aviso-aviso" *ngFor="let av of datos.cobertura.avisos">{{ av }}</div></ng-container>
+    </p>
+  </div>
+
+  <!-- ====================== FLUJOS ====================== -->
+  <div *ngIf="pestana === 'flujos'" class="pestana-contenido">
+    <section class="control-bar">
+      <div class="search-box">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+        <input type="search" [(ngModel)]="busqueda" (ngModelChange)="aplicarFiltros()" placeholder="Buscar por nombre, ID, propietario o etiqueta…" aria-label="Buscar flujo" />
+      </div>
+
+      <label class="campo"><span>Estado</span>
+        <select [(ngModel)]="filtroEstado" (ngModelChange)="aplicarFiltros()">
+          <option value="todos">Todos ({{ contarEstado('todos') }})</option>
+          <option value="activos">Activos ({{ contarEstado('activos') }})</option>
+          <option value="detenidos">Detenidos ({{ contarEstado('detenidos') }})</option>
+          <option value="atencion">Con alertas ({{ contarEstado('atencion') }})</option>
+          <option value="fallos">Con fallos ({{ contarEstado('fallos') }})</option>
+          <option value="sin-ejecutar">Sin ejecuciones ({{ contarEstado('sin-ejecutar') }})</option>
+          <option value="sin-asignar" *ngIf="esAdminPod && acceso?.estricto">Sin asignar ({{ contarEstado('sin-asignar') }})</option>
+        </select>
+      </label>
+
+      <label class="campo" *ngIf="variasCuentas"><span>Propietario</span>
+        <select [(ngModel)]="filtroCuenta" (ngModelChange)="aplicarFiltros()" aria-label="Filtrar por propietario">
+          <option value="todas">Todos</option>
+          <option *ngFor="let c of cuentas; trackBy: trackCuenta" [value]="c.id">{{ c.nombre }} ({{ c.totalFlujos }})</option>
+        </select>
+      </label>
+
+      <label class="campo" *ngIf="etiquetasDisponibles.length"><span>Etiqueta</span>
+        <select [(ngModel)]="filtroEtiqueta" (ngModelChange)="aplicarFiltros()" aria-label="Filtrar por etiqueta">
+          <option value="todas">Todas</option>
+          <option *ngFor="let t of etiquetasDisponibles" [value]="t">{{ t }}</option>
+        </select>
+      </label>
+
+      <label class="campo"><span>Ordenar</span>
+        <select [(ngModel)]="orden" (ngModelChange)="aplicarFiltros()" aria-label="Ordenar flujos">
+          <option value="atencion">Alertas primero</option>
+          <option value="nombre">Nombre</option>
+          <option value="ejecuciones">Más ejecuciones</option>
+          <option value="fallos">Más fallos</option>
+          <option value="tasa">Menor tasa de éxito</option>
+          <option value="lentos">Más lentos</option>
+          <option value="reciente">Ejecución más reciente</option>
+        </select>
+      </label>
+
+      <div class="vista-toggle" role="group" aria-label="Tipo de vista">
+        <button type="button" [class.activo]="vistaFlujos === 'tarjetas'" (click)="vistaFlujos = 'tarjetas'">Tarjetas</button>
+        <button type="button" [class.activo]="vistaFlujos === 'tabla'" (click)="vistaFlujos = 'tabla'">Tabla</button>
+      </div>
+
+      <button type="button" class="btn btn-sm btn-ghost" (click)="exportarFlujosCsv()" [disabled]="!flujosFiltrados.length">Exportar CSV</button>
+
+      <!-- Solo ADMIN_POD/ADMIN_MIN pueden encender/apagar en bloque. BASIC ni las ve. -->
+      <div class="bulk-actions" *ngIf="puedeEditar">
+        <button class="btn btn-sm btn-success" (click)="cambiarEstadoTodos(true)" [disabled]="procesandoAccion">Encender todos</button>
+        <button class="btn btn-sm btn-danger" (click)="cambiarEstadoTodos(false)" [disabled]="procesandoAccion">Apagar todos</button>
+      </div>
+    </section>
+
+    <p class="resultado-filtro">
+      Mostrando {{ flujosMostrados.length }} de {{ flujosFiltrados.length }} flujo(s)
+      <button type="button" class="enlace" *ngIf="hayFiltros" (click)="limpiarFiltros()">Limpiar filtros</button>
+    </p>
+
+    <div class="cargando" *ngIf="procesandoAccion"><div class="spinner"></div><p>Actualizando flujos…</p></div>
+
+    <!-- Tarjetas -->
+    <section class="workflows-grid" *ngIf="vistaFlujos === 'tarjetas' && flujosMostrados.length">
+      <div class="wf-card" *ngFor="let wf of flujosMostrados; trackBy: trackFlujo" [class.inactive]="!wf.activo" (click)="abrirDetalle(wf)" tabindex="0" (keydown.enter)="abrirDetalle(wf)">
+        <div class="wf-card__header">
+          <div class="wf-title">
+            <div class="wf-icon" [ngClass]="wf.activo ? 'bg-purple' : 'bg-gray'">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+            </div>
+            <div class="wf-text">
+              <h3 [title]="wf.nombre">{{ wf.nombre }}</h3>
+              <span class="wf-id">ID: {{ wf.id }}</span>
+              <span class="wf-owner" *ngIf="variasCuentas && wf.cuentaNombre" [title]="'Propietario en n8n: ' + wf.cuentaNombre">{{ wf.cuentaNombre }}</span>
+            </div>
+          </div>
+
+          <!-- BASIC ve el interruptor pero no puede tocarlo (disabled, no oculto) -->
+          <label class="switch" [class.switch-disabled]="!puedeEditar" [title]="!puedeEditar ? 'Tu rol solo permite consulta' : ''" (click)="$event.stopPropagation()">
+            <input type="checkbox" [checked]="wf.activo" [disabled]="!puedeEditar" (click)="toggleEstado(wf, $event)">
+            <span class="slider round"></span>
+          </label>
+        </div>
+
+        <div class="wf-chips" *ngIf="wf.motivos.length || wf.etiquetas.length || wf.disparadores?.length">
+          <span class="chip" *ngFor="let m of wf.motivos" [ngClass]="'chip-' + m.severidad">{{ m.texto }}</span>
+          <span class="chip chip-marca" *ngFor="let d of wf.disparadores">{{ d }}</span>
+          <span class="chip" *ngFor="let t of wf.etiquetas">{{ t }}</span>
+        </div>
+
+        <div class="wf-metrics-strip">
+          <div class="metric-item"><span class="metric-label">Ejec.</span><span class="metric-val">{{ fmtNum(wf.totalEjecuciones) }}</span></div>
+          <div class="metric-item"><span class="metric-label">Éxito</span><span class="metric-val" [ngClass]="'t-' + claseTasa(wf.tasaExito)">{{ fmtPct(wf.tasaExito) }}</span></div>
+          <div class="metric-item"><span class="metric-label">Fallos</span><span class="metric-val" [class.t-mal]="wf.fallidas">{{ fmtNum(wf.fallidas) }}</span></div>
+          <div class="metric-item"><span class="metric-label">Duración</span><span class="metric-val">{{ fmtDuracion(wf.duracion.prom) }}</span></div>
+        </div>
+
+        <app-sparkline [valores]="wf.spark" [fallos]="wf.sparkFallos" [alto]="30"></app-sparkline>
+
+        <div class="wf-card__footer">
+          <span class="est" [ngClass]="'est-' + claseEstado(wf.ultimoEstado)">{{ etiquetaEstado(wf.ultimoEstado) }}</span>
+          <span class="wf-fecha">{{ wf.ultimaEjecucion ? fmtRelativo(wf.ultimaEjecucion) : 'sin ejecuciones' }}</span>
+          <span class="chip chip-baja" *ngIf="esAdminPod && acceso?.estricto && wf.usuariosConAcceso === 0" title="Ningún usuario puede ver este flujo">Sin asignar</span>
+          <span class="chip" *ngIf="esAdminPod && acceso?.estricto && wf.usuariosConAcceso" [title]="wf.usuariosConAcceso + ' usuario(s) lo ven'">{{ wf.usuariosConAcceso }} usuario(s)</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- Tabla -->
+    <section class="tarjeta tabla-flujos" *ngIf="vistaFlujos === 'tabla' && flujosMostrados.length">
+      <div class="tabla-wrap">
+        <table class="tabla">
+          <thead>
+            <tr>
+              <th>Flujo</th><th *ngIf="variasCuentas">Propietario</th><th>Activo</th><th class="num">Ejec.</th><th class="num">Éxito</th><th class="num">Fallos</th>
+              <th class="num">Prom.</th><th class="num">P95</th><th class="num">Racha</th><th>Última</th><th>Estado</th><th *ngIf="esAdminPod && acceso?.estricto" class="num">Acceso</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr *ngFor="let wf of flujosMostrados; trackBy: trackFlujo" class="fila-click" (click)="abrirDetalle(wf)" tabindex="0" (keydown.enter)="abrirDetalle(wf)">
+              <td class="td-nombre"><strong [title]="wf.nombre">{{ wf.nombre }}</strong><span class="mono id">{{ wf.id }}</span>
+                <span class="chip" *ngFor="let m of wf.motivos | slice:0:1" [ngClass]="'chip-' + m.severidad">{{ m.texto }}</span></td>
+              <td *ngIf="variasCuentas">{{ wf.cuentaNombre }}</td>
+              <td (click)="$event.stopPropagation()">
+                <label class="switch" [class.switch-disabled]="!puedeEditar" [title]="!puedeEditar ? 'Tu rol solo permite consulta' : ''">
+                  <input type="checkbox" [checked]="wf.activo" [disabled]="!puedeEditar" (click)="toggleEstado(wf, $event)">
+                  <span class="slider round"></span>
+                </label>
+              </td>
+              <td class="num">{{ fmtNum(wf.totalEjecuciones) }}</td>
+              <td class="num" [ngClass]="'t-' + claseTasa(wf.tasaExito)">{{ fmtPct(wf.tasaExito) }}</td>
+              <td class="num" [class.t-mal]="wf.fallidas">{{ fmtNum(wf.fallidas) }}</td>
+              <td class="num">{{ fmtDuracion(wf.duracion.prom) }}</td>
+              <td class="num">{{ fmtDuracion(wf.duracion.p95) }}</td>
+              <td class="num" [class.t-mal]="wf.racha >= 3">{{ wf.racha }}</td>
+              <td>{{ wf.ultimaEjecucion ? fmtRelativo(wf.ultimaEjecucion) : '—' }}</td>
+              <td><span class="est" [ngClass]="'est-' + claseEstado(wf.ultimoEstado)">{{ etiquetaEstado(wf.ultimoEstado) }}</span></td>
+              <td *ngIf="esAdminPod && acceso?.estricto" class="num"><span class="chip" [ngClass]="wf.usuariosConAcceso ? '' : 'chip-media'">{{ wf.usuariosConAcceso || 'Sin asignar' }}</span></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <div class="mas" *ngIf="flujosMostrados.length < flujosFiltrados.length">
+      <button type="button" class="btn btn-ghost" (click)="verMas()">Mostrar más ({{ flujosFiltrados.length - flujosMostrados.length }} restantes)</button>
+    </div>
+
+    <div class="tarjeta vacio-grande" *ngIf="!flujosFiltrados.length">
+      <p>Ningún flujo coincide con los filtros.</p>
+      <button type="button" class="btn btn-sm btn-ghost" (click)="limpiarFiltros()">Limpiar filtros</button>
+    </div>
+  </div>
+
+  <!-- ====================== EJECUCIONES ====================== -->
+  <div *ngIf="pestana === 'ejecuciones'" class="pestana-contenido">
+    <section class="control-bar">
+      <div class="search-box">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+        <input type="search" [(ngModel)]="busquedaEj" (ngModelChange)="aplicarFiltrosEj()" placeholder="Buscar por flujo, ID de ejecución o propietario…" aria-label="Buscar ejecución" />
+      </div>
+      <div class="vista-toggle" role="group" aria-label="Resultado">
+        <button type="button" [class.activo]="filtroEstadoEj === 'todas'" (click)="filtroEstadoEj = 'todas'; aplicarFiltrosEj()">Todas</button>
+        <button type="button" [class.activo]="filtroEstadoEj === 'exitosa'" (click)="filtroEstadoEj = 'exitosa'; aplicarFiltrosEj()">Exitosas</button>
+        <button type="button" [class.activo]="filtroEstadoEj === 'fallida'" (click)="filtroEstadoEj = 'fallida'; aplicarFiltrosEj()">Fallidas</button>
+        <button type="button" [class.activo]="filtroEstadoEj === 'otras'" (click)="filtroEstadoEj = 'otras'; aplicarFiltrosEj()">Otras</button>
+      </div>
+      <button type="button" class="btn btn-sm btn-ghost" (click)="exportarEjecucionesCsv()" [disabled]="!ejecucionesFiltradas.length">Exportar CSV</button>
+    </section>
+    <p class="resultado-filtro">Las {{ datos.recientes.length }} ejecuciones más recientes del periodo ({{ textoPeriodo }}). Haz clic en una fila para ver el flujo.</p>
+
+    <section class="tarjeta" *ngIf="ejecucionesFiltradas.length; else sinEjecuciones">
+      <div class="tabla-wrap tabla-alta">
+        <table class="tabla">
+          <thead><tr><th>Inicio</th><th>Flujo</th><th *ngIf="variasCuentas">Propietario</th><th>Estado</th><th>Modo</th><th class="num">Duración</th><th class="num">ID</th></tr></thead>
+          <tbody>
+            <tr *ngFor="let e of ejecucionesFiltradas; trackBy: trackEj" class="fila-click" (click)="abrirEjecucion(e)" tabindex="0" (keydown.enter)="abrirEjecucion(e)">
+              <td>{{ fmtHora(e.inicio) }}</td>
+              <td class="td-nombre"><strong [title]="e.flujo">{{ e.flujo }}</strong></td>
+              <td *ngIf="variasCuentas">{{ e.cuentaNombre }}</td>
+              <td><span class="est" [ngClass]="'est-' + claseEstado(e.estado)">{{ etiquetaEstado(e.estado) }}</span></td>
+              <td>{{ e.modo }}</td>
+              <td class="num">{{ fmtDuracion(e.duracion) }}</td>
+              <td class="num mono">{{ e.id }}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+    <ng-template #sinEjecuciones><div class="tarjeta vacio-grande"><p>No hay ejecuciones que coincidan.</p></div></ng-template>
+  </div>
+</ng-container>
+
+<!-- Modales -->
+<app-n8n-detalle *ngIf="flujoSeleccionado" [flujo]="flujoSeleccionado" [dias]="dias" [puedeEditar]="puedeEditar" [esAdmin]="esAdminPod" (cerrar)="cerrarDetalle()"></app-n8n-detalle>
+<app-n8n-accesos *ngIf="panelAccesosAbierto" (cerrar)="cerrarAccesos($event)"></app-n8n-accesos>
+<app-n8n-cuentas *ngIf="panelCuentasAbierto" (cerrar)="cerrarCuentas()"></app-n8n-cuentas>

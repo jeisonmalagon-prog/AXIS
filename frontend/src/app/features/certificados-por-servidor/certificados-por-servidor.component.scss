@@ -1,0 +1,387 @@
+// ==========================================
+// Variables de la Paleta Corporativa (mismas que el resto del módulo)
+// ==========================================
+$brand-light: var(--ax-brand-soft, #ede9fe);
+$brand-dark:    var(--ax-text, #0f172a);
+$brand-gray:    var(--ax-text-muted, #64748b);
+$surface-bg:    var(--ax-surface-2, #f8fafc);
+$border-light:  var(--ax-border, #e2e8f0);
+
+* { box-sizing: border-box; }
+
+:host {
+  display: block;
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  color: $brand-dark;
+}
+
+// ==========================================
+// Cabecera, buscador y filtros
+// ==========================================
+.page-header {
+  display: flex; justify-content: space-between; align-items: flex-start;
+  margin-bottom: 24px; flex-wrap: wrap; gap: 16px;
+
+  h1 { font-size: 30px; font-weight: 800; color: $brand-dark; margin: 0; letter-spacing: -0.5px; }
+  .subtitle { color: $brand-gray; margin-top: 6px; font-size: 14.5px; }
+}
+
+.header-actions { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+
+.search-box {
+  position: relative; display: flex; align-items: center;
+  svg { position: absolute; left: 14px; width: 17px; height: 17px; stroke: #94a3b8; }
+  input {
+    padding: 10px 14px 10px 40px; border: 1px solid $border-light; border-radius: 8px;
+    font-size: 13.5px; width: 300px; color: $brand-dark; background: var(--ax-surface, white);
+    &::placeholder { color: #94a3b8; }
+    &:focus { outline: none; border-color: var(--ax-brand-primary, #673ab7); box-shadow: 0 0 0 3px rgba(var(--ax-brand-primary-rgb, 103, 58, 183), 0.15); }
+  }
+}
+
+.btn {
+  font-family: 'Inter', sans-serif; display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+  padding: 9px 16px; border-radius: 8px; font-size: 13px; font-weight: 600;
+  border: 1px solid $border-light; background: var(--ax-surface, white); color: $brand-dark; cursor: pointer; transition: all 0.15s ease;
+  &:hover { background: $surface-bg; }
+}
+
+.btn-primary {
+  background: var(--ax-brand-primary, #673ab7); color: white; border: none; box-shadow: 0 4px 12px rgba(var(--ax-brand-primary-rgb, 103, 58, 183), 0.3);
+  &:hover { background: var(--ax-brand-primary-hover, #5a33a0); color: white; }
+}
+
+.filtros {
+  display: flex; gap: 10px; margin-bottom: 22px; flex-wrap: wrap;
+  .btn {
+    border-radius: 99px; border: none; background: var(--ax-glass-bg, rgba(255, 255, 255, 0.6)); color: $brand-gray;
+    &.active { background: var(--ax-brand-primary, #673ab7); color: white; box-shadow: 0 4px 12px rgba(var(--ax-brand-primary-rgb, 103, 58, 183), 0.25); }
+  }
+}
+
+.empty {
+  color: $brand-gray; padding: 50px 0; text-align: center; font-weight: 500;
+  background: var(--ax-surface, #fff); border: 1px solid $border-light; border-radius: 16px;
+}
+
+.mono { font-family: 'JetBrains Mono', monospace; font-size: 12px; }
+
+// ==========================================
+// Etiquetas de estado (mismas clases que Certificados)
+// ==========================================
+.status-pill {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 3px 11px; border-radius: 999px; font-size: 11.5px; font-weight: 600;
+  &::before { content: ''; width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+}
+::ng-deep .status-vigente { color: #10b981; background: #d1fae5; }
+::ng-deep .status-por-vencer { color: #f59e0b; background: #fef3c7; }
+::ng-deep .status-vencido { color: #ef4444; background: #fee2e2; }
+
+.status-dot {
+  width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; background: currentColor;
+  &.status-vigente { color: #10b981; }
+  &.status-por-vencer { color: #f59e0b; }
+  &.status-vencido { color: #ef4444; }
+}
+
+// ==========================================
+// TAGS DE APLICACIÓN INTERNA — mismo criterio de color que Aplicaciones
+// ==========================================
+%tag-base {
+  display: inline-flex; align-items: center; gap: 5px; font-size: 10.5px; font-weight: 600;
+  line-height: 1.3; padding: 3px 9px; border-radius: 999px; border: none; word-break: break-word;
+  &::before { content: ''; width: 5px; height: 5px; border-radius: 50%; background: currentColor; flex-shrink: 0; }
+}
+.tag-chip { @extend %tag-base; }
+.tag-chip-lg { font-size: 13px; padding: 5px 13px; }
+
+.tag-api          { background: #e0f2fe; color: #0369a1; }
+.tag-orquestador  { background: #fef3c7; color: #b45309; }
+.tag-suscriptor   { background: #dcfce7; color: #15803d; }
+.tag-kafka        { background: #f3e8ff; color: #7e22ce; }
+.tag-logs         { background: #fee2e2; color: #b91c1c; }
+.tag-docs         { background: #fce7f3; color: #be185d; }
+.tag-balanceador  { background: #ffe4e6; color: #be123c; }
+.tag-job          { background: #e0e7ff; color: #4338ca; }
+.tag-db           { background: #cffafe; color: #0e7490; }
+.tag-otro         { background: var(--ax-surface-2, #f1f5f9); color: var(--ax-text-muted, #64748b); }
+
+// ==========================================
+// TARJETA DE SERVIDOR (nivel 1 del árbol)
+// ==========================================
+.servidor-card {
+  background: var(--ax-surface, #ffffff);
+  border: 1px solid $border-light;
+  border-radius: 16px;
+  margin-bottom: 16px;
+  overflow: hidden;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.03);
+  transition: box-shadow 0.2s ease, border-color 0.2s ease;
+
+  &:hover { border-color: var(--ax-brand-soft-strong, #d9d2ee); }
+}
+
+.servidor-header {
+  display: flex; align-items: center; gap: 10px;
+  padding: 16px 20px; cursor: pointer; flex-wrap: wrap;
+  background: var(--ax-surface, #fff);
+
+  &:hover { background: $surface-bg; }
+}
+
+.chevron-btn {
+  flex-shrink: 0; width: 26px; height: 26px; border-radius: 8px;
+  border: 1px solid $border-light; background: var(--ax-surface, white); color: $brand-gray;
+  display: flex; align-items: center; justify-content: center; cursor: pointer;
+  transition: transform 0.2s ease, background 0.15s ease;
+
+  svg { width: 14px; height: 14px; }
+  &.rotated svg { transform: rotate(180deg); }
+  &:hover { background: $surface-bg; }
+}
+
+.servidor-id {
+  display: inline-flex; align-items: center; gap: 8px; flex-wrap: wrap;
+  border: none; background: none; padding: 4px 6px; margin: -4px 0;
+  border-radius: 8px; cursor: pointer; font-family: inherit; text-align: left;
+
+  &:hover { background: $brand-light; }
+
+  .node-icon { width: 16px; height: 16px; color: #94a3b8; flex-shrink: 0; }
+
+  .hostname { font-weight: 700; color: $brand-dark; font-size: 14.5px; }
+
+  .ip-badge {
+    background: #eef2f6; color: var(--ax-text-muted, #475569); padding: 2px 8px; border-radius: 6px; font-size: 11px; font-weight: 600;
+  }
+
+  .os-badge, .ambiente-badge {
+    background: $brand-light; color: var(--ax-brand-primary, #673ab7); padding: 2px 9px; border-radius: 999px;
+    font-size: 10.5px; font-weight: 700;
+  }
+
+  .ambiente-badge { background: #e0f2fe; color: #0369a1; }
+}
+
+.servidor-resumen {
+  margin-left: auto;
+  display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+
+  .contador { font-size: 12px; color: $brand-gray; font-weight: 600; white-space: nowrap; }
+}
+
+.servidor-body {
+  padding: 4px 20px 20px;
+  border-top: 1px solid #f1f5f9;
+}
+
+// ==========================================
+// BLOQUE DE APLICACIÓN (nivel 2)
+// ==========================================
+.aplicacion-block {
+  margin-top: 16px;
+  padding: 14px 16px 16px;
+  background: $surface-bg;
+  border: 1px solid #eef0f4;
+  border-radius: 12px;
+}
+
+.aplicacion-header {
+  display: flex; align-items: center; gap: 10px; width: 100%;
+  border: none; background: none; padding: 2px; margin-bottom: 12px;
+  cursor: pointer; font-family: inherit; text-align: left; border-radius: 8px;
+
+  &:hover { background: var(--ax-glass-bg, rgba(255, 255, 255, 0.7)); }
+
+  .app-icon {
+    position: relative; flex-shrink: 0; width: 28px; height: 28px; border-radius: 8px;
+    background: linear-gradient(135deg, var(--ax-brand-primary, #673ab7), var(--ax-brand-primary-claro, #8b5cf6)); color: #fff;
+    display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 12px; overflow: hidden;
+
+    img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; background: var(--ax-surface, #fff); padding: 3px; }
+  }
+
+  .aplicacion-nombre { font-weight: 700; color: $brand-dark; font-size: 13.5px; }
+
+  .componente-count-badge {
+    margin-left: auto; background: $brand-light; color: var(--ax-brand-primary, #673ab7); font-size: 10.5px;
+    font-weight: 700; padding: 2px 9px; border-radius: 20px; white-space: nowrap;
+  }
+}
+
+// Grilla de "aplicaciones internas" (nivel 3) dentro de una aplicación
+.componentes-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 10px;
+}
+
+.componente-card {
+  background: var(--ax-surface, #ffffff);
+  border: 1px solid #eef0f4;
+  border-radius: 10px;
+  padding: 10px 12px 12px;
+  display: flex; flex-direction: column; gap: 8px;
+  min-width: 0;
+
+  &:hover { border-color: #dcdfe6; }
+}
+
+.componente-top {
+  display: flex; align-items: center; justify-content: space-between; gap: 6px;
+  border: none; background: none; padding: 0; cursor: pointer; font-family: inherit;
+}
+
+// Informativo (no de advertencia): un componente compartido por varias
+// aplicaciones es un caso normal, no un error de datos.
+.badge-compartido {
+  font-size: 9.5px; font-weight: 700; color: var(--ax-brand-primary, #673ab7); background: $brand-light;
+  padding: 2px 7px; border-radius: 999px; white-space: nowrap; flex-shrink: 0;
+}
+
+// Lista de certificados dentro de un componente (o "sueltos"/"sin clasificar")
+.certificados-mini-list {
+  display: flex; flex-direction: column; gap: 4px;
+}
+
+.cert-row {
+  display: flex; align-items: center; gap: 7px; width: 100%;
+  border: 1px solid transparent; background: var(--ax-surface-2, #f8fafc); border-radius: 7px;
+  padding: 6px 9px; cursor: pointer; font-family: inherit; text-align: left;
+  transition: all 0.12s ease;
+
+  &:hover { border-color: var(--ax-brand-primary, #673ab7); background: $brand-light; }
+  &.dim { opacity: 0.4; }
+
+  .cert-cn { flex: 1; min-width: 0; font-size: 11.5px; color: $brand-dark; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .cert-dias { font-size: 10.5px; font-weight: 700; flex-shrink: 0; }
+}
+
+.cert-row-empty {
+  cursor: default; color: #94a3b8; font-style: italic; font-size: 11.5px;
+  background: transparent; border-style: dashed; border-color: var(--ax-border, #e2e8f0);
+  &:hover { background: transparent; border-color: var(--ax-border, #e2e8f0); }
+}
+
+.sueltos-block, .sin-clasificar-block {
+  margin-top: 14px;
+}
+
+.sueltos-label {
+  font-size: 11px; font-weight: 700; color: $brand-gray; text-transform: uppercase;
+  letter-spacing: 0.03em; margin: 0 0 6px;
+}
+
+.sin-apps {
+  color: $brand-gray; font-size: 13px; font-style: italic; padding: 14px 4px 4px;
+}
+
+// ==========================================
+// MODAL DE DETALLE
+// ==========================================
+.overlay {
+  position: fixed; inset: 0; background: rgba(15, 23, 42, 0.6); backdrop-filter: blur(4px);
+  display: flex; align-items: center; justify-content: center; z-index: 9999; padding: 20px;
+}
+
+.detalle-modal {
+  background: var(--ax-surface, #ffffff); border-radius: 18px; width: 100%; max-width: 780px; max-height: 94vh;
+  display: flex; flex-direction: column; box-shadow: 0 25px 50px rgba(0, 0, 0, 0.25); overflow: hidden;
+
+  .modal-header {
+    display: flex; align-items: center; justify-content: space-between; gap: 12px;
+    padding: 18px 24px; border-bottom: 1px solid $border-light;
+  }
+
+  .breadcrumb {
+    display: flex; align-items: center; flex-wrap: wrap; gap: 4px; min-width: 0;
+    font-size: 12.5px; color: $brand-gray;
+  }
+  .crumb-sep { color: #cbd5e1; }
+  .crumb-activo { color: var(--ax-brand-primary, #673ab7); font-weight: 700; }
+
+  .btn-close {
+    background: none; border: none; font-size: 18px; color: $brand-gray; cursor: pointer;
+    padding: 4px 8px; border-radius: 6px; line-height: 1; flex-shrink: 0;
+    &:hover { background: var(--ax-surface-2, #f1f5f9); color: $brand-dark; }
+  }
+
+  .modal-body {
+    padding: 20px 24px; overflow-y: auto; flex: 1;
+    &::-webkit-scrollbar { width: 6px; }
+    &::-webkit-scrollbar-thumb { background: var(--ax-border-2, #cbd5e1); border-radius: 4px; }
+
+    h2 { margin: 0 0 6px; font-size: 20px; color: $brand-dark; font-weight: 800; }
+  }
+
+  .modal-footer {
+    padding: 14px 24px 20px; border-top: 1px solid $border-light; background: var(--ax-surface-2, #f8fafc);
+    display: flex; justify-content: flex-end; gap: 10px; flex-wrap: wrap;
+  }
+}
+
+.detalle-cert-header {
+  display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap;
+  h2 { margin: 0; }
+}
+
+.detalle-subtitulo {
+  color: $brand-gray; font-size: 13px; margin: 0 0 16px;
+  strong { color: $brand-dark; }
+}
+
+.detalle-nota {
+  font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.03em;
+  color: var(--ax-brand-primary, #673ab7); margin: 18px 0 8px;
+}
+
+.detalle-vacio {
+  color: #94a3b8; font-style: italic; font-size: 13px; margin: 0;
+}
+
+.detalle-observaciones {
+  font-size: 13.5px; color: $brand-dark; background: $surface-bg; border-radius: 8px;
+  padding: 10px 12px; margin: 0; white-space: pre-wrap;
+}
+
+.detalle-grid {
+  display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px 20px; margin-top: 4px;
+
+  > div { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+}
+
+.detalle-label {
+  font-size: 10.5px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.03em; color: $brand-gray;
+}
+
+.lista-simple {
+  margin: 0; padding-left: 18px; font-size: 13px; color: $brand-dark;
+  li { margin-bottom: 4px; }
+}
+
+.tags-inline {
+  display: flex; flex-wrap: wrap; gap: 6px;
+}
+
+// Dónde más se usa un componente/certificado — informativo, sin tono de
+// advertencia: compartir un componente entre aplicaciones es un caso normal.
+.tambien-en {
+  margin: 10px 0 4px;
+}
+
+.certificados-mini-list--modal {
+  margin-top: 4px;
+}
+
+// ==========================================
+// Responsive
+// ==========================================
+@media (max-width: 768px) {
+  .page-header { flex-direction: column; }
+  .header-actions { width: 100%; }
+  .search-box { width: 100%; input { width: 100%; } }
+  .servidor-resumen { margin-left: 0; width: 100%; justify-content: space-between; }
+  .componentes-grid { grid-template-columns: 1fr; }
+  .detalle-grid { grid-template-columns: 1fr; }
+}

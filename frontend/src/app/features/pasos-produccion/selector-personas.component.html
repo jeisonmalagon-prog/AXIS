@@ -1,0 +1,21 @@
+<div class="sp" [class.sp--off]="deshabilitado">
+  <div class="sp__barra">
+    <input type="text" class="sp__buscar" [(ngModel)]="texto" name="sp-buscar" [placeholder]="placeholder" [disabled]="deshabilitado" autocomplete="off" />
+    <select class="sp__equipo" *ngIf="equipos.length" [(ngModel)]="equipoElegido" name="sp-equipo" (ngModelChange)="agregarEquipo()" [disabled]="deshabilitado">
+      <option [ngValue]="null">+ Agregar un equipo…</option>
+      <option *ngFor="let e of equipos" [ngValue]="e.id">{{ e.nombre }} ({{ e.miembros.length }})</option>
+    </select>
+  </div>
+  <div class="sp__lista">
+    <label class="sp__fila" *ngFor="let p of filtradas">
+      <input type="checkbox" [checked]="marcada(p.id)" (change)="alternar(p.id, $event)" [disabled]="deshabilitado" />
+      <span class="sp__nombre">{{ nombre(p) }}</span>
+      <small *ngIf="p.nombre_completo">{{ p.username }}</small>
+    </label>
+    <div class="sp__vacio" *ngIf="!filtradas.length">{{ personas.length ? 'Nadie coincide con la búsqueda.' : 'No hay personas disponibles.' }}</div>
+  </div>
+  <div class="chips" *ngIf="elegidas.length">
+    <span class="chip" *ngFor="let p of elegidas">{{ nombre(p) }}<button type="button" (click)="quitar(p.id)" title="Quitar">×</button></span>
+    <button type="button" class="sp__limpiar" (click)="limpiar()">Quitar todas</button>
+  </div>
+</div>

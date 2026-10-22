@@ -1,0 +1,81 @@
+@use '../../repositorio/azure/azure-base' as *;
+@include base;
+
+// Series de las gráficas: validadas con scripts/validate_palette.js (claro y oscuro).
+:host { --ix-s1: var(--ax-brand-primary, #5b3fc4); --ix-s2: #0e9488; display: block; padding: 4px 2px 24px; }
+:host-context(.dark-theme) { --ix-s1: var(--ax-brand-primary-claro, #8f81f5); --ix-s2: #10a898; }
+@supports (color: oklch(from red l c h)) {
+  :host { --ix-s2: oklch(from var(--ax-brand-primary) 0.58 0.12 calc(h + 150)); }
+  :host-context(.dark-theme) { --ix-s2: oklch(from var(--ax-brand-primary-claro) 0.7 0.13 calc(h + 150)); }
+}
+
+.cab { display: flex; justify-content: space-between; align-items: flex-end; gap: 16px; flex-wrap: wrap; margin-bottom: 18px;
+  h1 { margin: 0; font-size: 24px; font-weight: 800; letter-spacing: -0.3px; }
+  .fecha { margin: 4px 0 0; font-size: 13px; color: $brand-gray; &::first-letter { text-transform: uppercase; } }
+  .cab-acc { display: flex; gap: 8px; } }
+
+.vacio-inicio { text-align: center; padding: 60px 16px; color: $brand-gray; h2 { color: $brand-dark; font-size: 17px; margin: 0 0 6px; } p { margin: 0; font-size: 13px; } }
+
+// Estilo «ladrillos»: filas finas de 6 px y cada tarjeta ocupa las que necesita (ver MasonryDirective),
+// así no quedan huecos junto a una tarjeta más alta. Sin JavaScript se ve como una cuadrícula normal.
+.grilla-w { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); column-gap: 16px; row-gap: 0; grid-auto-rows: 6px; grid-auto-flow: dense; align-items: start; }
+.w { grid-column: span var(--span, 3); grid-row-end: span 50; min-width: 0;
+  @media (max-width: 1180px) { grid-column: span 6; } }
+.w .tarjeta-cab { margin-bottom: 12px; h2 { font-size: 14.5px; } }
+.tarjeta-sub { display: inline-flex; align-items: center; gap: 8px; }
+.vivo { width: 8px; height: 8px; border-radius: 50%; background: $ok; display: inline-block; animation: pulso 2.2s ease-in-out infinite; }
+@keyframes pulso { 0%, 100% { opacity: 1; } 50% { opacity: 0.35; } }
+@media (prefers-reduced-motion: reduce) { .vivo { animation: none; } }
+.cargando.chico { padding: 22px 0; }
+.aviso-aviso { margin-bottom: 10px; }
+.aviso-prefs { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+
+// Cifras destacadas (stat tiles)
+.mini-kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); gap: 10px; margin-bottom: 14px; }
+.mk { background: $surface-bg; border: 1px solid $border-light; border-radius: 12px; padding: 10px 12px; display: flex; flex-direction: column; gap: 2px; min-width: 0;
+  .et { font-size: 10.5px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.3px; color: $brand-gray; }
+  .v { font-size: 21px; font-weight: 800; line-height: 1.15; overflow-wrap: anywhere; small { font-size: 12.5px; font-weight: 600; color: $brand-gray; } }
+  &.alerta { border-color: rgba(239, 68, 68, 0.45); .v { color: $danger; } }
+  &.aviso { border-color: rgba(245, 158, 11, 0.5); } }
+
+.nota { margin: 10px 0 0; font-size: 11.5px; color: $brand-gray; line-height: 1.5; b { color: $brand-dark; } }
+.ok-linea { margin: 6px 0 0; font-size: 12.5px; color: $brand-gray; }
+.titulo-sec { margin-top: 4px; }
+
+// Filas con mini barra (entornos / sistemas operativos)
+.filas { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 7px;
+  li { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(40px, 1fr) auto; gap: 10px; align-items: center; font-size: 12.5px; }
+  .nombre { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .val { font-variant-numeric: tabular-nums; color: $brand-gray; font-weight: 600; }
+  .chip { grid-column: 2 / 4; justify-self: end; } }
+.barra-mini { height: 8px; border-radius: 999px; background: $border-light; overflow: hidden; i { display: block; height: 100%; background: var(--ix-s1); border-radius: 999px; } }
+
+// Barras horizontales con etiqueta directa (top consumidores / nodos)
+.barras { list-style: none; margin: 12px 0 0; padding: 0; display: flex; flex-direction: column; gap: 9px;
+  li { display: grid; grid-template-columns: minmax(90px, 1.1fr) minmax(60px, 1.6fr) auto; gap: 10px; align-items: center; font-size: 12.5px; cursor: default; }
+  .nombre { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; small { display: block; font-size: 10.5px; color: $brand-gray; overflow: hidden; text-overflow: ellipsis; } }
+  .pista { height: 10px; background: $border-light; border-radius: 0 4px 4px 0; overflow: hidden; border-radius: 4px; i { display: block; height: 100%; background: var(--ix-s1); border-radius: 0 4px 4px 0; min-width: 2px; } }
+  .val { font-variant-numeric: tabular-nums; font-weight: 700; min-width: 64px; text-align: right; }
+  li:hover .pista i { filter: brightness(1.15); } }
+.selector-dias { margin-bottom: 4px; }
+
+.f5-cuerpo { display: grid; grid-template-columns: minmax(0, 3fr) minmax(0, 2fr); gap: 20px; @media (max-width: 900px) { grid-template-columns: minmax(0, 1fr); } }
+.f5-top .barras { margin-top: 8px; }
+
+// Listas compactas (próximos vencimientos, pasos, tareas)
+.lista-compacta { list-style: none; margin: 8px 0 0; padding: 0; display: flex; flex-direction: column; gap: 7px;
+  li { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 10px; align-items: center; padding: 8px 10px; border: 1px solid $border-light; background: $surface-bg; border-radius: 10px; font-size: 12.5px; }
+  .nombre { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; small { display: block; font-size: 11px; color: $brand-gray; overflow: hidden; text-overflow: ellipsis; } }
+  .val { color: $brand-gray; font-size: 11.5px; white-space: nowrap; }
+  .chip { min-width: 74px; text-align: center; } }
+
+// Estado de Virtual Servers
+.leyenda-est { list-style: none; margin: 10px 0 0; padding: 0; display: flex; flex-wrap: wrap; gap: 6px 16px; font-size: 12.5px;
+  li { display: inline-flex; align-items: center; gap: 6px; color: $brand-gray; b { color: $brand-dark; } }
+  i { width: 10px; height: 10px; border-radius: 3px; display: inline-block; &.s-ok { background: $ok; } &.s-mal { background: $danger; } &.s-aviso { background: $warn; } &.s-nulo { background: $border-light; border: 1px solid $brand-gray; } } }
+.barra-segmentos { margin-top: 2px; }
+
+.chip { &.est-mal { background: rgba(239, 68, 68, 0.12); color: $danger; border-color: transparent; }
+  &.est-aviso { background: rgba(245, 158, 11, 0.14); color: #b45309; border-color: transparent; }
+  &.est-info { background: rgba($brand-rgb, 0.12); color: $brand; border-color: transparent; } }
+:host-context(.dark-theme) .chip.est-aviso { color: #fbbf24; }

@@ -1,0 +1,49 @@
+<div class="selector-buscable" [class.deshabilitado]="deshabilitado">
+  <svg class="icono-buscar" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+    <circle cx="11" cy="11" r="8"></circle>
+    <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+  </svg>
+
+  <input
+    type="text"
+    class="selector-input"
+    [(ngModel)]="textoFiltro"
+    (focus)="abrir()"
+    (input)="abierto = true"
+    (blur)="alPerderFoco()"
+    [placeholder]="placeholder"
+    [disabled]="deshabilitado"
+    autocomplete="off"
+  />
+
+  <button
+    type="button"
+    class="btn-limpiar"
+    *ngIf="permitirLimpiar && valor != null && !deshabilitado"
+    (mousedown)="$event.preventDefault(); limpiar()"
+    title="Quitar selección"
+  >✕</button>
+
+  <div class="lista-opciones" *ngIf="abierto && !deshabilitado">
+    <div
+      class="opcion"
+      *ngFor="let op of opcionesFiltradas"
+      [class.seleccionada]="op.id === valor"
+      (mousedown)="$event.preventDefault(); elegir(op)"
+    >
+      <span class="opcion-nombre">{{ op.nombre }}</span>
+      <span class="opcion-sub" *ngIf="op.subtitulo">{{ op.subtitulo }}</span>
+    </div>
+    <div
+      class="opcion opcion-agregar"
+      *ngIf="mostrarOpcionAgregar"
+      (mousedown)="$event.preventDefault(); elegirAgregar()"
+    >
+      <span class="opcion-nombre">+ Agregar "{{ textoFiltro.trim() }}"</span>
+    </div>
+
+    <div class="opcion sin-resultados" *ngIf="!opcionesFiltradas.length && !mostrarOpcionAgregar">
+      {{ opciones.length ? ('Sin resultados para "' + textoFiltro + '"') : (textoVacio || 'No hay opciones disponibles') }}
+    </div>
+  </div>
+</div>

@@ -1,0 +1,226 @@
+<div class="subpestanas" role="tablist" aria-label="Análisis global">
+  <button type="button" role="tab" class="subpestana" *ngFor="let s of subs" [class.activa]="sub === s.valor" [attr.aria-selected]="sub === s.valor" (click)="cambiarSub(s.valor)">{{ s.etiqueta }}</button>
+</div>
+
+<!-- CONTROLES DE MUESTRA (no aplican al historial de alertas) -->
+<div class="filtros-panel" *ngIf="sub !== 'alertas'">
+  <div class="filtros-grid">
+    <div class="campo">
+      <span class="campo__etiqueta">Ventana de análisis</span>
+      <div class="rango-selector" role="group" aria-label="Ventana">
+        <button *ngFor="let v of ventanas" type="button" class="rango-boton" [class.activo]="!modoHistorico && ventanaMin === v" (click)="elegirVentana(v)">{{ v }} min</button>
+        <button type="button" class="rango-boton" [class.activo]="modoHistorico" (click)="activarHistorico()">Hora pasada</button>
+      </div>
+    </div>
+    <ng-container *ngIf="modoHistorico">
+      <div class="campo"><label for="sgFecha">Fecha</label><input id="sgFecha" type="date" [(ngModel)]="fechaHistorica" [max]="fechaMaxima"></div>
+      <div class="campo"><label for="sgHora">Desde las</label>
+        <select id="sgHora" [(ngModel)]="horaHistorica"><option *ngFor="let h of horas" [ngValue]="h">{{ h }}:00</option></select>
+      </div>
+      <div class="campo campo--accion"><button type="button" class="btn-primario" [disabled]="cargando" (click)="aplicarVentana()">Analizar</button></div>
+    </ng-container>
+    <div class="campo campo--accion" *ngIf="!modoHistorico"><button type="button" class="btn-secundario" [disabled]="cargando" (click)="aplicarVentana()">{{ cargando ? 'Actualizando…' : 'Actualizar' }}</button></div>
+  </div>
+</div>
+
+<div class="error-banner" *ngIf="error">{{ error }}</div>
+<div class="carga-inicial" *ngIf="cargando">Leyendo y analizando la muestra de logs…</div>
+
+<!-- ======================= LATENCIA ======================= -->
+<ng-container *ngIf="sub === 'latencia' && latencia as l">
+  <div class="resumen-barra">
+    <span><strong>{{ textoPeriodo(l) }}</strong></span>
+    <span>{{ l.muestra.clientes | number }} clientes · {{ l.muestra.operaciones | number }} operaciones · {{ l.lectura.filasLeidas | number }} filas</span>
+    <span class="aviso-chip" *ngIf="l.lectura.truncada">Lectura cortada por el tope de {{ l.lectura.topeFilas | number }} filas: la muestra no es completa.</span>
+  </div>
+
+  <div class="panel-diagrama">
+    <div class="panel-diagrama__cabecera">
+      <div>
+        <h2>Tiempo de respuesta por servicio</h2>
+        <p class="sub">Percentiles sobre las llamadas con inicio y resultado en el log. <strong>*</strong> = menos de 20 llamadas medidas: el percentil no es confiable.</p>
+      </div>
+      <div class="herramientas">
+        <input type="text" class="buscar" placeholder="Filtrar servicio…" [(ngModel)]="filtroTexto" aria-label="Filtrar servicio">
+        <label class="check-label"><input type="checkbox" [(ngModel)]="soloConErrores"> Solo con errores</label>
+      </div>
+    </div>
+
+    <div class="tabla-scroll">
+      <table>
+        <thead>
+          <tr>
+            <th class="orden" (click)="ordenarPor('servicio')">Servicio {{ flecha('servicio') }}</th>
+            <th class="orden num" (click)="ordenarPor('llamadas')">Llamadas {{ flecha('llamadas') }}</th>
+            <th class="orden num" (click)="ordenarPor('medidas')">Medidas {{ flecha('medidas') }}</th>
+            <th class="orden num" (click)="ordenarPor('p50')">p50 {{ flecha('p50') }}</th>
+            <th class="orden num" (click)="ordenarPor('p90')">p90 {{ flecha('p90') }}</th>
+            <th class="orden num" (click)="ordenarPor('p95')">p95 {{ flecha('p95') }}</th>
+            <th class="orden num" (click)="ordenarPor('max')">Máx. {{ flecha('max') }}</th>
+            <th class="orden num" (click)="ordenarPor('tasaError')">% error {{ flecha('tasaError') }}</th>
+            <th class="orden num" (click)="ordenarPor('sinMedir')">Sin medir {{ flecha('sinMedir') }}</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          <ng-container *ngFor="let s of filasLatencia; trackBy: trackClave">
+            <tr class="fila-op" (click)="alternarServicio(s.metodo)">
+              <td><strong>{{ s.servicio }}</strong></td>
+              <td class="num">{{ s.llamadas | number }}</td>
+              <td class="num">{{ s.todas.n | number }}</td>
+              <td class="num" [ngClass]="claseDuracion(s.todas.p50Ms)">{{ formatearDuracion(s.todas.p50Ms) }}</td>
+              <td class="num" [ngClass]="claseDuracion(s.todas.p90Ms)">{{ formatearDuracion(s.todas.p90Ms) }}</td>
+              <td class="num" [ngClass]="claseDuracion(s.todas.p95Ms)">{{ formatearDuracion(s.todas.p95Ms) }}{{ marcaConfianza(s.todas) }}</td>
+              <td class="num" [ngClass]="claseDuracion(s.todas.maxMs)">{{ formatearDuracion(s.todas.maxMs) }}</td>
+              <td class="num"><span class="pill" [ngClass]="s.tasaError >= 0.15 ? 'pill--error' : s.errores ? 'pill--warn' : 'pill--ok'">{{ pct(s.tasaError, 0) }}</span></td>
+              <td class="num"><span [class.sesgo]="sesgo(s) > 0.3" [title]="sesgo(s) > 0.3 ? 'Más del 30% de las llamadas no se pudieron medir: los tiempos pueden estar sesgados' : ''">{{ s.sinMedir | number }}</span></td>
+              <td><button type="button" class="btn-link" (click)="alternarServicio(s.metodo); $event.stopPropagation()">{{ abiertos.has(s.metodo) ? 'Ocultar' : 'Detalle' }}</button></td>
+            </tr>
+            <tr class="fila-detalle" *ngIf="abiertos.has(s.metodo)">
+              <td colspan="10">
+                <div class="datos">
+                  <div><span>Solo respuestas correctas</span><strong>{{ s.exitosas.n }} medidas · p50 {{ formatearDuracion(s.exitosas.p50Ms) }} · p95 {{ formatearDuracion(s.exitosas.p95Ms) }}{{ marcaConfianza(s.exitosas) }}</strong></div>
+                  <div><span>Lentas (≥ 5 s) / muy lentas (≥ 15 s)</span><strong>{{ s.lentas }} / {{ s.muyLentas }}</strong></div>
+                  <div><span>Promedio (todas)</span><strong>{{ formatearDuracion(s.todas.promMs) }}</strong></div>
+                  <div><span>Con error</span><strong>{{ s.errores }} de {{ s.llamadas }}</strong></div>
+                </div>
+                <p class="sub" *ngIf="sesgo(s) > 0.3"><strong>Ojo:</strong> {{ pct(sesgo(s), 0) }} de las llamadas de este servicio no tienen fila de inicio o de resultado y no entran a los percentiles.</p>
+                <table class="subtabla" *ngIf="s.nodos.length">
+                  <thead><tr><th>Nodo</th><th class="num">Medidas</th><th class="num">Errores</th><th class="num">p50</th><th class="num">p90</th><th class="num">p95</th><th class="num">Máx.</th></tr></thead>
+                  <tbody>
+                    <tr *ngFor="let n of s.nodos"><td>{{ n.nodo }}</td><td class="num">{{ n.n }}</td><td class="num">{{ n.errores }}</td>
+                      <td class="num">{{ formatearDuracion(n.p50Ms) }}</td><td class="num">{{ formatearDuracion(n.p90Ms) }}</td><td class="num">{{ formatearDuracion(n.p95Ms) }}{{ marcaConfianza(n) }}</td><td class="num">{{ formatearDuracion(n.maxMs) }}</td></tr>
+                  </tbody>
+                </table>
+              </td>
+            </tr>
+          </ng-container>
+        </tbody>
+      </table>
+    </div>
+    <div class="vacio" *ngIf="!filasLatencia.length"><p>No hay servicios con esos filtros en esta muestra.</p></div>
+  </div>
+
+  <div class="panel-diagrama panel-espacio" *ngIf="filasAce.length">
+    <div class="panel-diagrama__cabecera">
+      <div>
+        <h2>Servicios ACE (bus de integración)</h2>
+        <p class="sub">Operaciones del bus que la app llamó de forma directa, con su descripción del catálogo. ≈ = coincidencia aproximada con el catálogo.</p>
+      </div>
+      <button type="button" class="btn-secundario btn-mini" (click)="verAce = !verAce">{{ verAce ? 'Ocultar' : 'Ver' }} tabla ({{ filasAce.length }})</button>
+    </div>
+    <div class="tabla-scroll" *ngIf="verAce">
+      <table>
+        <thead><tr><th>Código</th><th>Servicio.Operación</th><th>Qué hace</th><th class="num">Llamadas</th><th class="num">Errores</th><th class="num">p50</th><th class="num">p95</th><th class="num">Máx.</th></tr></thead>
+        <tbody>
+          <tr *ngFor="let a of filasAce">
+            <td class="mono">{{ a.codigo }}</td>
+            <td>{{ a.servicio }}.{{ a.operacion }}<span class="aprox" *ngIf="a.aproximado"> ≈</span></td>
+            <td class="detalle-mensaje">{{ a.descripcion || '—' }}<small *ngIf="a.instancias"> · {{ a.instancias }} instancia(s)</small></td>
+            <td class="num">{{ a.llamadas }}</td><td class="num">{{ a.errores }}</td>
+            <td class="num">{{ formatearDuracion(a.p50Ms) }}</td><td class="num" [ngClass]="claseDuracion(a.p95Ms)">{{ formatearDuracion(a.p95Ms) }}{{ marcaConfianza(a) }}</td><td class="num">{{ formatearDuracion(a.maxMs) }}</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+  <p class="detalle-aviso detalle-aviso--precision"><strong>Precisión.</strong> {{ l.precision }}</p>
+</ng-container>
+
+<!-- ======================= ERRORES MASIVOS ======================= -->
+<ng-container *ngIf="sub === 'errores' && errores as e">
+  <div class="banner" [class.banner--error]="e.masivas > 0" [class.banner--ok]="e.masivas === 0">
+    <strong>{{ e.masivas > 0 ? (e.masivas === 1 ? 'Hay 1 error masivo ahora mismo' : 'Hay ' + e.masivas + ' errores masivos') : 'No hay errores masivos en esta muestra' }}</strong>
+    <span>{{ textoPeriodo(e) }} · {{ e.muestra.clientes | number }} clientes · {{ e.muestra.errores | number }} errores en {{ e.muestra.operaciones | number }} operaciones.</span>
+  </div>
+
+  <p class="detalle-aviso">
+    Un error es <strong>masivo</strong> cuando afecta a muchos clientes distintos a la vez: al menos <strong>{{ e.umbrales.minClientes }} clientes</strong>,
+    <strong>{{ e.umbrales.minErrores }} errores</strong> y <strong>{{ pct(e.umbrales.minTasa, 0) }}</strong> de las llamadas del servicio (con mínimo {{ e.umbrales.minLlamadas }} llamadas).
+    Cuando se cumple, el sistema avisa en la campana de notificaciones con este mismo detalle. Las causas se agrupan por el código o servicio literal del error.
+  </p>
+
+  <div class="barra-acciones">
+    <span class="sub">{{ e.causas.length }} causa(s) {{ verTodasCausas ? 'en total' : 'con 2 o más clientes o masivas' }}.</span>
+    <button type="button" class="btn-secundario btn-mini" (click)="alternarTodasCausas()">{{ verTodasCausas ? 'Ver solo las relevantes' : 'Ver también causas de un solo cliente' }}</button>
+  </div>
+
+  <div class="vacio" *ngIf="!e.causas.length"><p>No hay causas de error repetidas entre clientes en esta muestra.</p></div>
+  <app-causa-error *ngFor="let c of e.causas; trackBy: trackCausa" [causa]="c" [abierta]="c.masivo"></app-causa-error>
+
+  <p class="detalle-aviso detalle-aviso--precision"><strong>Precisión.</strong> {{ e.precision }}</p>
+</ng-container>
+
+<!-- ======================= ALERTAS ======================= -->
+<ng-container *ngIf="sub === 'alertas' && alertas as a">
+  <div class="vacio" *ngIf="!a.disponible"><p>{{ a.mensaje }}</p></div>
+  <ng-container *ngIf="a.disponible">
+    <p class="detalle-aviso">Alertas de error masivo que el sistema detectó solo (se revisa cada pocos minutos) y avisó por la campana de notificaciones. Toca una para ver el detalle completo de la causa tal como estaba cuando se detectó.</p>
+    <div class="vacio" *ngIf="!a.alertas.length"><p>Todavía no se ha detectado ningún error masivo.</p></div>
+    <div class="tabla-scroll" *ngIf="a.alertas.length">
+      <table>
+        <thead><tr><th>Detectada</th><th>Causa</th><th class="num">Clientes</th><th class="num">Errores</th><th class="num">% error</th><th>Última vez vista</th></tr></thead>
+        <tbody>
+          <tr *ngFor="let f of a.alertas" class="fila-op" [class.fila-error]="alertaSeleccionada === f.Id" (click)="abrirAlerta(f.Id)">
+            <td class="mono">{{ f.Detectada }}</td>
+            <td class="detalle-mensaje">{{ f.Titulo }}</td>
+            <td class="num">{{ f.Clientes }}</td><td class="num">{{ f.Errores }}</td><td class="num">{{ tasaAlerta(f) }}</td>
+            <td class="mono">{{ f.UltimaVista }}</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="carga-inicial" *ngIf="cargandoDetalle">Abriendo la alerta…</div>
+    <section class="alerta-detalle" *ngIf="alertaDetalle as d">
+      <h3>Alerta #{{ d.id }} — detectada {{ d.detectada }}</h3>
+      <app-causa-error *ngIf="d.detalle as causa; else sinDetalleAlerta" [causa]="causa" [abierta]="true"></app-causa-error>
+      <ng-template #sinDetalleAlerta><p class="sub">Esta alerta no guardó el detalle de la causa.</p></ng-template>
+    </section>
+  </ng-container>
+</ng-container>
+
+<!-- ======================= CÓDIGOS ======================= -->
+<ng-container *ngIf="sub === 'codigos' && codigos as c">
+  <p class="detalle-aviso">{{ c.nota }} El significado de cada código viene de lo observado en los propios logs (columna «fuente»), no de documentación externa.</p>
+  <p class="aviso-chip" *ngIf="c.aviso">{{ c.aviso }}</p>
+  <div class="barra-acciones">
+    <input type="text" class="buscar" placeholder="Buscar código o significado…" [(ngModel)]="filtroCodigo" aria-label="Buscar código">
+    <label class="check-label"><input type="checkbox" [(ngModel)]="verDiccionario"> Ver el diccionario completo</label>
+  </div>
+
+  <div class="panel-diagrama" *ngIf="!verDiccionario">
+    <div class="panel-diagrama__cabecera"><div><h2>Códigos vistos en esta muestra</h2><p class="sub" *ngIf="c.muestra">{{ c.muestra.clientes }} clientes · {{ c.muestra.operaciones }} operaciones.</p></div></div>
+    <div class="vacio" *ngIf="!vistosFiltrados.length"><p>No hay códigos que coincidan.</p></div>
+    <div class="tabla-scroll" *ngIf="vistosFiltrados.length">
+      <table>
+        <thead><tr><th>Tipo</th><th>Código</th><th>Clase</th><th>Significado</th><th class="num">Veces</th><th>Texto del banco que lo acompaña</th></tr></thead>
+        <tbody>
+          <tr *ngFor="let v of vistosFiltrados">
+            <td>{{ v.tipo }}</td><td class="mono"><strong>{{ v.codigo }}</strong></td>
+            <td><span class="pill" [ngClass]="claseCategoria(v.categoria)">{{ textoCategoria(v.categoria) }}</span></td>
+            <td class="detalle-mensaje">{{ v.significado }}<small>{{ v.fuente }}</small></td>
+            <td class="num">{{ v.veces | number }}</td>
+            <td class="detalle-mensaje"><span *ngFor="let d of v.descripciones; let ult = last">«{{ d.texto }}» ({{ d.n }}){{ ult ? '' : ' · ' }}</span></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="panel-diagrama" *ngIf="verDiccionario">
+    <div class="panel-diagrama__cabecera"><div><h2>Diccionario de códigos</h2><p class="sub">{{ diccionarioFiltrado.length }} entradas.</p></div></div>
+    <div class="tabla-scroll">
+      <table>
+        <thead><tr><th>Tipo</th><th>Código</th><th>Clase</th><th>Significado</th><th>Fuente</th></tr></thead>
+        <tbody>
+          <tr *ngFor="let d of diccionarioFiltrado">
+            <td>{{ d.tipo }}</td><td class="mono"><strong>{{ d.codigo }}</strong></td>
+            <td><span class="pill" [ngClass]="claseCategoria(d.categoria)">{{ textoCategoria(d.categoria) }}</span></td>
+            <td class="detalle-mensaje">{{ d.significado }}</td><td class="detalle-mensaje">{{ d.fuente }}</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</ng-container>

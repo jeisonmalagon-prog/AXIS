@@ -1,0 +1,5 @@
+@use './azure-base' as *;
+@include base;
+.meta { display: flex; flex-wrap: wrap; gap: 6px 12px; align-items: center; margin-top: 6px; font-size: 12px; color: $brand-gray; }
+.archivo { cursor: pointer; .ruta { font-family: 'JetBrains Mono', monospace; font-size: 12px; overflow-wrap: anywhere; } .espacio { flex: 1; } }
+.comentario { font-size: 13px; padding: 6px 0; border-top: 1px solid $border-light; &:first-of-type { border-top: none; } .texto-c { white-space: pre-wrap; overflow-wrap: anywhere; margin-top: 2px; line-height: 1.5; } }

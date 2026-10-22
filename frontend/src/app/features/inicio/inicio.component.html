@@ -1,0 +1,130 @@
+<div class="inicio">
+  <header class="cab">
+    <div>
+      <h1>{{ saludo }}<span *ngIf="nombre">, {{ nombre }}</span></h1>
+      <p class="fecha">{{ fechaTexto }} · métricas en vivo del aplicativo</p>
+    </div>
+    <div class="cab-acc">
+      <button type="button" class="btn btn-ghost" (click)="actualizarTodo()" title="Actualizar todos los cuadros ahora">Actualizar</button>
+      <button type="button" class="btn btn-purple" *ngIf="esAdmin" (click)="mostrarConfig = true" title="Elegir qué métricas ven los usuarios">Personalizar</button>
+    </div>
+  </header>
+
+  <div class="cargando" *ngIf="cargandoLista"><div class="spinner"></div><span>Cargando tu pantalla de inicio…</span></div>
+  <div class="error-state" *ngIf="errorLista">{{ errorLista }} <button type="button" class="btn-mini" (click)="cargarLista()">Reintentar</button></div>
+
+  <div class="aviso-aviso aviso-prefs" *ngIf="avisoPrefs">{{ avisoPrefs }} <button type="button" class="btn-mini" (click)="avisoPrefs = ''">Entendido</button></div>
+
+  <div class="vacio-inicio" *ngIf="!cargandoLista && !errorLista && !widgets.length">
+    <h2>Aún no hay métricas para mostrar</h2>
+    <p *ngIf="!esAdmin">El administrador no ha habilitado cuadros para tus módulos. Usa el menú lateral para navegar.</p>
+    <p *ngIf="esAdmin">Habilita al menos un cuadro con el botón «Personalizar».</p>
+  </div>
+
+  <div class="grilla-w" axMasonry *ngIf="widgets.length">
+    <section *ngFor="let w of widgets; trackBy: trackWidget" class="w tarjeta" [style.--span]="w.ancho" [attr.aria-label]="w.titulo">
+      <div class="tarjeta-cab">
+        <h2>{{ w.titulo }}</h2>
+        <span class="tarjeta-sub">
+          <ng-container *ngIf="!w.propio">
+            <span class="vivo" *ngIf="!est(w.id).error && est(w.id).ts" title="Se actualiza solo cada {{ w.intervaloSeg }} s"></span>
+            {{ haceCuanto(est(w.id).ts) }}
+          </ng-container>
+          <a class="ext" [routerLink]="ruta(w.id)">Ver detalle →</a>
+        </span>
+      </div>
+
+      <div class="aviso-aviso" *ngIf="est(w.id).error">{{ est(w.id).error }}</div>
+      <div class="cargando chico" *ngIf="est(w.id).cargando"><div class="spinner"></div></div>
+
+      <app-inicio-f5-vivo *ngIf="w.id === 'f5_vivo'" [opciones]="opcionesDe('f5_vivo')" (opcionesChange)="guardarOpciones('f5_vivo', $event)" (restablecer)="restablecerOpciones('f5_vivo')"></app-inicio-f5-vivo>
+
+      <ng-container *ngIf="!est(w.id).cargando && w.id !== 'f5_vivo'">
+        <ng-container [ngSwitch]="w.id">
+
+          <!-- PORTAINER y F5: los cuadros con filtros por persona viven en sus propios componentes -->
+          <ng-container *ngSwitchCase="'portainer_flota'"><app-inicio-portainer [id]="w.id" [datos]="est(w.id).datos" [opciones]="opcionesDe(w.id)" (opcionesChange)="guardarOpciones(w.id, $event)" (restablecer)="restablecerOpciones(w.id)"></app-inicio-portainer></ng-container>
+          <ng-container *ngSwitchCase="'portainer_problemas'"><app-inicio-portainer [id]="w.id" [datos]="est(w.id).datos" [opciones]="opcionesDe(w.id)" (opcionesChange)="guardarOpciones(w.id, $event)" (restablecer)="restablecerOpciones(w.id)"></app-inicio-portainer></ng-container>
+          <ng-container *ngSwitchCase="'portainer_consumo'"><app-inicio-portainer [id]="w.id" [datos]="est(w.id).datos" [opciones]="opcionesDe(w.id)" (opcionesChange)="guardarOpciones(w.id, $event)" (restablecer)="restablecerOpciones(w.id)"></app-inicio-portainer></ng-container>
+          <ng-container *ngSwitchCase="'portainer_tendencia'"><app-inicio-portainer [id]="w.id" [datos]="est(w.id).datos" [opciones]="opcionesDe(w.id)" (opcionesChange)="guardarOpciones(w.id, $event)" (restablecer)="restablecerOpciones(w.id)"></app-inicio-portainer></ng-container>
+          <ng-container *ngSwitchCase="'f5_trafico'"><app-inicio-f5 [id]="w.id" [datos]="est(w.id).datos" [opciones]="opcionesDe(w.id)" (opcionesChange)="guardarOpciones(w.id, $event)" (restablecer)="restablecerOpciones(w.id)"></app-inicio-f5></ng-container>
+          <ng-container *ngSwitchCase="'f5_salud'"><app-inicio-f5 [id]="w.id" [datos]="est(w.id).datos" [opciones]="opcionesDe(w.id)" (opcionesChange)="guardarOpciones(w.id, $event)" (restablecer)="restablecerOpciones(w.id)"></app-inicio-f5></ng-container>
+
+          <!-- CERTIFICADOS -->
+          <ng-container *ngSwitchCase="'certificados'">
+            <ng-container *ngIf="certs as d">
+              <div class="mini-kpis">
+                <div class="mk"><span class="et">Vigentes</span><span class="v">{{ n(d.resumen.vigentes) }}</span></div>
+                <div class="mk" [class.aviso]="d.resumen.porVencer > 0"><span class="et">Por vencer (30 d)</span><span class="v">{{ n(d.resumen.porVencer) }}</span></div>
+                <div class="mk" [class.alerta]="d.resumen.vencidos > 0"><span class="et">Vencidos</span><span class="v">{{ n(d.resumen.vencidos) }}</span></div>
+              </div>
+              <ul class="lista-compacta" *ngIf="d.proximos.length">
+                <li *ngFor="let c of d.proximos">
+                  <span class="chip" [class.est-mal]="c.dias < 0" [class.est-aviso]="c.dias >= 0 && c.dias <= 30" [class.est-nulo]="c.dias > 30">{{ diasTexto(c.dias) }}</span>
+                  <span class="nombre" [title]="c.nombreComun || ''">{{ c.aplicacion }}<small>{{ c.servidor }} · {{ fecha(c.fechaFin) }}</small></span>
+                </li>
+              </ul>
+              <p class="ok-linea" *ngIf="!d.proximos.length">Ningún certificado vence en los próximos 60 días.</p>
+            </ng-container>
+          </ng-container>
+
+          <!-- PASOS A PRODUCCIÓN -->
+          <ng-container *ngSwitchCase="'pasos'">
+            <ng-container *ngIf="pasos as d">
+              <div class="mini-kpis">
+                <div class="mk"><span class="et">Próximos 7 días</span><span class="v">{{ n(d.proximos7Dias) }}</span></div>
+                <div class="mk" *ngFor="let e of estadosPasos.slice(1, 3)"><span class="et">{{ e.etiqueta }} (30 d)</span><span class="v">{{ n(e.valor) }}</span></div>
+              </div>
+              <ul class="lista-compacta" *ngIf="d.proximos.length">
+                <li *ngFor="let p of d.proximos">
+                  <span class="chip est-info">{{ fecha(p.fecha) }}</span>
+                  <span class="nombre" [title]="p.titulo">{{ p.titulo }}<small>{{ p.rfc || 'Sin RFC' }}<ng-container *ngIf="p.entorno"> · {{ p.entorno }}</ng-container></small></span>
+                </li>
+              </ul>
+              <p class="ok-linea" *ngIf="!d.proximos.length">No hay pasos programados.</p>
+              <p class="nota">Rollback: <b>{{ estadosPasos[3].valor }}</b> · Cancelados: <b>{{ estadosPasos[4].valor }}</b> · Reagendados: <b>{{ estadosPasos[2].valor }}</b> (últimos 30 días).</p>
+            </ng-container>
+          </ng-container>
+
+          <!-- TAREAS -->
+          <ng-container *ngSwitchCase="'tareas'">
+            <ng-container *ngIf="tareas as d">
+              <div class="mini-kpis">
+                <div class="mk" *ngFor="let e of estadosTareas"><span class="et">{{ e.etiqueta }}</span><span class="v">{{ n(e.valor) }}</span></div>
+                <div class="mk" [class.alerta]="d.vencidas > 0"><span class="et">Vencidas</span><span class="v">{{ n(d.vencidas) }}</span></div>
+              </div>
+              <ul class="lista-compacta" *ngIf="d.proximas.length">
+                <li *ngFor="let t of d.proximas">
+                  <span class="chip" [ngClass]="clasePrioridad(t.prioridad)">{{ t.prioridad || 'Normal' }}</span>
+                  <span class="nombre" [title]="t.titulo">{{ t.titulo }}<small>{{ t.fechaLimite ? 'Límite ' + fecha(t.fechaLimite) : 'Sin fecha límite' }}</small></span>
+                </li>
+              </ul>
+              <p class="ok-linea" *ngIf="!d.proximas.length">No tienes tareas pendientes.</p>
+            </ng-container>
+          </ng-container>
+
+          <!-- INVENTARIO -->
+          <ng-container *ngSwitchCase="'inventario'">
+            <ng-container *ngIf="inventario as d">
+              <div class="mini-kpis">
+                <div class="mk"><span class="et">Servidores</span><span class="v">{{ n(d.servidoresActivos ?? d.servidores) }}</span></div>
+                <div class="mk"><span class="et">Aplicaciones</span><span class="v">{{ n(d.aplicaciones) }}</span></div>
+                <div class="mk"><span class="et">Certificados</span><span class="v">{{ n(d.certificados) }}</span></div>
+              </div>
+              <ul class="filas" *ngIf="d.porSo.length">
+                <li *ngFor="let s of d.porSo">
+                  <span class="nombre">{{ s.nombre }}</span>
+                  <span class="barra-mini"><i [style.width.%]="pct(s.total, d.servidoresActivos ?? d.servidores ?? 0)"></i></span>
+                  <span class="val">{{ s.total }}</span>
+                </li>
+              </ul>
+            </ng-container>
+          </ng-container>
+
+        </ng-container>
+      </ng-container>
+    </section>
+  </div>
+</div>
+
+<app-inicio-config *ngIf="mostrarConfig" (cerrar)="alCerrarConfig($event)"></app-inicio-config>

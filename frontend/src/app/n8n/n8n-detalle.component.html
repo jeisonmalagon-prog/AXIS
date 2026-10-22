@@ -1,0 +1,126 @@
+<div class="modal-overlay" (click)="cerrar.emit()">
+  <div class="modal-card modal-detalle" (click)="$event.stopPropagation()" role="dialog" aria-modal="true" [attr.aria-label]="'Detalle del flujo ' + f.nombre">
+    <div class="modal-header">
+      <div class="cab-titulo">
+        <h2 [title]="f.nombre">{{ f.nombre }}</h2>
+        <div class="cab-meta">
+          <span class="mono">ID {{ f.id }}</span>
+          <span class="status-badge" [ngClass]="f.activo ? 'status-active' : 'status-inactive'">{{ f.activo ? 'Activo' : 'Detenido' }}</span>
+          <span class="chip chip-marca" *ngIf="f.cuentaNombre" [title]="'Propietario en n8n'">{{ f.cuentaNombre }}</span>
+          <span class="chip" *ngFor="let t of f.etiquetas">{{ t }}</span>
+        </div>
+      </div>
+      <button class="close-btn" (click)="cerrar.emit()" aria-label="Cerrar">✕</button>
+    </div>
+
+    <!-- Motivos de atención -->
+    <div class="motivos" *ngIf="f.motivos?.length">
+      <span class="chip" *ngFor="let m of f.motivos" [ngClass]="'chip-' + m.severidad">{{ m.texto }}</span>
+    </div>
+
+    <!-- Métricas (ya vienen en el listado: se ven al instante) -->
+    <div class="kpis">
+      <div class="kpi"><span class="kpi-et">Ejecuciones</span><span class="kpi-v">{{ fmtNum(f.totalEjecuciones) }}</span><span class="kpi-s">últimos {{ dias === 1 ? '24 h' : dias + ' días' }}</span></div>
+      <div class="kpi"><span class="kpi-et">Tasa de éxito</span><span class="kpi-v" [ngClass]="'t-' + claseTasa(f.tasaExito)">{{ fmtPct(f.tasaExito) }}</span><span class="kpi-s">{{ fmtNum(f.exitosas) }} ok · {{ fmtNum(f.fallidas) }} fallos</span></div>
+      <div class="kpi"><span class="kpi-et">Duración prom.</span><span class="kpi-v">{{ fmtDuracion(f.duracion.prom) }}</span><span class="kpi-s">mediana {{ fmtDuracion(f.duracion.p50) }}</span></div>
+      <div class="kpi"><span class="kpi-et">P95 / máxima</span><span class="kpi-v">{{ fmtDuracion(f.duracion.p95) }}</span><span class="kpi-s">máx. {{ fmtDuracion(f.duracion.max) }}</span></div>
+      <div class="kpi"><span class="kpi-et">Racha de fallos</span><span class="kpi-v" [class.t-mal]="f.racha >= 3">{{ f.racha }}</span><span class="kpi-s">seguidos al final</span></div>
+      <div class="kpi"><span class="kpi-et">Última ejecución</span><span class="kpi-v kpi-v-chico">{{ fmtRelativo(f.ultimaEjecucion) }}</span><span class="kpi-s"><span class="est" [ngClass]="'est-' + claseEstado(f.ultimoEstado)">{{ etiquetaEstado(f.ultimoEstado) }}</span></span></div>
+    </div>
+
+    <div class="cargando" *ngIf="cargando"><div class="spinner"></div><p>Leyendo el detalle en n8n…</p></div>
+    <div class="aviso-cuentas" *ngIf="error">{{ error }}</div>
+
+    <ng-container *ngIf="d">
+      <div class="aviso-aviso" *ngIf="d.truncado">El volumen de ejecuciones superó el límite de análisis: las cifras pueden estar incompletas.</div>
+
+      <div class="grilla-2">
+        <section class="tarjeta">
+          <div class="tarjeta-cab"><h2>Ejecuciones {{ unidadSerie }}</h2><span class="tarjeta-sub">éxito / fallo</span></div>
+          <app-stacked-bar-chart [etiquetas]="etiquetasSerie" [series]="seriesSerie" [alto]="150" unidad="ejecuciones"></app-stacked-bar-chart>
+        </section>
+        <section class="tarjeta">
+          <div class="tarjeta-cab"><h2>Hora del día</h2><span class="tarjeta-sub">cuándo se ejecuta</span></div>
+          <app-stacked-bar-chart [etiquetas]="etiquetasHora" [series]="seriesHora" [alto]="150" unidad="ejecuciones"></app-stacked-bar-chart>
+        </section>
+      </div>
+
+      <!-- Errores recientes -->
+      <section class="tarjeta" *ngIf="d.errores.length">
+        <div class="tarjeta-cab"><h2>Últimos fallos</h2><span class="tarjeta-sub">nodo y mensaje de n8n</span></div>
+        <ul class="errores">
+          <li *ngFor="let e of d.errores">
+            <div class="err-cab">
+              <span class="est est-mal">{{ etiquetaEstado(e.estado) }}</span>
+              <span class="err-fecha">{{ fmtHora(e.fecha) }} · <span class="mono">#{{ e.ejecucionId }}</span></span>
+              <span class="chip chip-baja" *ngIf="e.nodo" title="Nodo donde falló">{{ e.nodo }}</span>
+            </div>
+            <p class="err-msg">{{ e.mensaje || 'n8n no entregó el mensaje de error.' }}</p>
+          </li>
+        </ul>
+      </section>
+
+      <div class="grilla-2">
+        <section class="tarjeta">
+          <div class="tarjeta-cab"><h2>Ficha del flujo</h2></div>
+          <dl class="ficha">
+            <dt>Creado</dt><dd>{{ fmtFecha(f.creado) }}</dd>
+            <dt>Última modificación</dt><dd>{{ fmtFecha(f.actualizado) }}</dd>
+            <dt>Se dispara por</dt>
+            <dd><ng-container *ngIf="f.disparadores?.length; else sinDisp"><span class="chip chip-marca" *ngFor="let t of f.disparadores">{{ t }}</span></ng-container><ng-template #sinDisp>—</ng-template></dd>
+            <dt>Nodos</dt><dd>{{ f.nodos ?? '—' }}<ng-container *ngIf="nodosApagados"> ({{ nodosApagados }} desactivados)</ng-container></dd>
+            <dt>Última exitosa</dt><dd>{{ fmtFecha(f.ultimaExitosa) }}</dd>
+            <dt>Último fallo</dt><dd>{{ fmtFecha(f.ultimaFallida) }}</dd>
+            <ng-container *ngIf="esAdmin && f.usuariosConAcceso !== undefined">
+              <dt>Usuarios con acceso</dt>
+              <dd><span class="chip" [ngClass]="f.usuariosConAcceso ? 'chip-ok' : 'chip-media'">{{ f.usuariosConAcceso ? f.usuariosConAcceso + ' usuario(s)' : 'Sin asignar a nadie' }}</span></dd>
+            </ng-container>
+          </dl>
+        </section>
+        <section class="tarjeta">
+          <div class="tarjeta-cab"><h2>Modo de ejecución</h2><span class="tarjeta-sub">quién las inicia</span></div>
+          <app-bar-list [items]="modos" colorVar="var(--ax-chart-series-1)"></app-bar-list>
+          <p class="vacio" *ngIf="!modos.length">Sin ejecuciones en el periodo.</p>
+        </section>
+      </div>
+
+      <!-- Estructura -->
+      <section class="tarjeta" *ngIf="d.nodos.length">
+        <div class="tarjeta-cab">
+          <h2>Estructura</h2>
+          <button type="button" class="btn-mini" (click)="verNodos = !verNodos">{{ verNodos ? 'Ocultar nodos' : 'Ver los ' + d.nodos.length + ' nodos' }}</button>
+        </div>
+        <app-bar-list [items]="tipos" colorVar="var(--ax-chart-series-2)"></app-bar-list>
+        <p class="tarjeta-sub nota">Solo se muestran nombres y tipos de nodo; los parámetros y credenciales nunca salen de n8n.</p>
+        <div class="nodos" *ngIf="verNodos">
+          <span class="chip" *ngFor="let n of d.nodos" [class.chip-baja]="n.deshabilitado" [title]="n.tipo">{{ n.nombre }}<ng-container *ngIf="n.deshabilitado"> (off)</ng-container></span>
+        </div>
+      </section>
+
+      <!-- Ejecuciones recientes -->
+      <section class="tarjeta">
+        <div class="tarjeta-cab"><h2>Ejecuciones recientes</h2><span class="tarjeta-sub">hasta {{ d.ejecuciones.length }}</span></div>
+        <div class="tabla-wrap" *ngIf="d.ejecuciones.length; else sinEj">
+          <table class="tabla">
+            <thead><tr><th>Inicio</th><th>Estado</th><th>Modo</th><th class="num">Duración</th><th class="num">ID</th></tr></thead>
+            <tbody>
+              <tr *ngFor="let e of d.ejecuciones; trackBy: trackEj">
+                <td>{{ fmtHora(e.inicio) }}</td>
+                <td><span class="est" [ngClass]="'est-' + claseEstado(e.estado)">{{ etiquetaEstado(e.estado) }}</span></td>
+                <td>{{ e.modo }}</td>
+                <td class="num">{{ fmtDuracion(e.duracion) }}</td>
+                <td class="num mono">{{ e.id }}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <ng-template #sinEj><p class="vacio">Sin ejecuciones en el periodo.</p></ng-template>
+      </section>
+    </ng-container>
+
+    <div class="modal-footer">
+      <a *ngIf="puedeEditar" [href]="n8nBaseUrl + '/workflow/' + f.id" target="_blank" rel="noopener" class="btn btn-purple">Abrir editor en n8n ↗</a>
+      <button type="button" class="btn btn-ghost" (click)="cerrar.emit()">Cerrar</button>
+    </div>
+  </div>
+</div>

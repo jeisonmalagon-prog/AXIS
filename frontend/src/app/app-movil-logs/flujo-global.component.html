@@ -1,0 +1,322 @@
+<!-- CONTROLES -->
+<div class="filtros-panel">
+  <div class="filtros-grid">
+    <div class="campo">
+      <span class="campo__etiqueta">Datos</span>
+      <div class="rango-selector" role="group" aria-label="Origen de los datos">
+        <button type="button" class="rango-boton" [class.activo]="!modoHistorico" (click)="cambiarModo(false)">Ahora</button>
+        <button type="button" class="rango-boton" [class.activo]="modoHistorico" (click)="cambiarModo(true)">Otra fecha</button>
+      </div>
+    </div>
+
+    <div class="campo" *ngIf="modoHistorico">
+      <label for="fgFecha">Fecha</label>
+      <input id="fgFecha" type="date" [(ngModel)]="fechaHistorica" [max]="fechaMaxima">
+    </div>
+    <div class="campo" *ngIf="modoHistorico">
+      <label for="fgHora">Desde las</label>
+      <select id="fgHora" [(ngModel)]="horaHistorica">
+        <option *ngFor="let h of horas" [ngValue]="h">{{ h < 10 ? '0' + h : h }}:00</option>
+      </select>
+    </div>
+
+    <div class="campo">
+      <span class="campo__etiqueta">{{ modoHistorico ? 'Duración de la muestra' : 'Últimos' }}</span>
+      <div class="rango-selector" role="group" aria-label="Ventana de tiempo">
+        <button *ngFor="let v of ventanas" type="button" class="rango-boton" [class.activo]="ventanaMin === v" (click)="elegirVentana(v)">{{ v }} min</button>
+      </div>
+    </div>
+
+    <div class="campo campo--accion">
+      <button type="button" class="btn-primario" [disabled]="cargando" (click)="consultar(true)">
+        {{ cargando ? 'Calculando…' : (modoHistorico ? 'Ver mapa' : 'Actualizar') }}
+      </button>
+    </div>
+  </div>
+</div>
+
+<p class="detalle-aviso">
+  Este análisis se arma sobre una <strong>muestra</strong> de los registros (no el día completo) para no sobrecargar la base de logs.
+  Muestra cómo se mueven los clientes entre servicios, no entre pantallas. No incluye documentos ni contenido de las respuestas.
+</p>
+
+<div class="error-banner" *ngIf="error">{{ error }}</div>
+<div class="carga-inicial" *ngIf="cargando && !respuesta">Calculando el mapa…</div>
+
+<div class="vacio" *ngIf="!cargando && respuesta && !respuesta.nodos.length">
+  <p *ngIf="respuesta.tablaFaltante">No existe la tabla <span class="mono">{{ respuesta.tabla }}</span> en LogApp: no hay datos archivados para esa fecha.</p>
+  <p *ngIf="!respuesta.tablaFaltante">No hay actividad registrada en esa ventana de tiempo.</p>
+</div>
+
+<ng-container *ngIf="respuesta && respuesta.nodos.length">
+  <div class="resumen-barra">
+    <span>
+      <ng-container *ngIf="respuesta.muestra.desde && respuesta.muestra.hasta">
+        Muestra de {{ horaCorta(respuesta.muestra.desde) }} a {{ horaCorta(respuesta.muestra.hasta) }} ({{ minutosMuestra() }} min)
+      </ng-container>
+      <ng-container *ngIf="respuesta.fecha"> · {{ respuesta.fecha }}</ng-container>
+    </span>
+    <span class="aviso-chip" *ngIf="respuesta.muestra.truncada">
+      Hay más actividad que la que cabe en la muestra: se acotó a {{ respuesta.muestra.topeFilas | number }} registros ({{ respuesta.modo === 'reciente' ? 'los más recientes' : 'los primeros de la ventana' }}).
+    </span>
+    <span class="aviso-chip aviso-chip--neutro" *ngIf="respuesta.desdeCache">Calculado hace {{ formatearDuracion(respuesta.antiguedadMs) }}</span>
+    <span class="aviso-chip" *ngIf="cargando">Actualizando…</span>
+  </div>
+
+  <!-- KPIs -->
+  <div class="kpis-flujo">
+    <div class="kpi-flujo"><span class="kpi-flujo__etiqueta">Clientes</span><span class="kpi-flujo__valor">{{ respuesta.muestra.clientes | number }}</span><span class="kpi-flujo__pie">distintos en la muestra</span></div>
+    <div class="kpi-flujo"><span class="kpi-flujo__etiqueta">Recorridos</span><span class="kpi-flujo__valor">{{ respuesta.muestra.recorridos | number }}</span><span class="kpi-flujo__pie">{{ respuesta.kpis.llamadasPorRecorrido | number:'1.1-1' }} llamadas c/u</span></div>
+    <div class="kpi-flujo"><span class="kpi-flujo__etiqueta">Llamadas</span><span class="kpi-flujo__valor">{{ respuesta.muestra.llamadas | number }}</span><span class="kpi-flujo__pie">{{ respuesta.kpis.serviciosDistintos }} servicios distintos</span></div>
+    <div class="kpi-flujo" [class.kpi-flujo--ok]="respuesta.kpis.tasaError < 0.02" [class.kpi-flujo--warn]="respuesta.kpis.tasaError >= 0.02 && respuesta.kpis.tasaError < 0.1" [class.kpi-flujo--error]="respuesta.kpis.tasaError >= 0.1">
+      <span class="kpi-flujo__etiqueta">Llamadas con error</span><span class="kpi-flujo__valor">{{ pct(respuesta.kpis.tasaError) }}</span>
+      <span class="kpi-flujo__pie">{{ respuesta.kpis.errores | number }} llamadas · {{ respuesta.kpis.recorridosConError | number }} recorridos</span>
+    </div>
+    <div class="kpi-flujo"><span class="kpi-flujo__etiqueta">Respuesta típica</span><span class="kpi-flujo__valor">{{ formatearDuracion(respuesta.kpis.llamadaMedianaMs) }}</span><span class="kpi-flujo__pie">90 % responde en {{ formatearDuracion(respuesta.kpis.llamadaP90Ms) }}</span></div>
+    <div class="kpi-flujo"><span class="kpi-flujo__etiqueta">Duración de la sesión</span><span class="kpi-flujo__valor">{{ formatearDuracion(respuesta.kpis.recorridoMedianaMs) }}</span><span class="kpi-flujo__pie">mediana · 90 % hasta {{ formatearDuracion(respuesta.kpis.recorridoP90Ms) }}</span></div>
+    <div class="kpi-flujo">
+      <span class="kpi-flujo__etiqueta">Cierran sesión</span>
+      <span class="kpi-flujo__valor">{{ pct(respuesta.muestra.recorridos ? respuesta.kpis.cierreNormal / respuesta.muestra.recorridos : 0) }}</span>
+      <span class="kpi-flujo__pie">{{ respuesta.kpis.sinCierre | number }} sin cierre · {{ respuesta.kpis.cierreError | number }} con error</span>
+    </div>
+  </div>
+
+  <div class="subpestanas" role="tablist" aria-label="Vistas del análisis global">
+    <button *ngFor="let v of vistas" type="button" role="tab" class="subpestana" [class.activa]="vista === v.valor" [attr.aria-selected]="vista === v.valor" (click)="cambiarVista(v.valor)">{{ v.etiqueta }}</button>
+  </div>
+
+  <!-- ============================ MAPA ============================ -->
+  <section class="panel-diagrama" *ngIf="vista === 'mapa'">
+    <div class="panel-diagrama__cabecera">
+      <div>
+        <h2>Mapa de servicios por etapas</h2>
+        <p class="sub">Se lee de izquierda a derecha: cada columna es una etapa típica de la sesión. El grosor de la línea es cuántas veces los clientes siguieron ese camino. Haz clic en un servicio para ver de dónde viene y a dónde va. Si hay más etapas, desplázate hacia la derecha o usa «Ajustar».</p>
+      </div>
+      <div class="herramientas">
+        <label class="control-detalle">
+          Detalle
+          <input type="range" min="0" max="25" step="1" [(ngModel)]="detallePorcentaje" (change)="cambiarDetalle()" aria-label="Nivel de detalle de las transiciones">
+          <span class="mono">{{ detallePorcentaje === 0 ? 'todas' : '≥ ' + detallePorcentaje + ' %' }}</span>
+        </label>
+        <div class="zoom">
+          <button type="button" (click)="alejar()" title="Alejar" aria-label="Alejar">−</button>
+          <button type="button" (click)="ajustar()" title="Ajustar al ancho">Ajustar</button>
+          <button type="button" (click)="restablecer()" title="Tamaño real">100%</button>
+          <button type="button" (click)="acercar()" title="Acercar" aria-label="Acercar">+</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="leyenda" aria-hidden="true">
+      <span><i class="punto punto--ok"></i> ✓ Fallos &lt; 2 %</span>
+      <span><i class="punto punto--warn"></i> ! 2 % a 10 %</span>
+      <span><i class="punto punto--error"></i> ✕ Más de 10 %</span>
+      <span><i class="marca marca--entra"></i> ▶ Clientes que empiezan aquí</span>
+      <span><i class="marca marca--sale"></i> ■ Clientes que terminan aquí</span>
+      <span>↻ Reintentos seguidos</span>
+      <span class="aviso-chip aviso-chip--neutro" *ngIf="modelo && modelo.retornosOcultos > 0">{{ modelo.retornosOcultos }} transición(es) que vuelven atrás no se dibujan; salen en el detalle de cada servicio</span>
+      <span class="aviso-chip aviso-chip--neutro" *ngIf="respuesta.nodosOmitidos > 0">{{ respuesta.nodosOmitidos }} servicio(s) poco usados no se muestran</span>
+    </div>
+
+    <div class="lienzo" #lienzo *ngIf="modelo">
+      <div class="mapa" [style.width.px]="anchoLienzo" [style.height.px]="altoLienzo">
+        <div class="mapa__escala" [style.width.px]="modelo.ancho" [style.height.px]="modelo.alto" [style.transform]="'scale(' + zoom + ')'">
+          <!-- Cabeceras de etapa -->
+          <div class="columna-titulo" *ngFor="let c of modelo.columnas" [style.left.px]="c.x" [style.width.px]="c.w">
+            <strong>{{ c.etiqueta }}</strong><span>{{ c.cantidad }} servicio(s)</span>
+          </div>
+
+          <svg class="mapa__aristas" [attr.width]="modelo.ancho" [attr.height]="modelo.alto" role="img" aria-label="Transiciones entre servicios">
+            <defs>
+              <marker id="flecha-glob" viewBox="0 0 10 10" refX="8" refY="5" markerUnits="userSpaceOnUse" markerWidth="13" markerHeight="13" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" class="flecha"></path></marker>
+              <marker id="flecha-glob-activa" viewBox="0 0 10 10" refX="8" refY="5" markerUnits="userSpaceOnUse" markerWidth="13" markerHeight="13" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" class="flecha flecha--activa"></path></marker>
+              <marker id="flecha-glob-alerta" viewBox="0 0 10 10" refX="8" refY="5" markerUnits="userSpaceOnUse" markerWidth="13" markerHeight="13" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" class="flecha flecha--alerta"></path></marker>
+            </defs>
+            <g *ngFor="let a of modelo.aristas; trackBy: trackArista">
+              <path class="arista" [class.arista--aviso]="a.nivel === 'aviso'" [class.arista--critica]="a.nivel === 'critico'" [class.arista--resaltada]="aristasResaltadas.has(a.id)" [class.arista--atenuada]="nodoActivo && !aristasResaltadas.has(a.id)"
+                    [attr.d]="a.d" [attr.stroke-width]="a.grosor"
+                    [attr.marker-end]="aristasResaltadas.has(a.id) ? 'url(#flecha-glob-activa)' : (a.nivel === 'critico' ? 'url(#flecha-glob-alerta)' : 'url(#flecha-glob)')">
+                <title>{{ a.n | number }} veces · espera promedio {{ formatearDuracion(a.esperaPromMs) }}{{ a.fallosDestino ? ' · ' + a.fallosDestino + ' con error' : '' }}</title>
+              </path>
+              <text *ngIf="a.mostrarEtiqueta || aristasResaltadas.has(a.id)" class="arista-etiqueta" [class.arista-etiqueta--activa]="aristasResaltadas.has(a.id)" [attr.x]="a.lx" [attr.y]="a.ly" text-anchor="middle">{{ a.n | number }}</text>
+            </g>
+          </svg>
+
+          <!-- Tarjetas de servicio -->
+          <div *ngFor="let n of modelo.nodos; trackBy: trackNodo" class="tarjeta" [class.tarjeta--aviso]="n.nivel === 'aviso'" [class.tarjeta--critico]="n.nivel === 'critico'"
+               [class.activa]="nodoActivo === n" [class.atenuada]="esAtenuado(n)"
+               [style.left.px]="n.x" [style.top.px]="n.y" [style.width.px]="n.w" [style.height.px]="n.h"
+               role="button" tabindex="0" [attr.aria-label]="n.servicio + ', ' + n.total + ' llamadas, ' + porcentajeFallo(n) + ' de fallos'"
+               (click)="elegirNodo(n)" (keydown.enter)="elegirNodo(n)" [title]="n.servicio + ' (' + n.metodo + ')'">
+            <div class="tarjeta__fila">
+              <span class="tarjeta__nombre">{{ n.servicio }}</span>
+              <span class="tarjeta__estado" [class]="'nivel-' + n.nivel" aria-hidden="true">{{ n.nivel === 'ok' ? '✓' : (n.nivel === 'aviso' ? '!' : '✕') }}</span>
+            </div>
+            <div class="tarjeta__metodo mono">{{ n.metodo }}</div>
+            <div class="tarjeta__volumen"><i [style.width.%]="n.volumen * 100"></i></div>
+            <div class="tarjeta__datos">
+              <span><b>{{ compacto(n.total) }}</b> llamadas</span>
+              <span class="dato-fallo"><b>{{ porcentajeFallo(n) }}</b> fallos</span>
+              <span><b>{{ formatearDuracion(n.duracionMedianaMs) }}</b></span>
+            </div>
+            <div class="tarjeta__marcas">
+              <span class="ins ins--entra" *ngIf="n.entradas > 0" title="Recorridos que empiezan aquí">▶ {{ compacto(n.entradas) }}</span>
+              <span class="ins ins--sale" *ngIf="n.salidas > 0" title="Recorridos que terminan aquí">■ {{ compacto(n.salidas) }}</span>
+              <span class="ins ins--reintento" *ngIf="n.repeticiones > 0" title="Reintentos seguidos">↻ {{ compacto(n.repeticiones) }}</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- DETALLE DEL SERVICIO -->
+    <div class="detalle-nodo" *ngIf="nodoActivo">
+      <div class="detalle-nodo__titulo">
+        <strong>{{ nodoActivo.servicio }}</strong>
+        <span class="mono">{{ nodoActivo.metodo }}</span>
+        <button type="button" class="cerrar" (click)="limpiarSeleccion()" aria-label="Cerrar detalle">×</button>
+      </div>
+      <div class="datos">
+        <div><span>Llamadas</span><strong>{{ nodoActivo.total | number }}</strong></div>
+        <div><span>Clientes distintos</span><strong>{{ nodoActivo.clientes | number }}</strong></div>
+        <div><span>Con error</span><strong>{{ nodoActivo.fallos | number }} ({{ porcentajeFallo(nodoActivo) }})</strong></div>
+        <div><span>Sin respuesta</span><strong>{{ nodoActivo.sinRespuesta | number }}</strong></div>
+        <div><span>Reintentos seguidos</span><strong>{{ nodoActivo.repeticiones | number }}</strong></div>
+        <div><span>Tiempo típico</span><strong>{{ formatearDuracion(nodoActivo.duracionMedianaMs) }}</strong></div>
+        <div><span>El 90 % responde en</span><strong>{{ formatearDuracion(nodoActivo.duracionP90Ms) }}</strong></div>
+        <div><span>Recorridos que empiezan aquí</span><strong>{{ nodoActivo.entradas | number }}</strong></div>
+        <div><span>Recorridos que terminan aquí</span><strong>{{ nodoActivo.salidas | number }}</strong></div>
+      </div>
+      <div class="vecinos">
+        <div *ngIf="anteriores.length">
+          <h3>Viene de</h3>
+          <ul><li *ngFor="let c of anteriores"><span>{{ c.servicio }}<em *ngIf="c.retorno"> ↩ vuelve atrás</em></span><span class="mono">{{ c.n | number }} · {{ c.porcentaje }} % · espera {{ formatearDuracion(c.esperaPromMs) }}</span></li></ul>
+        </div>
+        <div *ngIf="siguientes.length">
+          <h3>Sigue hacia</h3>
+          <ul><li *ngFor="let c of siguientes"><span>{{ c.servicio }}<em *ngIf="c.retorno"> ↩ vuelve atrás</em></span><span class="mono">{{ c.n | number }} · {{ c.porcentaje }} % · espera {{ formatearDuracion(c.esperaPromMs) }}</span></li></ul>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================ RUTAS ============================ -->
+  <section class="panel-diagrama" *ngIf="vista === 'rutas'">
+    <div class="panel-diagrama__cabecera">
+      <div>
+        <h2>Rutas más comunes</h2>
+        <p class="sub">Las secuencias de servicios que más repiten los clientes, de principio a fin. Los servicios que se llaman a la vez (por ejemplo, la carga del inicio) aparecen apilados en el mismo paso.</p>
+      </div>
+    </div>
+    <ol class="rutas">
+      <li class="ruta" *ngFor="let v of respuesta.variantes; let i = index; trackBy: trackVariante">
+        <div class="ruta__cabecera">
+          <span class="ruta__rango">{{ i + 1 }}</span>
+          <div class="ruta__metricas">
+            <strong>{{ pct(v.porcentaje) }}</strong> de los recorridos <span class="sub">· {{ v.n | number }} sesiones</span>
+          </div>
+          <div class="ruta__chips">
+            <span class="pill pill--ok" *ngIf="v.conError === 0">✓ Sin errores</span>
+            <span class="pill pill--error" *ngIf="v.conError > 0">✕ {{ v.conError | number }} con error ({{ pct(v.conError / v.n) }})</span>
+            <span class="pill">{{ formatearDuracion(v.duracionMedianaMs) }} de duración típica</span>
+            <span class="pill">{{ v.llamadasProm | number:'1.0-1' }} llamadas</span>
+          </div>
+        </div>
+        <div class="ruta__pasos" role="list">
+          <ng-container *ngFor="let paso of v.pasos; let ultimo = last">
+            <div class="paso" role="listitem" [class.paso--paralelo]="paso.length > 1">
+              <span class="paso__etiqueta" *ngIf="paso.length > 1">en paralelo</span>
+              <span class="paso__chip" *ngFor="let s of paso" [title]="s.metodo">{{ s.servicio }}</span>
+            </div>
+            <span class="paso__flecha" *ngIf="!ultimo" aria-hidden="true">→</span>
+          </ng-container>
+          <span class="paso__mas" *ngIf="v.truncada">… la ruta continúa</span>
+        </div>
+        <div class="ruta__cierre">
+          <div class="segmentos" role="img" [attr.aria-label]="v.cierreNormal + ' cierran sesión, ' + v.sinCierre + ' sin cierre, ' + v.cierreError + ' terminan con error'">
+            <i class="seg seg--ok" [style.width.%]="porcentajeVariante(v, v.cierreNormal)"></i>
+            <i class="seg seg--neutro" [style.width.%]="porcentajeVariante(v, v.sinCierre)"></i>
+            <i class="seg seg--error" [style.width.%]="porcentajeVariante(v, v.cierreError)"></i>
+          </div>
+          <span class="sub">{{ pct(porcentajeDominante(v)) }} {{ textoCierreDominante(v) }}</span>
+        </div>
+      </li>
+    </ol>
+    <p class="empty-inline" *ngIf="!respuesta.variantes.length">No hay suficientes recorridos para identificar rutas.</p>
+    <p class="sub" *ngIf="respuesta.variantes.length">Cierre de sesión: <i class="punto punto--ok"></i> cierran · <i class="punto punto--neutro"></i> sin cierre · <i class="punto punto--error"></i> terminan con error.</p>
+  </section>
+
+  <!-- ============================ SERVICIOS ============================ -->
+  <section class="panel-diagrama" *ngIf="vista === 'servicios'">
+    <div class="panel-diagrama__cabecera">
+      <div>
+        <h2>Servicios en la muestra</h2>
+        <p class="sub">Todos los servicios con su volumen, fallos y tiempos. Ordena con un clic en el encabezado; con un clic en la fila lo abres en el mapa.</p>
+      </div>
+      <input class="buscador" type="text" placeholder="Buscar servicio o método…" [(ngModel)]="filtroServicio" aria-label="Buscar servicio">
+    </div>
+    <div class="tabla-scroll">
+      <table>
+        <thead>
+          <tr>
+            <th class="orden" (click)="ordenarPor('servicio')">Servicio {{ indicadorOrden('servicio') }}</th>
+            <th class="orden" (click)="ordenarPor('total')">Llamadas {{ indicadorOrden('total') }}</th>
+            <th class="orden num" (click)="ordenarPor('clientes')">Clientes {{ indicadorOrden('clientes') }}</th>
+            <th class="orden num" (click)="ordenarPor('tasaFallo')">Fallos {{ indicadorOrden('tasaFallo') }}</th>
+            <th class="orden num" (click)="ordenarPor('duracionMedianaMs')">Típico {{ indicadorOrden('duracionMedianaMs') }}</th>
+            <th class="orden num" (click)="ordenarPor('duracionP90Ms')">P90 {{ indicadorOrden('duracionP90Ms') }}</th>
+            <th class="orden num" (click)="ordenarPor('repeticiones')">Reintentos {{ indicadorOrden('repeticiones') }}</th>
+            <th class="orden num" (click)="ordenarPor('entradas')">Inician {{ indicadorOrden('entradas') }}</th>
+            <th class="orden num" (click)="ordenarPor('salidas')">Terminan {{ indicadorOrden('salidas') }}</th>
+            <th class="orden" (click)="ordenarPor('posProm')">Momento típico {{ indicadorOrden('posProm') }}</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr *ngFor="let n of serviciosFiltrados" class="fila-click" (click)="verEnMapa(n)" tabindex="0" (keydown.enter)="verEnMapa(n)">
+            <td><strong>{{ n.servicio }}</strong><div class="mono sub">{{ n.metodo }}</div></td>
+            <td><span class="barra-celda"><i [style.width.%]="(n.total / maxTotalServicios) * 70"></i>{{ n.total | number }}</span></td>
+            <td class="num">{{ n.clientes | number }}</td>
+            <td class="num"><span class="pill" [class.pill--ok]="nivelDe(n) === 'ok'" [class.pill--warn]="nivelDe(n) === 'aviso'" [class.pill--error]="nivelDe(n) === 'critico'">{{ nivelDe(n) === 'ok' ? '✓' : (nivelDe(n) === 'aviso' ? '!' : '✕') }} {{ porcentajeFallo(n) }}</span></td>
+            <td class="num">{{ formatearDuracion(n.duracionMedianaMs) }}</td>
+            <td class="num">{{ formatearDuracion(n.duracionP90Ms) }}</td>
+            <td class="num">{{ n.repeticiones | number }}</td>
+            <td class="num">{{ n.entradas | number }}</td>
+            <td class="num">{{ n.salidas | number }}</td>
+            <td><span class="posicion" [attr.title]="(n.posProm * 100 | number:'1.0-0') + ' % del recorrido'"><i [style.left.%]="n.posProm * 92"></i></span></td>
+          </tr>
+          <tr *ngIf="!serviciosFiltrados.length"><td colspan="10" class="empty-inline">Ningún servicio coincide con la búsqueda.</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- ============================ ACTIVIDAD ============================ -->
+  <section class="panel-diagrama" *ngIf="vista === 'actividad'">
+    <div class="panel-diagrama__cabecera">
+      <div>
+        <h2>Actividad en el tiempo</h2>
+        <p class="sub">Cómo evolucionó la muestra, en intervalos de {{ formatearDuracion(respuesta.actividad.bucketMs) }}. Cada gráfica tiene su propia escala.</p>
+      </div>
+      <label class="check-label"><input type="checkbox" [(ngModel)]="verTabla"> Ver como tabla</label>
+    </div>
+
+    <ng-container *ngIf="!verTabla">
+      <div class="graficas">
+        <div class="grafica"><h3>Llamadas por intervalo</h3><app-inicio-linea [series]="seriesLlamadas" [fmt]="fmtEntero" [alto]="190" etiqueta="Llamadas por intervalo"></app-inicio-linea></div>
+        <div class="grafica"><h3>Clientes activos por intervalo</h3><app-inicio-linea [series]="seriesClientes" [fmt]="fmtEntero" [alto]="190" etiqueta="Clientes activos por intervalo"></app-inicio-linea></div>
+        <div class="grafica"><h3>Llamadas con error por intervalo</h3><app-inicio-linea [series]="seriesErrores" [fmt]="fmtEntero" [alto]="190" [minMax]="4" etiqueta="Llamadas con error por intervalo"></app-inicio-linea></div>
+      </div>
+    </ng-container>
+
+    <div class="tabla-scroll" *ngIf="verTabla">
+      <table>
+        <thead><tr><th>Hora</th><th class="num">Llamadas</th><th class="num">Clientes activos</th><th class="num">Con error</th></tr></thead>
+        <tbody>
+          <tr *ngFor="let p of respuesta.actividad.puntos">
+            <td class="mono">{{ horaPunto(p.t) }}</td><td class="num">{{ p.llamadas | number }}</td><td class="num">{{ p.clientes | number }}</td><td class="num">{{ p.errores | number }}</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+</ng-container>

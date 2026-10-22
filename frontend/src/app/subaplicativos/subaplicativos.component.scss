@@ -1,0 +1,355 @@
+// Estilos propios del inventario de sub-aplicativos. Los generales (modales,
+// badges, tabla, formularios, visor de código) vienen de
+// servidores.component.scss, que se carga primero (ver styleUrls).
+
+$brand-dark: var(--ax-text, #1e293b);
+$border-light: var(--ax-border, #e2e8f0);
+
+.subapps-container {
+  max-width: 1500px;
+  margin: 0 auto;
+}
+
+.titulo-vista { font-size: 20px; font-weight: 800; color: $brand-dark; margin: 0; }
+
+// --- Indicadores ---
+.kpis {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.kpi {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  background: var(--ax-surface, #fff);
+  border: 1px solid $border-light;
+  border-radius: 12px;
+  padding: 10px 16px;
+  font-family: inherit;
+  color: $brand-dark;
+
+  strong { font-size: 20px; font-weight: 800; }
+  span { font-size: 12.5px; color: var(--ax-text-muted, #64748b); font-weight: 600; }
+}
+
+.kpi-btn {
+  cursor: pointer;
+  transition: border-color 0.15s, box-shadow 0.15s;
+  &:hover { border-color: var(--ax-brand-primary, #673ab7); }
+  &.activo {
+    border-color: var(--ax-brand-primary, #673ab7);
+    box-shadow: 0 0 0 2px rgba(var(--ax-brand-primary-rgb, 103, 58, 183), 0.18);
+  }
+}
+
+// --- Filtros ---
+.filtros-barra {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  margin-bottom: 16px;
+
+  input, select {
+    padding: 8px 10px;
+    border: 1px solid $border-light;
+    border-radius: 8px;
+    font-size: 13px;
+    background: var(--ax-surface, #fff);
+    color: $brand-dark;
+    max-width: 220px;
+    &:focus { outline: none; border-color: var(--ax-brand-primary, #673ab7); }
+  }
+
+  .filtro-busqueda { flex: 1 1 280px; max-width: 420px; }
+}
+
+// --- Tabla ---
+.th-orden {
+  cursor: pointer;
+  user-select: none;
+  &:hover { color: var(--ax-brand-primary, #673ab7); }
+}
+
+.celda-nombre {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.chip-tipo {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+}
+
+.marca-sin-ficha {
+  color: #f59e0b;
+  font-size: 10px;
+  line-height: 1;
+}
+
+.ip-chica {
+  font-size: 11.5px;
+  padding: 2px 6px !important;
+}
+
+.rel {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--ax-text-muted, #475569);
+  margin-right: 10px;
+}
+
+.badge.deprecado { background: #fee2e2; color: #991b1b; }
+
+.paginacion {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 14px;
+  margin-top: 16px;
+  font-size: 13px;
+  color: var(--ax-text-muted, #64748b);
+}
+
+// --- Ficha ---
+.enlace {
+  color: var(--ax-brand-primary, #673ab7);
+  word-break: break-all;
+  text-decoration: none;
+  &:hover { text-decoration: underline; }
+}
+
+.bloque-codigo {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 32px;
+  margin: 16px 0 8px 0;
+}
+
+.sin-datos { font-size: 13px; margin: 4px 0 0 0; }
+
+// --- Formulario ---
+.form-seccion {
+  margin: 22px 0 12px 0;
+  padding-bottom: 6px;
+  border-bottom: 2px solid $border-light;
+  font-size: 13px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--ax-brand-primary, #673ab7);
+  &:first-child { margin-top: 0; }
+}
+
+.aviso-error {
+  background: #fee2e2;
+  color: #991b1b;
+  border: 1px solid #fecaca;
+  padding: 10px 14px;
+  border-radius: 8px;
+  font-size: 13px;
+  margin-bottom: 14px;
+}
+
+.aviso-ok {
+  background: #dcfce7;
+  color: #166534;
+  border: 1px solid #bbf7d0;
+  padding: 10px 14px;
+  border-radius: 8px;
+  font-size: 13px;
+  margin-bottom: 14px;
+}
+
+.chips-negocio {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+
+.chip-negocio {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: #fef3c7;
+  color: #92400e;
+  border-radius: 12px;
+  padding: 4px 6px 4px 12px;
+  font-size: 12.5px;
+  font-weight: 700;
+
+  button {
+    background: none;
+    border: none;
+    cursor: pointer;
+    color: inherit;
+    font-size: 12px;
+    padding: 0 4px;
+    border-radius: 50%;
+    &:hover { background: rgba(0, 0, 0, 0.1); }
+  }
+}
+
+// Tabla compacta: son muchas columnas, así que se reduce el relleno para que
+// quepan sin scroll horizontal en pantallas de escritorio normales.
+.tabla-compacta table {
+  th, td { padding: 10px 10px; font-size: 13px; }
+  th { font-size: 12px; }
+
+  // En modo tabla las columnas con texto largo se envuelven en vez de ensanchar la tabla:
+  // si no, el scroll horizontal dejaba la columna fija «Acciones» tapando Criticidad y Estado.
+  td.celda-principal { white-space: normal; min-width: 170px; max-width: 280px; }
+  td.celda-negocio { white-space: normal; min-width: 150px; max-width: 280px; .badge-negocio { display: inline-block; margin: 0 4px 4px 0; white-space: normal; } }
+  td.celda-servidor { white-space: normal; min-width: 150px; max-width: 220px; overflow-wrap: anywhere; }
+  td.celda-corta, th.th-corta { width: 1%; white-space: nowrap; }   // Puerto, Criticidad, Estado: ocupan solo lo suyo
+  th.th-orden { white-space: normal; line-height: 1.25; }
+  .celda-nombre { flex-wrap: wrap; gap: 4px 8px; }
+  .celda-nombre strong { overflow-wrap: anywhere; }
+}
+
+// La columna fija de acciones no debe quedar encima de otras columnas: reserva su propio ancho.
+.tabla-compacta table .col-sticky { width: 1%; white-space: nowrap; padding-left: 8px; padding-right: 10px; }
+
+// ---------------------------------------------------------------------------
+// RESPONSIVO por el ANCHO DEL CONTENEDOR (no de la ventana: el menú lateral se
+// come ~260px, así que un breakpoint de ventana no dice cuánto espacio tiene
+// de verdad la tabla).
+//   >= 1600px  tabla completa
+//   1360-1600  se ocultan Último despliegue y Rel.
+//   1180-1360  además Plataforma y Propietario (ese dato sigue en la ficha)
+//   < 1180px   cada fila pasa a ser una tarjeta con sus datos rotulados, sin
+//              scroll horizontal ni columnas tapadas por "Acciones"; de a dos
+//              tarjetas por fila desde 860px de ancho
+// ---------------------------------------------------------------------------
+// El contenedor de consulta es el div de AFUERA: así, en modo tarjetas, se le
+// puede quitar el marco a la tabla (si no, quedaría una tarjeta dentro de otra).
+.tabla-contenedor {
+  container-type: inline-size;
+  container-name: subapps;
+}
+
+@container subapps (max-width: 1599px) {
+  .col-ancho { display: none; }
+}
+
+@container subapps (max-width: 1359px) {
+  .col-opcional { display: none; }
+}
+
+@container subapps (max-width: 1179px) {
+  .table-card.tabla-compacta {
+    border: none;
+    box-shadow: none;
+    background: transparent;
+    overflow: visible;
+  }
+  table { display: block; width: 100%; }
+  thead { display: none; }
+
+  // Cada fila es una tarjeta; las tarjetas van de a una por fila y, si hay
+  // espacio (>= 860px de contenedor), de a dos.
+  tbody {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 12px;
+    width: 100%;
+    padding: 0;
+  }
+
+  tbody tr {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    align-content: start;
+    gap: 10px 16px;
+    padding: 14px 16px;
+    border: 1px solid $border-light;
+    border-radius: 12px;
+    background: var(--ax-surface, #fff);
+    position: relative;
+    min-width: 0;
+
+    &:hover { background: var(--ax-surface-2, #f8fafc); }
+  }
+
+  td {
+    display: block;
+    padding: 0 !important;
+    border: none !important;
+    white-space: normal !important;
+    min-width: 0;
+    font-size: 13px;
+  }
+
+  // Todos los datos se muestran en tarjeta (incluidos los "secundarios").
+  td.col-opcional, td.col-ancho { display: block; }
+
+  // anula los anchos del modo tabla (más específicos) para que la tarjeta use todo su espacio
+  .tabla-compacta table td.celda-principal, .tabla-compacta table td.celda-negocio, .tabla-compacta table td.celda-servidor,
+  .tabla-compacta table td.celda-corta, .tabla-compacta table td.col-sticky { width: auto; min-width: 0; max-width: none; padding: 0 !important; }
+
+  td[data-label]::before {
+    content: attr(data-label);
+    display: block;
+    margin-bottom: 3px;
+    font-size: 10.5px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--ax-text-muted, #64748b);
+  }
+
+  td.celda-principal,
+  td.celda-negocio,
+  td.celda-acciones { grid-column: 1 / -1; }
+
+  td.celda-acciones {
+    position: static;
+    background: transparent;
+    box-shadow: none;
+    border-top: 1px dashed $border-light !important;
+    padding-top: 10px !important;
+
+    .acciones { justify-content: flex-end; }
+  }
+
+  .celda-nombre { flex-wrap: wrap; font-size: 14.5px; }
+  .celda-nombre strong { overflow-wrap: anywhere; }
+}
+
+@container subapps (min-width: 860px) and (max-width: 1179px) {
+  tbody { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+// El diseño de filtros y KPIs también se acomoda en pantallas chicas.
+@media (max-width: 700px) {
+  .filtros-barra input, .filtros-barra select { max-width: none; flex: 1 1 100%; }
+  .filtros-barra .filtro-busqueda { max-width: none; }
+  .kpis { gap: 8px; }
+  .kpi { flex: 1 1 calc(50% - 8px); padding: 8px 12px; }
+}
+
+.amb-chico {
+  display: inline-block;
+  margin-left: 8px;
+  font-size: 10.5px;
+  font-weight: 800;
+  letter-spacing: 0.3px;
+  color: #0369a1;
+}
+
+// Bus por el que un sub-aplicativo consume un servicio (integraciones con servicios).
+.badge-ace { background: #dbeafe; color: #1d4ed8; }
+.badge-bus10 { background: #ccfbf1; color: #0f766e; }
+:host-context(.dark-theme) {
+  .badge-ace { background: rgba(59, 130, 246, 0.2); color: #93c5fd; }
+  .badge-bus10 { background: rgba(20, 184, 166, 0.2); color: #5eead4; }
+}

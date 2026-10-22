@@ -1,0 +1,30 @@
+<div class="sb" *ngIf="!sinDatos; else vacio">
+  <div class="sb-plot" [style.height.px]="alto">
+    <div class="sb-grid" *ngFor="let g of grid" [style.bottom.%]="g.pct"><span>{{ g.valor }}</span></div>
+
+    <div class="sb-barras">
+      <div class="sb-col" *ngFor="let c of columnas; let i = index" [class.activa]="hover === i" (mouseenter)="hover = i" (mouseleave)="hover = null">
+        <div class="sb-pila" [style.height.%]="c.pctAlto">
+          <span class="sb-seg" *ngFor="let s of c.segmentos" [style.background]="s.color" [style.flex-grow]="s.valor"></span>
+        </div>
+
+        <div class="sb-tooltip" *ngIf="hover === i" [class.izquierda]="tooltipALaIzquierda">
+          <strong>{{ c.etiqueta }}</strong>
+          <div class="sb-tt-fila" *ngFor="let s of c.segmentos">
+            <span class="sb-sw" [style.background]="s.color"></span>{{ s.nombre }}: {{ s.valor }}
+          </div>
+          <div class="sb-tt-total">Total: {{ c.total }} {{ unidad }}</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="sb-x">
+    <span *ngFor="let c of columnas; let i = index" [class.oculta]="!mostrarEtiqueta(i)">{{ c.etiqueta }}</span>
+  </div>
+
+  <div class="sb-leyenda" *ngIf="series.length > 1">
+    <span class="sb-ley-item" *ngFor="let s of series"><span class="sb-sw" [style.background]="s.colorVar"></span>{{ s.nombre }}</span>
+  </div>
+</div>
+<ng-template #vacio><div class="sb-vacio">Sin ejecuciones en este periodo.</div></ng-template>

@@ -1,0 +1,601 @@
+$brand-dark:    var(--ax-text, #1e293b);
+$brand-gray:    var(--ax-text-muted, #64748b);
+$surface-bg:    var(--ax-surface-2, #f8fafc);
+$border-light:  var(--ax-border, #e2e8f0);
+
+$state-ok:      #10b981;
+$state-warn:    #f59e0b;
+$state-danger:  #ef4444;
+$state-muted:   #94a3b8;
+$state-info:    #2563eb;
+
+* { box-sizing: border-box; }
+:host { display: block; font-family: 'Inter', sans-serif; color: $brand-dark; }
+
+.page-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 22px; gap: 12px; flex-wrap: wrap; }
+.page-header h1 { font-size: 28px; font-weight: 800; margin: 0; letter-spacing: -0.5px; }
+.page-header .subtitle { color: $brand-gray; margin-top: 6px; font-size: 14px; }
+
+.btn {
+  font-family: inherit; display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+  padding: 9px 16px; border-radius: 9px; font-size: 13px; font-weight: 600;
+  border: 1px solid $border-light; background: var(--ax-surface, white); color: $brand-gray; cursor: pointer; transition: all 0.15s ease;
+  &:hover { background: $surface-bg; color: $brand-dark; }
+  &:disabled { opacity: 0.55; cursor: default; }
+  &.btn-sm { padding: 6px 12px; font-size: 12px; }
+}
+.btn-primary {
+  background: var(--ax-brand-primary, #673ab7); border-color: var(--ax-brand-primary, #673ab7); color: white;
+  box-shadow: 0 4px 12px rgba(var(--ax-brand-primary-rgb, 103, 58, 183), 0.28);
+  &:hover { opacity: 0.92; color: white; }
+}
+.btn-outline-purple { color: var(--ax-brand-primary, #673ab7); background: rgba(var(--ax-brand-primary-rgb, 103, 58, 183), 0.08); border-color: transparent; &:hover { background: rgba(var(--ax-brand-primary-rgb, 103, 58, 183), 0.15); } }
+
+// ---------- Barra de filtros: ahora es una "tarjeta" propia en vez de
+// selects sueltos flotando sobre el fondo -- separa visualmente los
+// controles del contenido, igual que hace Tareas con sus tabs. ----------
+.filtros-fila {
+  display: flex; gap: 10px; margin-bottom: 18px; flex-wrap: wrap; align-items: center;
+  background: var(--ax-surface, white); border: 1px solid $border-light; border-radius: 14px; padding: 10px 14px;
+}
+select {
+  padding: 8px 30px 8px 12px; border-radius: 9px; border: 1px solid $border-light; font-size: 13px;
+  background: $surface-bg; color: $brand-dark; font-weight: 600; cursor: pointer;
+  &:focus { outline: none; border-color: var(--ax-brand-primary, #673ab7); }
+}
+
+// ---------- Buscador de texto libre, en la misma barra de filtros ----------
+.buscador {
+  display: flex; align-items: center; gap: 7px; background: $surface-bg; border: 1px solid $border-light; border-radius: 9px;
+  padding: 0 10px; min-width: 230px; flex: 1 1 230px; max-width: 360px;
+  svg { width: 14px; height: 14px; color: $brand-gray; flex-shrink: 0; }
+  input {
+    border: none; background: transparent; padding: 8px 0; font-size: 13px; color: $brand-dark; font-family: inherit; width: 100%;
+    &:focus { outline: none; }
+    &::placeholder { color: $brand-gray; }
+  }
+}
+.buscador__limpiar {
+  border: none; background: transparent; color: $brand-gray; font-size: 17px; line-height: 1; cursor: pointer; padding: 0 2px; flex-shrink: 0;
+  &:hover { color: $brand-dark; }
+}
+
+.error-banner { background: #fef2f2; color: $state-danger; border: 1px solid #fecaca; border-radius: 12px; padding: 12px 16px; font-size: 13px; font-weight: 600; margin-bottom: 16px; }
+.carga-inicial, .empty { text-align: center; color: $brand-gray; padding: 48px 0; font-weight: 600; font-size: 13.5px; }
+.empty { border: 1px dashed $border-light; border-radius: 16px; background: var(--ax-surface, white); }
+
+// ---------- Bitácora: lista de filas que se acomodan a su propio contenido
+// (en vez de una tabla con columnas fijas) -- con 8 datos por registro y
+// títulos que a veces son largos, una tabla de columnas fijas siempre termina
+// necesitando scroll horizontal (con min-width) o truncando información real
+// (con table-layout:fixed). Aquí cada fila es un bloque flexible: arriba el
+// título (puede ocupar varias líneas) junto con sus badges, abajo una línea
+// de metadatos que se envuelve sola si no cabe completa -- nunca se corta ni
+// se oculta nada, y no hace falta ningún scroll. ----------
+.bitacora-lista {
+  display: flex;
+  flex-direction: column;
+  background: var(--ax-surface, white);
+  border-radius: 16px;
+  border: 1px solid $border-light;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04), 0 8px 24px rgba(15, 23, 42, 0.05);
+  overflow: hidden;
+}
+.bitacora-fila {
+  position: relative;
+  cursor: pointer;
+  padding: 14px 44px 12px 18px;
+  border-bottom: 1px solid $border-light;
+  border-left: 4px solid var(--fila-color, transparent);
+  transition: background 0.15s;
+
+  &:last-child { border-bottom: none; }
+  &:hover { background: $surface-bg; }
+
+  &.fila-desarrollo { --fila-color: #{$state-info}; }
+  &.fila-qa { --fila-color: #{$state-warn}; }
+  &.fila-produccion { --fila-color: #{$state-danger}; }
+}
+.bitacora-fila__cabecera {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px 10px;
+}
+.bitacora-fila__titulo {
+  font-size: 14.5px;
+  font-weight: 700;
+  color: $brand-dark;
+  flex: 1 1 220px;
+  min-width: 0;
+  overflow-wrap: break-word;
+}
+.bitacora-fila__meta {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 5px 8px;
+  margin-top: 8px;
+  font-size: 12.5px;
+  color: $brand-gray;
+}
+.meta-item { white-space: nowrap; }
+.meta-flecha { color: $state-muted; }
+.meta-punto {
+  width: 3px; height: 3px; border-radius: 50%; background: $state-muted; flex-shrink: 0;
+}
+// El botón de eliminar queda anclado a la esquina superior derecha de la
+// fila -- aquí sí es seguro usar position:absolute porque nada más comparte
+// esa esquina (a diferencia de la tarjeta de Tareas, donde competía con la
+// etiqueta de prioridad).
+.bitacora-fila .btn-eliminar { position: absolute; top: 12px; right: 12px; }
+
+.mono { font-family: 'JetBrains Mono', 'SFMono-Regular', monospace; font-size: 12.5px; }
+.text-gray { color: $brand-gray; }
+.aplicativo-tag { font-size: 12.5px; font-weight: 600; color: var(--ax-brand-primary, #673ab7); }
+
+// ---------- Commit de Azure DevOps asociado: chip compacto en la fila
+// (abre el commit en Azure DevOps en pestaña nueva) ----------
+.commit-chip {
+  display: inline-flex; align-items: center; gap: 4px; font-family: 'JetBrains Mono', 'SFMono-Regular', monospace;
+  font-size: 11.5px; font-weight: 600; color: var(--ax-brand-primary, #673ab7); text-decoration: none;
+  svg { width: 12px; height: 12px; }
+  &:hover { text-decoration: underline; }
+}
+
+// ---------- Checklist "en línea" en la vista principal: compacto, sin el
+// progreso/estilo completo de la pestaña de detalle -- solo lo necesario
+// para marcar rápido sin abrir el registro. ----------
+.bitacora-fila__checklist {
+  margin-top: 10px; padding-top: 10px; border-top: 1px dashed $border-light; cursor: default;
+}
+.checklist-mini-cargando { font-size: 11.5px; color: $brand-gray; }
+.checklist-mini-item {
+  display: flex; align-items: center; flex-wrap: wrap; gap: 4px 10px; padding: 4px 0; font-size: 12.5px;
+}
+.checklist-mini-item__check {
+  display: flex; align-items: center; gap: 8px; cursor: pointer; min-width: 0;
+  input[type="checkbox"] { width: 15px; height: 15px; flex-shrink: 0; accent-color: var(--ax-brand-primary, #673ab7); cursor: pointer; }
+  span { overflow-wrap: anywhere; }
+  .tachado { text-decoration: line-through; color: $state-muted; }
+}
+.checklist-mini-item__meta { font-size: 11px; color: $brand-gray; white-space: nowrap; display: inline-flex; align-items: center; gap: 6px; }
+.checklist-mini-item__subiendo { font-size: 11px; color: var(--ax-brand-primary, #673ab7); font-weight: 600; }
+.link-evidencia {
+  border: none; background: transparent; color: var(--ax-brand-primary, #673ab7); font-size: 11px; font-weight: 700;
+  cursor: pointer; padding: 0; text-decoration: underline;
+  &:hover { opacity: 0.8; }
+}
+
+.badge-entorno { display: inline-flex; align-items: center; font-size: 10.5px; font-weight: 700; padding: 4px 10px; border-radius: 999px; text-transform: uppercase; letter-spacing: 0.4px; }
+.entorno-desarrollo { color: $state-info; background: #dbeafe; }
+.entorno-qa { color: #b45309; background: #fef3c7; }
+.entorno-produccion { color: $state-danger; background: #fee2e2; }
+
+.status-pill { display: inline-flex; align-items: center; gap: 6px; padding: 4px 12px; border-radius: 999px; font-size: 11px; font-weight: 700; white-space: nowrap; &::before { content: ''; width: 6px; height: 6px; border-radius: 50%; background: currentColor; flex-shrink: 0; } }
+.estado-programado { color: $state-info; background: #dbeafe; }
+.estado-ejecutado { color: $state-ok; background: #d1fae5; }
+.estado-cancelado { color: $state-muted; background: #e2e8f0; }
+.estado-reagendado { color: $state-warn; background: #fef3c7; }
+.estado-rollback { color: $state-danger; background: #fee2e2; }
+
+.btn-eliminar { background: transparent; border: none; color: $state-muted; cursor: pointer; padding: 4px; border-radius: 6px; transition: all 0.15s; svg { width: 15px; height: 15px; display: block; } &:hover { color: $state-danger; background: #fee2e2; } }
+
+// ---------- Modal ----------
+.overlay { position: fixed; inset: 0; background: rgba(15, 23, 42, 0.55); backdrop-filter: blur(4px); display: flex; align-items: center; justify-content: center; z-index: 9999; padding: 20px; }
+.modal { background: var(--ax-surface, white); border-radius: 18px; width: 100%; max-width: 780px; max-height: 94vh; display: flex; flex-direction: column; box-shadow: 0 25px 50px rgba(0, 0, 0, 0.25); overflow: hidden; }
+.modal-detalle { max-width: 860px; }
+.modal-header { padding: 22px 28px 14px; border-bottom: 1px solid $border-light; h2 { margin: 0; font-size: 19px; font-weight: 800; } }
+.modal-body { padding: 18px 28px; overflow-y: auto; flex: 1; }
+.modal-footer { padding: 14px 28px 22px; border-top: 1px solid $border-light; background: $surface-bg; display: flex; justify-content: flex-end; gap: 10px; }
+
+.aviso-evento { background: var(--ax-brand-soft, #eef2ff); color: var(--ax-brand-ink, #4338ca); border-radius: 8px; padding: 8px 12px; font-size: 12.5px; margin: 0 0 14px; }
+
+.form-label { display: block; margin-bottom: 6px; margin-top: 4px; font-size: 12.5px; color: $brand-gray; font-weight: 600; }
+.form-input {
+  width: 100%; padding: 10px 14px; margin-bottom: 16px; border: 1px solid var(--ax-border-2, #cbd5e1); border-radius: 8px;
+  font-size: 13.5px; color: $brand-dark; font-family: inherit; background: var(--ax-surface, white);
+  &:focus { outline: none; border-color: var(--ax-brand-primary, #673ab7); }
+}
+textarea.form-input { resize: vertical; }
+
+.lista-usuarios { max-height: 160px; overflow-y: auto; border: 1px solid $border-light; border-radius: 10px; padding: 8px 12px; margin-bottom: 8px; }
+.checkbox-row { display: flex; align-items: center; gap: 8px; padding: 5px 0; font-size: 13px; cursor: pointer; }
+
+.detalle-meta { display: flex; flex-wrap: wrap; gap: 8px 14px; font-size: 12.5px; color: $brand-gray; margin-bottom: 12px; }
+.descripcion { font-size: 13px; color: $brand-dark; margin-bottom: 12px; line-height: 1.55; }
+.asignados { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 14px; }
+.chip { background: var(--ax-brand-soft, #f3ebf8); color: var(--ax-brand-primary, #673ab7); border-radius: 999px; padding: 4px 10px; font-size: 11.5px; font-weight: 600; }
+
+.historial { background: $surface-bg; border-radius: 10px; padding: 10px 14px; margin-bottom: 12px; p { margin: 4px 0 0; font-size: 13px; } }
+.cambiar-estado { border-top: 1px solid $border-light; padding-top: 14px; margin-top: 6px; }
+
+// ---------- Hora estimada de finalización: fila compacta input + botón,
+// separada del resto para poder ajustarla sin tocar nada más. ----------
+.estimado-fin { background: $surface-bg; border-radius: 12px; padding: 12px 14px; margin-bottom: 14px; }
+.estimado-fin__fila { display: flex; gap: 10px; align-items: center; input.form-input { margin-bottom: 0; flex: 1; } }
+
+// ---------- Cumplimiento (programado vs. real): mismo lenguaje visual que
+// el status-pill, pero con su propia paleta para no confundirse con Estado. ----------
+.badge-cumplimiento {
+  display: inline-flex; align-items: center; margin-left: 8px; padding: 3px 10px; border-radius: 999px;
+  font-size: 10.5px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.3px; white-space: nowrap;
+}
+.cumplimiento-a-tiempo { color: $state-ok; background: #d1fae5; }
+.cumplimiento-tardio { color: $state-danger; background: #fee2e2; }
+
+.duracion-real { background: $surface-bg; border-radius: 12px; padding: 12px 14px; margin-bottom: 14px; }
+.duracion-real__filas { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center; font-size: 12.5px; color: $brand-gray; margin-top: 4px; strong { color: $brand-dark; } }
+.fila-duracion-real { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; > div { display: flex; flex-direction: column; } }
+
+// ---------- Pestañas del modal de detalle ----------
+.tabs-detalle {
+  display: flex; gap: 2px; padding: 0 28px; border-bottom: 1px solid $border-light; background: $surface-bg;
+}
+.tab-detalle {
+  border: none; background: transparent; padding: 12px 14px; font-size: 12.5px; font-weight: 700; font-family: inherit;
+  color: $brand-gray; cursor: pointer; border-bottom: 2px solid transparent; margin-bottom: -1px; transition: all 0.15s ease;
+  display: inline-flex; align-items: center; gap: 6px;
+  &:hover { color: $brand-dark; }
+  &.activo { color: var(--ax-brand-primary, #673ab7); border-bottom-color: var(--ax-brand-primary, #673ab7); }
+}
+.tab-contador {
+  background: var(--ax-border-2, #d9d2ee); color: $brand-dark; border-radius: 999px; padding: 1px 7px; font-size: 10.5px; font-weight: 700;
+  .tab-detalle.activo & { background: var(--ax-brand-primary, #673ab7); color: white; }
+}
+
+// ---------- Checklist ----------
+.checklist-progreso { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; font-size: 12px; color: $brand-gray; font-weight: 600; }
+.checklist-progreso__barra { flex: 1; height: 6px; border-radius: 999px; background: $surface-bg; overflow: hidden; }
+.checklist-progreso__relleno { height: 100%; background: $state-ok; border-radius: 999px; transition: width 0.2s ease; }
+
+// Fila principal (checkbox + eliminar) y fila de detalle (quién/cuándo lo
+// completó + ver evidencia) separadas en dos líneas -- con todo en una sola
+// fila (como antes) se amontonaba apenas el ítem tenía evidencia o estaba en
+// proceso de subida.
+.checklist-item {
+  display: flex; flex-direction: column; gap: 3px; padding: 9px 2px; border-bottom: 1px solid $border-light;
+  &:last-of-type { border-bottom: none; }
+}
+.checklist-item__fila { display: flex; align-items: center; gap: 10px; }
+.checklist-item__check {
+  display: flex; align-items: center; gap: 10px; font-size: 13.5px; cursor: pointer; flex: 1; min-width: 0;
+  input[type="checkbox"] { width: 16px; height: 16px; flex-shrink: 0; accent-color: var(--ax-brand-primary, #673ab7); cursor: pointer; }
+  span { overflow-wrap: anywhere; }
+  .tachado { text-decoration: line-through; color: $state-muted; }
+}
+// Alineado bajo el texto del ítem (16px checkbox + 10px gap), no bajo el borde del modal.
+.checklist-item__detalle { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; padding-left: 26px; }
+.checklist-item__meta { font-size: 11px; color: $brand-gray; white-space: nowrap; display: inline-flex; align-items: center; gap: 6px; }
+
+.checklist-nuevo { display: flex; gap: 10px; margin-top: 12px; margin-bottom: 16px; input.form-input { margin-bottom: 0; flex: 1; } }
+
+// ---------- Evidencia del checklist: modal de "pegar" (Ctrl+V) y lightbox
+// de vista previa (en vez de abrir el archivo en una pestaña nueva) ----------
+.zona-pegar-evidencia {
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px;
+  border: 2px dashed $border-light; border-radius: 14px; padding: 28px 16px; margin: 14px 0 6px;
+  text-align: center; font-size: 13px; color: $brand-gray; cursor: text; outline: none; user-select: none;
+  svg { width: 30px; height: 30px; opacity: 0.6; }
+  strong { color: $brand-dark; }
+  &:focus, &:focus-visible { border-color: var(--ax-brand-primary, #673ab7); background: $surface-bg; }
+}
+.evidencia-alternativa {
+  margin: 10px 0 0; font-size: 12.5px; color: $brand-gray; display: flex; align-items: center; gap: 6px; flex-wrap: wrap;
+}
+// Banner "flotante" de errores que llegan con el modal de evidencia ya
+// cerrado (la subida sigue en curso en segundo plano -- ver
+// procesarEvidenciaArchivo). Se fija arriba de todo para no perderse aunque
+// el usuario ya haya cerrado el modal y esté viendo otra parte de la página.
+.error-banner--flotante {
+  position: fixed; top: 16px; left: 50%; transform: translateX(-50%); z-index: 10000;
+  max-width: calc(100vw - 32px); margin-bottom: 0; box-shadow: 0 10px 25px rgba(0, 0, 0, 0.15);
+}
+
+// Ambos pueden abrirse con el modal de Detalle ya abierto detrás (el checklist
+// vive en una de sus pestañas) -- como están antes que él en el HTML, sin un
+// z-index mayor quedaban tapados por el propio modal de Detalle (mismo
+// z-index que .overlay, y el orden en el DOM decide el apilamiento).
+.overlay--pegar-evidencia { z-index: 10000; }
+.overlay--evidencia { z-index: 10000; background: rgba(15, 23, 42, 0.8); padding: 32px; }
+.evidencia-preview {
+  position: relative; max-width: min(90vw, 900px); max-height: 90vh; display: flex;
+  img { max-width: 100%; max-height: 90vh; border-radius: 10px; object-fit: contain; box-shadow: 0 25px 50px rgba(0, 0, 0, 0.4); }
+}
+.evidencia-preview__cargando { color: white; font-size: 14px; font-weight: 600; padding: 40px; }
+.btn-cerrar-evidencia {
+  position: absolute; top: -14px; right: -14px; width: 32px; height: 32px; border-radius: 50%;
+  background: white; border: none; display: flex; align-items: center; justify-content: center; cursor: pointer;
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.3); color: $brand-dark;
+  svg { width: 16px; height: 16px; }
+  &:hover { background: $surface-bg; }
+}
+
+// ---------- Commit de Azure DevOps asociado: ya elegido (chip con botón de
+// quitar) o selector en dos pasos (repo -> commits de ese repo, ambos
+// <select> normales) -- se usa igual en el formulario de creación y en el
+// de edición (detalle). ----------
+.commit-elegido {
+  display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  background: $surface-bg; border: 1px solid $border-light; border-radius: 10px; padding: 10px 12px; margin-bottom: 16px;
+}
+.commit-elegido__info {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; min-width: 0; font-size: 12.5px;
+  .mono { font-weight: 700; color: var(--ax-brand-primary, #673ab7); text-decoration: none; }
+  span:not(.mono) { overflow-wrap: anywhere; }
+}
+.commit-guardar { margin-top: 2px; }
+
+// ---------- Historial ----------
+.historial-evento { padding: 10px 2px; border-bottom: 1px solid $border-light; &:last-of-type { border-bottom: none; } }
+.historial-evento__cabecera { display: flex; justify-content: space-between; font-size: 13px; strong { color: $brand-dark; } span { color: $brand-gray; font-size: 11.5px; } }
+.historial-evento__autor { margin: 2px 0 0; font-size: 11.5px; color: $brand-gray; }
+.historial-evento__resumen { margin: 4px 0 0; font-size: 12.5px; color: $brand-dark; line-height: 1.5; }
+
+/* =========================================
+   RESPONSIVE
+   ========================================= */
+@media (max-width: 768px) {
+  .overlay { padding: 0; align-items: flex-end; }
+  // En móvil el modal se ancla abajo y ocupa el ancho completo, igual que el
+  // resto de modales rediseñados este trimestre (Tareas) -- más fácil de
+  // operar con el pulgar que un modal centrado con márgenes.
+  .modal { max-width: 100%; border-radius: 18px 18px 0 0; max-height: 94vh; }
+
+  // 2 columnas fijas -> 1 columna: con el teclado numérico/fecha nativo
+  // encima, dos selectores datetime-local lado a lado quedaban ilegibles.
+  .fila-duracion-real { grid-template-columns: 1fr; }
+
+  // Las pestañas (Detalle/Checklist/Historial) no caben en una fila en
+  // pantallas angostas: en vez de que se encimen o se achiquen hasta ser
+  // ilegibles, la fila se desplaza horizontalmente.
+  .tabs-detalle { padding: 0 14px; overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  .tab-detalle { padding: 12px 10px; white-space: nowrap; flex-shrink: 0; }
+
+  .modal-header, .modal-body { padding-left: 18px; padding-right: 18px; }
+  .modal-footer { padding-left: 18px; padding-right: 18px; }
+
+  .estimado-fin__fila { flex-direction: column; align-items: stretch; }
+}
+
+// La lista de filas (.bitacora-fila, arriba) ya se acomoda sola a cualquier
+// ancho gracias a flex-wrap -- no necesita un layout aparte para celular como
+// antes (cuando era una tabla real). Solo se ajusta el espacio reservado para
+// el botón de eliminar, que en un teléfono angosto competía con el título.
+@media (max-width: 480px) {
+  .filtros-fila { flex-direction: column; align-items: stretch; }
+  .buscador { max-width: none; flex: 0 0 auto; } // en columna, el flex-basis (230px) era ALTO: dejaba la caja de búsqueda enorme
+
+  .bitacora-fila { padding: 14px 40px 12px 14px; }
+}
+
+
+// ---------- Varios servidores por paso ----------
+.servidor-tag {
+  display: inline-flex; align-items: center; font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 999px;
+  background: $surface-bg; border: 1px solid $border-light; color: $brand-dark; font-family: 'JetBrains Mono', 'SFMono-Regular', monospace;
+}
+.servidores-elegidos { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; }
+.chip-servidor {
+  display: inline-flex; align-items: center; gap: 6px; padding: 4px 4px 4px 10px; border-radius: 999px; font-size: 12px;
+  background: var(--ax-brand-soft, #f3e8ff); border: 1px solid var(--ax-brand-soft-strong, #e9d5ff); color: var(--ax-brand-ink, #581c87);
+  .chip-servidor__nombre { font-weight: 700; }
+  .chip-servidor__host { font-family: 'JetBrains Mono', 'SFMono-Regular', monospace; font-size: 11px; opacity: 0.85; }
+  button { border: none; background: rgba(var(--ax-brand-primary-rgb, 103, 58, 183), 0.12); color: inherit; width: 18px; height: 18px; border-radius: 50%; cursor: pointer; line-height: 1; font-size: 13px; padding: 0; &:hover { background: rgba(var(--ax-brand-primary-rgb, 103, 58, 183), 0.28); } }
+}
+.servidores-ayuda { margin: 6px 0 14px; font-size: 11.5px; color: $brand-gray; }
+.servidores-hermanos { display: block; margin: 4px 0 10px; font-size: 12px; }
+
+// ---------- Evidencias múltiples ----------
+.link-evidencia--mas { text-decoration: none; padding: 1px 8px; border: 1px dashed currentColor; border-radius: 999px; }
+.link-evidencia:disabled { opacity: 0.5; cursor: not-allowed; }
+.evidencia-miniaturas { display: grid; grid-template-columns: repeat(auto-fill, minmax(110px, 1fr)); gap: 10px; margin: 12px 0 4px; }
+.evidencia-miniatura {
+  position: relative; border: 1px solid $border-light; border-radius: 10px; overflow: hidden; background: $surface-bg;
+  img { display: block; width: 100%; height: 80px; object-fit: cover; }
+  .evidencia-miniatura__nombre { display: block; font-size: 10.5px; padding: 3px 6px; color: $brand-gray; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .evidencia-miniatura__quitar {
+    position: absolute; top: 4px; right: 4px; width: 20px; height: 20px; border-radius: 50%; border: none; cursor: pointer;
+    background: rgba(15, 23, 42, 0.75); color: white; line-height: 1; font-size: 14px; padding: 0; &:hover { background: $state-danger; }
+  }
+}
+
+// ---------- Galería de evidencias ----------
+.galeria { display: flex; flex-direction: column; gap: 10px; max-width: min(92vw, 960px); }
+.galeria__cabecera { display: flex; align-items: center; gap: 12px; color: white; font-size: 13px; padding-right: 24px; }
+.galeria__titulo { font-weight: 700; flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.galeria__contador { font-weight: 600; opacity: 0.85; white-space: nowrap; }
+.galeria__eliminar { border: 1px solid rgba(255, 255, 255, 0.4); background: transparent; color: #fecaca; border-radius: 8px; padding: 3px 10px; font-size: 12px; cursor: pointer; &:hover { background: rgba(220, 38, 38, 0.35); } }
+.galeria__visor {
+  position: relative; display: flex; justify-content: center; align-items: center;
+  img { max-width: 100%; max-height: 68vh; border-radius: 10px; object-fit: contain; box-shadow: 0 25px 50px rgba(0, 0, 0, 0.4); background: #0f172a; }
+}
+.galeria__nav {
+  position: absolute; top: 50%; transform: translateY(-50%); width: 40px; height: 40px; border-radius: 50%; border: none; cursor: pointer;
+  background: rgba(255, 255, 255, 0.9); color: $brand-dark; font-size: 26px; line-height: 1; box-shadow: 0 4px 10px rgba(0, 0, 0, 0.3);
+  &:hover { background: white; }
+}
+.galeria__nav--ant { left: 8px; }
+.galeria__nav--sig { right: 8px; }
+.galeria__pie { margin: 0; color: rgba(255, 255, 255, 0.85); font-size: 12px; text-align: center; overflow-wrap: anywhere; }
+.galeria__miniaturas {
+  display: flex; gap: 8px; justify-content: center; flex-wrap: wrap;
+  button { border: 2px solid transparent; border-radius: 8px; padding: 0; background: none; cursor: pointer; opacity: 0.65; overflow: hidden; &.activa { border-color: white; opacity: 1; } &:hover { opacity: 1; } }
+  img { display: block; width: 64px; height: 46px; object-fit: cover; }
+}
+
+
+// ---------- Importar desde GLPI ----------
+.header-acciones { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+.modal-glpi { max-width: 720px; }
+.glpi-intro { font-size: 12.5px; color: $brand-gray; line-height: 1.5; margin: 0 0 16px; }
+.aviso-glpi-config { background: #fff7ed; color: #9a3412; border-radius: 8px; padding: 8px 12px; font-size: 12.5px; margin: -6px 0 14px; }
+.glpi-pegar { margin: 0 0 12px; font-size: 12.5px; }
+
+.glpi-banner {
+  background: var(--ax-brand-soft, #eef2ff); border: 1px solid var(--ax-brand-soft-strong, #c7d2fe); border-radius: 10px; padding: 12px 14px; margin: 0 0 16px; font-size: 12.5px; color: var(--ax-brand-ink, #3730a3);
+  a { color: var(--ax-brand-ink, #4338ca); font-weight: 700; }
+}
+.glpi-banner__titulo { font-weight: 700; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.glpi-banner__estado { font-weight: 600; font-size: 11px; background: var(--ax-brand-soft, #e0e7ff); border-radius: 999px; padding: 2px 8px; }
+.glpi-banner__texto { margin: 6px 0 0; }
+.glpi-banner__duplicado { margin-top: 8px; background: #fef2f2; color: #991b1b; border-radius: 8px; padding: 6px 10px; }
+.glpi-banner__pendientes { margin: 8px 0 0; padding-left: 18px; color: #9a3412; li { margin-bottom: 3px; } }
+.glpi-banner__ok { margin: 8px 0 0; color: #166534; font-weight: 600; }
+
+.campo-pendiente { border-color: #f59e0b !important; background: #fffbeb !important; box-shadow: 0 0 0 2px rgba(245, 158, 11, 0.15); }
+.campo-pendiente-caja { background: #fffbeb; border: 1px dashed #f59e0b; color: #9a3412; border-radius: 8px; padding: 6px 10px; font-size: 12px; margin-bottom: 8px; }
+.lista-usuarios.campo-pendiente { border: 1px solid #f59e0b; border-radius: 8px; }
+
+// Checklist armado al crear: texto y papelera en la misma fila (la base apila en columna).
+.checklist-item--crear { flex-direction: row; align-items: center; gap: 10px; }
+
+// ---------- Publicar seguimiento en GLPI ----------
+.overlay--glpi-pub { z-index: 10001; }
+.modal-glpi-pub { max-width: 960px; }
+.glpi-pub-caso { max-width: 200px; }
+.glpi-pub-texto { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 12.5px; line-height: 1.5; }
+.glpi-pub-archivos { border: 1px solid $border-light; border-radius: 10px; padding: 6px 12px; margin-bottom: 14px; max-height: 170px; overflow-y: auto; }
+.glpi-pub-archivo__nombre { font-weight: 600; word-break: break-all; }
+.glpi-pub-archivo__meta { font-size: 11.5px; }
+.glpi-pub-privado { margin: 4px 0 14px; font-size: 12.5px; align-items: flex-start; input { margin-top: 3px; } }
+.glpi-pub-ok { background: #f0fdf4; border: 1px solid #bbf7d0; color: #166534; border-radius: 10px; padding: 12px 14px; margin-bottom: 14px; font-size: 13px; display: flex; flex-direction: column; gap: 6px; a { color: #15803d; font-weight: 700; } }
+.glpi-pub-archivos-res { margin: 4px 0 0; padding-left: 18px; font-size: 12.5px; }
+.glpi-pub-fallo { color: #b91c1c; }
+.glpi-pub-tipos { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin: 0 0 14px; }
+.glpi-pub-tipo {
+  text-align: left; border: 1px solid $border-light; background: #fff; border-radius: 10px; padding: 10px 12px; cursor: pointer;
+  display: flex; flex-direction: column; gap: 3px; font: inherit; color: inherit;
+  strong { font-size: 13px; }
+  span { font-size: 12px; color: $brand-gray; line-height: 1.4; }
+  &:hover:not(:disabled) { border-color: var(--ax-brand-primary-claro, #c4b5fd); }
+  &:disabled { opacity: .6; cursor: default; }
+  &:focus-visible { outline: 2px solid var(--ax-brand-primary, #7c3aed); outline-offset: 2px; }
+}
+.glpi-pub-tipo--activo { border-color: var(--ax-brand-primary, #7c3aed); background: var(--ax-brand-soft, #f5f3ff); box-shadow: 0 0 0 1px var(--ax-brand-primary, #7c3aed) inset; }
+.glpi-pub-tipo--cierre.glpi-pub-tipo--activo { border-color: #15803d; background: #f0fdf4; box-shadow: 0 0 0 1px #15803d inset; }
+.glpi-pub-avisos { margin: 0 0 12px; padding: 8px 12px 8px 28px; background: #fffbeb; border: 1px solid #fde68a; color: #92400e; border-radius: 8px; font-size: 12.5px; line-height: 1.5; }
+.glpi-pub-confirma { font-weight: 600; }
+@media (max-width: 640px) { .glpi-pub-tipos { grid-template-columns: 1fr; } }
+.glpi-pub-estado { margin: 8px 0 14px; padding: 8px 12px; border: 1px solid #bbf7d0; background: #f0fdf4; border-radius: 10px; font-size: 12.5px; a { margin-left: auto; font-weight: 700; color: var(--ax-brand-ink, #4c1d95); } }
+.glpi-pub-estado--cargando { border-color: $border-light; background: #f8fafc; color: $brand-gray; }
+.glpi-pub-estado--pendiente { border-color: #fde68a; background: #fffbeb; }
+.glpi-pub-estado--cerrado { border-color: #fecaca; background: #fef2f2; }
+.glpi-pub-estado__linea { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.glpi-pub-estado__rotulo { font-weight: 700; color: $brand-gray; }
+.glpi-pub-estado__chip { font-weight: 700; background: #dcfce7; color: #166534; border-radius: 999px; padding: 2px 10px; }
+.glpi-pub-estado--pendiente .glpi-pub-estado__chip { background: #fef3c7; color: #92400e; }
+.glpi-pub-estado--cerrado .glpi-pub-estado__chip { background: #fee2e2; color: #991b1b; }
+.glpi-pub-estado__titulo { color: $brand-gray; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 420px; }
+.glpi-pub-estado__bloqueo { margin: 6px 0 0; font-weight: 600; color: #991b1b; }
+
+// ---------- Bitácora única por persona ----------
+.tipo-bus { display: inline-flex; align-items: center; font-size: 10.5px; font-weight: 800; padding: 3px 9px; border-radius: 999px; background: var(--ax-brand-soft, #e0e7ff); color: var(--ax-brand-ink, #4338ca); letter-spacing: 0.4px; }
+.dueno { font-size: 12px; font-weight: 600; color: $brand-gray; }
+.nivel-tag { font-size: 10.5px; font-weight: 800; padding: 3px 9px; border-radius: 999px; background: #fef3c7; color: #92400e; }
+.btn-compartir-fila { border: 1px solid $border-light; background: var(--ax-surface, white); color: var(--ax-brand-primary, #673ab7); font-family: inherit; font-size: 11.5px; font-weight: 700; padding: 3px 10px; border-radius: 999px; cursor: pointer; &:hover { background: $surface-bg; } }
+.servicio-tag { font-size: 12px; font-weight: 600; padding: 2px 9px; border-radius: 999px; background: var(--ax-brand-soft, #eef2ff); color: var(--ax-brand-ink, #4338ca); max-width: 280px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.servicio-tag--mas { background: $surface-bg; color: $brand-gray; }
+.tipo-toggle { display: inline-flex; border: 1px solid $border-light; border-radius: 10px; overflow: hidden; margin-bottom: 6px;
+  button { border: none; background: var(--ax-surface, white); color: $brand-gray; font-family: inherit; font-size: 13px; font-weight: 600; padding: 8px 16px; cursor: pointer; &.activo { background: var(--ax-brand-primary, #673ab7); color: #fff; } } }
+.aviso-duplicado { margin: 0 28px 12px; padding: 12px 14px; border-radius: 12px; background: #fffbeb; border: 1px solid #fde68a; color: #92400e; font-size: 13px; display: flex; flex-direction: column; gap: 6px; align-items: flex-start; }
+.aviso-solo-lectura { background: #fffbeb; color: #92400e; border: 1px solid #fde68a; border-radius: 10px; padding: 8px 12px; font-size: 12.5px; font-weight: 600; margin: 0 0 14px; }
+.dup-tag { font-size: 10.5px; font-weight: 800; padding: 3px 9px; border-radius: 999px; background: #fee2e2; color: #b91c1c; }
+.btn-fusionar { color: #b91c1c; border-color: #fecaca; &:hover { background: #fef2f2; } }
+.aviso-duplicados { background: #fffbeb; color: #92400e; border: 1px solid #fde68a; border-radius: 12px; padding: 10px 14px; font-size: 13px; margin-bottom: 14px; }
+
+/* Aviso cuando la fecha de finalización es anterior a la de inicio */
+.error-fechas { display: block; margin-top: 4px; font-size: 12px; font-weight: 600; color: #dc2626; }
+
+// ---------- Vistas: principal / ocultos / eliminados ----------
+.vistas-tabs {
+  display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin: 0 0 12px;
+  border-bottom: 1px solid $border-light; padding-bottom: 0;
+}
+.vistas-tabs__relleno { flex: 1; }
+.vista-tab {
+  font-family: inherit; display: inline-flex; align-items: center; gap: 7px;
+  background: transparent; border: none; border-bottom: 3px solid transparent; margin-bottom: -1px;
+  padding: 9px 14px; font-size: 13.5px; font-weight: 700; color: $brand-gray; cursor: pointer; border-radius: 8px 8px 0 0;
+  transition: color 0.15s, background 0.15s, border-color 0.15s;
+  svg { width: 15px; height: 15px; }
+  &:hover { color: $brand-dark; background: $surface-bg; }
+  &.activo { color: var(--ax-brand-primary, #673ab7); border-bottom-color: var(--ax-brand-primary, #673ab7); }
+  &.vista-tab--eliminados.activo { color: $state-danger; border-bottom-color: $state-danger; }
+  &:focus-visible { outline: 2px solid var(--ax-brand-primary, #673ab7); outline-offset: -2px; }
+}
+.vista-tab__n {
+  min-width: 22px; text-align: center; font-size: 11.5px; font-weight: 800; padding: 1px 7px; border-radius: 999px;
+  background: $surface-bg; color: $brand-gray; border: 1px solid $border-light;
+}
+.vista-tab.activo .vista-tab__n { background: rgba(var(--ax-brand-primary-rgb, 103, 58, 183), 0.12); color: var(--ax-brand-primary, #673ab7); border-color: transparent; }
+.vista-tab--eliminados.activo .vista-tab__n { background: #fee2e2; color: #b91c1c; }
+.vista-descripcion { margin: 0 0 12px; font-size: 13px; color: $brand-gray; }
+.aviso-esquema { background: #fffbeb; color: #92400e; border: 1px solid #fde68a; border-radius: 12px; padding: 10px 14px; font-size: 13px; margin-bottom: 14px; }
+
+.resultado-accion {
+  display: flex; align-items: flex-start; gap: 10px; margin-bottom: 14px; padding: 10px 14px; border-radius: 12px; font-size: 13px;
+  background: #ecfdf5; color: #065f46; border: 1px solid #a7f3d0;
+  ul { margin: 6px 0 0; padding-left: 18px; }
+  &.resultado-accion--error { background: #fef2f2; color: #991b1b; border-color: #fecaca; }
+}
+.resultado-accion__texto { flex: 1; min-width: 0; }
+.resultado-accion__cerrar { background: transparent; border: none; font-size: 20px; line-height: 1; color: inherit; cursor: pointer; padding: 0 4px; opacity: 0.7; &:hover { opacity: 1; } }
+
+.barra-masiva {
+  position: sticky; top: 8px; z-index: 5; display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+  margin-bottom: 14px; padding: 9px 14px; border-radius: 12px;
+  background: var(--ax-surface, white); border: 1px solid var(--ax-brand-primary, #673ab7); box-shadow: 0 6px 18px rgba(15, 23, 42, 0.12);
+}
+.barra-masiva__todos { display: inline-flex; align-items: center; gap: 7px; font-size: 13px; font-weight: 700; color: $brand-dark; cursor: pointer; }
+.barra-masiva__n { font-size: 13px; font-weight: 700; color: var(--ax-brand-primary, #673ab7); }
+.barra-masiva__relleno { flex: 1; }
+.barra-masiva__ayuda { font-size: 12.5px; color: $brand-gray; }
+.btn-peligro { color: #b91c1c; border-color: #fecaca; background: var(--ax-surface, white); &:hover { background: #fef2f2; color: #991b1b; } }
+.btn-peligro-solido { background: $state-danger; border-color: $state-danger; color: white; &:hover { background: #dc2626; color: white; } }
+
+.fila-check { width: 17px; height: 17px; cursor: pointer; accent-color: var(--ax-brand-primary, #673ab7); flex-shrink: 0; }
+.bitacora-fila.fila-seleccionada { background: rgba(var(--ax-brand-primary-rgb, 103, 58, 183), 0.07); }
+.bitacora-fila.fila-eliminada {
+  .bitacora-fila__titulo, .bitacora-fila__meta { opacity: 0.62; }
+  .bitacora-fila__titulo { text-decoration: line-through; text-decoration-color: rgba(100, 116, 139, 0.6); }
+}
+.tag-eliminado { font-size: 10.5px; font-weight: 800; padding: 3px 9px; border-radius: 999px; background: #fee2e2; color: #b91c1c; }
+.tag-oculto { font-size: 10.5px; font-weight: 800; padding: 3px 9px; border-radius: 999px; background: $surface-bg; color: $brand-gray; border: 1px solid $border-light; }
+.bitacora-fila__eliminado { margin-top: 8px; font-size: 12.5px; color: #991b1b; background: #fef2f2; border-radius: 8px; padding: 6px 10px; }
+.btn-restaurar { color: #047857; border-color: #a7f3d0; &:hover { background: #ecfdf5; } }
+.btn-icono {
+  background: transparent; border: none; color: $state-muted; cursor: pointer; padding: 4px; border-radius: 6px; transition: all 0.15s;
+  svg { width: 15px; height: 15px; display: block; }
+  &:hover { color: var(--ax-brand-primary, #673ab7); background: rgba(var(--ax-brand-primary-rgb, 103, 58, 183), 0.1); }
+}
+.aviso-eliminado { background: #fef2f2; color: #991b1b; border: 1px solid #fecaca; border-radius: 12px; padding: 10px 14px; font-size: 13px; margin-bottom: 14px; }
+
+// ---------- Diálogo de eliminación ----------
+.modal-eliminar { max-width: 600px; }
+.eliminar-objetivo { margin: 0 0 14px; font-weight: 700; color: $brand-dark; overflow-wrap: anywhere; }
+.opciones-eliminar { display: flex; flex-direction: column; gap: 10px; margin-bottom: 14px; }
+.opcion-eliminar {
+  display: flex; gap: 12px; align-items: flex-start; padding: 12px 14px; border-radius: 12px; cursor: pointer;
+  border: 1.5px solid $border-light; background: var(--ax-surface, white); transition: border-color 0.15s, background 0.15s;
+  input[type='radio'] { margin-top: 3px; accent-color: var(--ax-brand-primary, #673ab7); flex-shrink: 0; }
+  &:hover { background: $surface-bg; }
+  &.opcion-eliminar--sel { border-color: var(--ax-brand-primary, #673ab7); background: rgba(var(--ax-brand-primary-rgb, 103, 58, 183), 0.06); }
+  &.opcion-eliminar--peligro.opcion-eliminar--sel { border-color: $state-danger; background: #fef2f2; input[type='radio'] { accent-color: $state-danger; } }
+  &.opcion-eliminar--off { opacity: 0.6; cursor: not-allowed; }
+}
+.opcion-eliminar__cuerpo { display: flex; flex-direction: column; gap: 4px; min-width: 0; small { color: $brand-gray; font-size: 12.5px; line-height: 1.45; } }
+.opcion-eliminar__titulo { font-weight: 800; font-size: 14px; color: $brand-dark; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.opcion-eliminar__sin-permiso { color: #b45309 !important; font-weight: 600; }
+.pildora { font-size: 10.5px; font-weight: 800; padding: 2px 9px; border-radius: 999px; }
+.pildora--ok { background: #d1fae5; color: #047857; }
+.pildora--peligro { background: #fee2e2; color: #b91c1c; }
+.campo-eliminar {
+  display: flex; flex-direction: column; gap: 6px; margin-bottom: 6px; font-size: 13px; font-weight: 700; color: $brand-dark;
+  input { padding: 9px 12px; border-radius: 9px; border: 1px solid $border-light; background: $surface-bg; color: $brand-dark; font-family: inherit; font-size: 13px; &:focus { outline: none; border-color: var(--ax-brand-primary, #673ab7); } }
+}
+.confirmo-eliminar { display: flex; align-items: flex-start; gap: 9px; font-size: 13px; color: #991b1b; font-weight: 600; cursor: pointer; margin-bottom: 6px; input { margin-top: 2px; accent-color: $state-danger; } }
+
+// Los botones llenos conservan su color al pasar el mouse (.btn:hover les pintaba el fondo claro con texto blanco).
+.btn.btn-primary:hover { background: var(--ax-brand-primary, #673ab7); color: white; opacity: 0.92; }
+.btn.btn-peligro-solido:hover { background: #dc2626; border-color: #dc2626; color: white; }

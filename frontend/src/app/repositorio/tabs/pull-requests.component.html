@@ -1,0 +1,38 @@
+<div class="pr-container">
+  <div class="filtros-bar">
+    <button
+      type="button"
+      *ngFor="let f of filtros"
+      class="btn-filtro"
+      [class.activo]="filtroActivo === f.valor"
+      (click)="cargar(f.valor)"
+      [disabled]="cargando && filtroActivo === f.valor"
+    >{{ f.texto }}</button>
+  </div>
+
+  <div class="empty-state text-center py-4" *ngIf="cargando">Cargando pull requests…</div>
+  <div class="error-state" *ngIf="!cargando && error"><app-ico n="alerta"></app-ico>{{ error }}</div>
+
+  <div class="lista-pr" *ngIf="!cargando && !error">
+    <p class="vacio-carpeta" *ngIf="!pullRequests.length">No hay pull requests en este estado.</p>
+
+    <div class="fila-pr" *ngFor="let pr of pullRequests">
+      <div class="pr-encabezado">
+        <span class="badge-estado" [ngClass]="'estado-' + pr.estado">{{ etiquetaEstado(pr.estado) }}</span>
+        <span class="badge-borrador" *ngIf="pr.esBorrador">Borrador</span>
+        <span class="pr-titulo">{{ pr.titulo }}</span>
+        <span class="pr-id">#{{ pr.id }}</span>
+      </div>
+      <p class="pr-descripcion" *ngIf="pr.descripcion">{{ pr.descripcion }}</p>
+      <div class="pr-meta">
+        <span class="pr-autor"><app-ico n="usuario"></app-ico>{{ pr.autor }}</span>
+        <span class="pr-ramas">
+          <code>{{ pr.ramaOrigen }}</code><app-ico n="derecha" class="sep"></app-ico><code>{{ pr.ramaDestino }}</code>
+        </span>
+        <span class="pr-fecha" *ngIf="pr.creado">Creado: {{ pr.creado | date:'dd/MM/yyyy HH:mm' }}</span>
+        <span class="pr-fecha" *ngIf="pr.cerrado">Cerrado: {{ pr.cerrado | date:'dd/MM/yyyy HH:mm' }}</span>
+        <a [href]="pr.url" target="_blank" rel="noopener" class="ver-en-azure">Ver en Azure DevOps<app-ico n="externo" class="fin"></app-ico></a>
+      </div>
+    </div>
+  </div>
+</div>

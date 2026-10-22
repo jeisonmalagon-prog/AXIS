@@ -1,0 +1,88 @@
+<article class="causa" [class.causa--masivo]="causa.masivo">
+  <header class="causa__cabecera" (click)="alternar()" tabindex="0" (keyup.enter)="alternar()" role="button" [attr.aria-expanded]="abierta">
+    <span class="causa__flecha" aria-hidden="true">{{ abierta ? '▾' : '▸' }}</span>
+    <div class="causa__titulo">
+      <div class="causa__etiquetas">
+        <span class="pill pill--error" *ngIf="causa.masivo">MASIVO</span>
+        <span class="pill pill--warn" *ngIf="causa.categoria === 'timeout'">{{ categoria(causa.categoria) }}</span>
+        <span class="pill" *ngIf="causa.categoria !== 'timeout'">{{ categoria(causa.categoria) }}</span>
+      </div>
+      <strong>{{ causa.titulo }}</strong>
+      <small>{{ causa.primera.replace('T', ' ') }} → {{ causa.ultima.replace('T', ' ') }}</small>
+    </div>
+    <div class="causa__cifras">
+      <span><b>{{ causa.clientesAfectados }}</b> clientes</span>
+      <span><b>{{ causa.errores }}</b> errores</span>
+      <span title="Errores de esta causa sobre las llamadas del servicio en la muestra"><b>{{ pct(causa.tasaError, 0) }}</b> de {{ causa.llamadasAfectadas }} llamadas</span>
+    </div>
+  </header>
+
+  <div class="causa__cuerpo" *ngIf="abierta">
+    <div class="datos">
+      <div *ngIf="causa.servicioAce"><span>Servicio ACE</span><strong class="mono">{{ causa.servicioAce.id }} {{ causa.servicioAce.servicio }}.{{ causa.servicioAce.operacion }}</strong></div>
+      <div *ngIf="causa.catalogo?.descripcion"><span>Qué hace (catálogo)</span><strong>{{ causa.catalogo?.descripcion }}</strong></div>
+      <div *ngIf="causa.catalogo?.operacionBackend"><span>Operación en el sistema</span><strong class="mono">{{ causa.catalogo?.operacionBackend }}</strong></div>
+      <div *ngIf="causa.codigo"><span>Código / marca</span><strong class="mono">{{ causa.codigo }}</strong></div>
+      <div *ngIf="causa.duracion && causa.duracion.n"><span>Duración hasta el error</span><strong>mediana {{ formatearDuracion(causa.duracion.p50Ms) }} · máx. {{ formatearDuracion(causa.duracion.maxMs) }}</strong></div>
+      <div *ngIf="causa.concentracionNodo !== null"><span>Concentración en un nodo</span><strong>{{ pct(causa.concentracionNodo, 0) }}</strong></div>
+    </div>
+
+    <p class="causa__significado" *ngIf="causa.significadoApp">{{ causa.significadoApp }}</p>
+    <p class="causa__significado" *ngIf="causa.detalleBanco">{{ causa.detalleBanco }}</p>
+
+    <div class="causa__falla" *ngIf="causa.falla as f">
+      <div><b>{{ f.esTimeout ? 'Tiempo de espera agotado' : 'Falla' }}</b><span *ngIf="f.segundosLimite"> · límite {{ f.segundosLimite }} s</span><span *ngIf="f.nodoIntegracion"> · nodo de integración <span class="mono">{{ f.nodoIntegracion }}</span></span></div>
+      <div *ngIf="f.mensaje">Mensaje de ACE: <span class="mono">{{ f.mensaje }}</span></div>
+      <div *ngIf="f.servicioActor">Servicio que no respondió: <span class="mono">{{ f.servicioActor }}</span></div>
+      <div *ngIf="f.fase === 'dentro_flujo'" class="causa__fase">Llegó al flujo de ACE y se agotó el tiempo procesando: la espera estuvo en ACE o en el sistema que consulta detrás.</div>
+      <div *ngIf="f.fase === 'antes_flujo'" class="causa__fase">No llegó a entrar al flujo de ACE: cola o saturación del nodo de integración o de la entrada del servicio.</div>
+    </div>
+
+    <div class="causa__codigos" *ngIf="causa.codigos && causa.codigos.length">
+      <app-pasos-analisis [pasos]="[{ tipo: 'soap', titulo: 'Códigos del error', nivel: 'error', texto: '', hora: '', esperaMs: 0, lento: false, destino: null, transaccion: null, falla: null, codigos: causa.codigos, catalogo: null }]"></app-pasos-analisis>
+    </div>
+
+    <div class="distribucion">
+      <div class="dist" *ngIf="causa.nodos.length"><span class="dist__etq">Nodos</span><span class="chip" *ngFor="let n of causa.nodos">{{ n.valor }} <b>{{ n.n }}</b></span></div>
+      <div class="dist" *ngIf="causa.versiones.length"><span class="dist__etq">Versiones</span><span class="chip" *ngFor="let n of causa.versiones">{{ n.valor }} <b>{{ n.n }}</b></span></div>
+      <div class="dist" *ngIf="causa.plataformas.length"><span class="dist__etq">Plataformas</span><span class="chip" *ngFor="let n of causa.plataformas">{{ n.valor }} <b>{{ n.n }}</b></span></div>
+      <div class="dist" *ngIf="causa.metodos.length"><span class="dist__etq">Servicios de la app</span><span class="chip" *ngFor="let n of causa.metodos">{{ n.valor }} <b>{{ n.n }}</b></span></div>
+    </div>
+
+    <div class="linea-tiempo" *ngIf="causa.porMinuto.length > 1">
+      <span class="dist__etq">Errores por minuto</span>
+      <div class="barras" role="img" [attr.aria-label]="'Errores por minuto de ' + causa.primera + ' a ' + causa.ultima">
+        <div class="barra" *ngFor="let m of causa.porMinuto" [style.height.%]="alturaBarra(m.n)" [title]="m.minuto.replace('T', ' ') + ' — ' + m.n + ' error(es)'"></div>
+      </div>
+      <div class="barras__ejes"><span>{{ causa.porMinuto[0].minuto.slice(11) }}</span><span>{{ causa.porMinuto[causa.porMinuto.length - 1].minuto.slice(11) }}</span></div>
+    </div>
+
+    <div class="muestras" *ngIf="causa.muestras.length">
+      <h4>Ejemplos (para buscar en Consulta de logs)</h4>
+      <div class="tabla-scroll">
+        <table>
+          <thead><tr><th>CC</th><th>Hora</th><th>Servicio</th><th class="num">Tardó</th><th>Nodo</th><th>Transacción ACE</th></tr></thead>
+          <tbody>
+            <tr *ngFor="let m of causa.muestras">
+              <td class="mono">{{ m.documento }}</td>
+              <td class="mono">{{ m.hora.replace('T', ' ') }}</td>
+              <td>{{ m.metodo }}</td>
+              <td class="num">{{ m.duracionMs !== null ? formatearDuracion(m.duracionMs) : '—' }}</td>
+              <td>{{ m.nodo ?? '—' }}</td>
+              <td class="mono">{{ m.transaccion ?? '—' }}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="causa__pie">
+      <button type="button" class="btn-secundario btn-mini" (click)="copiarResumen()">{{ copiado ? '¡Copiado!' : 'Copiar resumen' }}</button>
+      <button type="button" class="btn-secundario btn-mini" *ngIf="causa.clientes.length" (click)="verClientes = !verClientes">{{ verClientes ? 'Ocultar' : 'Ver' }} los {{ causa.clientes.length }} CC afectados</button>
+      <button type="button" class="btn-secundario btn-mini" *ngIf="verClientes" (click)="copiarClientes()">Copiar lista de CC</button>
+    </div>
+    <div class="lista-cc mono" *ngIf="verClientes">
+      <span *ngFor="let d of causa.clientes">{{ d }}</span>
+    </div>
+  </div>
+</article>

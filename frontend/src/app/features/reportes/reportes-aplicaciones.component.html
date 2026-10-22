@@ -1,0 +1,194 @@
+<header class="page-header">
+  <div>
+    <h1>Informes · Aplicaciones e Inventario</h1>
+    <p class="subtitle">Fase 2 del informe general del aplicativo — snapshot del inventario de sub-aplicativos y conexiones a bases de datos registradas por periodo</p>
+  </div>
+</header>
+
+<!-- ===================================================
+     SELECTOR DE PERIODO
+==================================================== -->
+<section class="seccion-selector">
+  <div class="selector-periodo">
+    <button type="button" class="btn-periodo" [class.activo]="periodo === 'dia'" (click)="seleccionarPeriodo('dia')">Día</button>
+    <button type="button" class="btn-periodo" [class.activo]="periodo === 'semana'" (click)="seleccionarPeriodo('semana')">Semana</button>
+    <button type="button" class="btn-periodo" [class.activo]="periodo === 'mes'" (click)="seleccionarPeriodo('mes')">Mes</button>
+    <button type="button" class="btn-periodo" [class.activo]="periodo === 'rango'" (click)="seleccionarPeriodo('rango')">Rango personalizado</button>
+  </div>
+
+  <div class="rango-fechas" *ngIf="periodo === 'rango'">
+    <label>
+      Desde
+      <input type="date" [(ngModel)]="desde" [max]="hasta">
+    </label>
+    <label>
+      Hasta
+      <input type="date" [(ngModel)]="hasta" [min]="desde">
+    </label>
+    <button type="button" class="btn-sm" (click)="generarInforme()">Generar</button>
+  </div>
+
+  <div class="acciones-informe">
+    <button type="button" class="btn-sm" (click)="generarInforme()" [disabled]="cargando">↻ Actualizar</button>
+    <button type="button" class="btn-sm btn-pdf" (click)="descargarPdf()" [disabled]="generandoPdf">
+      {{ generandoPdf ? 'Generando PDF…' : '⬇ Descargar PDF' }}
+    </button>
+  </div>
+</section>
+
+<div class="mensaje-error mensaje-error-seccion" *ngIf="error">{{ error }}</div>
+<div class="mensaje-error mensaje-error-seccion" *ngIf="errorPdf">{{ errorPdf }}</div>
+
+<div class="loading-state" *ngIf="cargando">
+  <div class="spinner"></div>
+  <p>Generando informe...</p>
+</div>
+
+<ng-container *ngIf="!cargando && informe">
+  <p class="etiqueta-periodo-activo">
+    Periodo: <strong>{{ etiquetaPeriodo }}</strong>
+    <span class="etiqueta-comparacion-vs" *ngIf="comparacionConexionesPeriodoAnteriorDesde && comparacionConexionesPeriodoAnteriorHasta">· conexiones BD comparadas contra {{ formatoFecha(comparacionConexionesPeriodoAnteriorDesde) }} — {{ formatoFecha(comparacionConexionesPeriodoAnteriorHasta) }}</span>
+  </p>
+
+  <div class="mensaje-error mensaje-error-seccion aviso-snapshot">
+    Este informe es principalmente un snapshot del estado actual — Aplicaciones e Inventario no registran fecha de alta, así que el único dato filtrado por periodo (con tendencia y comparación) son las conexiones a bases de datos registradas.
+  </div>
+
+  <section class="centro-analitica">
+    <!-- ---------- Resumen actual ---------- -->
+    <h2 class="subtitulo-seccion">Resumen general (estado actual)</h2>
+    <div class="kpis-grid">
+      <div class="kpi-card kpi-info kpi-sano">
+        <div class="kpi-texto">
+          <span class="kpi-valor">{{ informe.resumenActual.totalAplicacionesNegocio }}</span>
+          <span class="kpi-label">Aplicaciones de negocio</span>
+        </div>
+      </div>
+      <div class="kpi-card kpi-info kpi-sano">
+        <div class="kpi-texto">
+          <span class="kpi-valor">{{ informe.resumenActual.totalSubaplicativos }}</span>
+          <span class="kpi-label">Sub-aplicativos</span>
+        </div>
+      </div>
+      <div class="kpi-card kpi-info kpi-sano">
+        <div class="kpi-texto">
+          <span class="kpi-valor">{{ informe.resumenActual.totalServidores }}</span>
+          <span class="kpi-label">Servidores activos</span>
+        </div>
+      </div>
+      <div class="kpi-card kpi-info" [ngClass]="informe.resumenActual.servidoresSinAplicativos ? 'kpi-riesgo' : 'kpi-sano'">
+        <div class="kpi-texto">
+          <span class="kpi-valor">{{ informe.resumenActual.servidoresSinAplicativos }}</span>
+          <span class="kpi-label">Servidores sin aplicativos</span>
+        </div>
+      </div>
+      <div class="kpi-card kpi-info" [ngClass]="informe.resumenActual.subaplicativosSinCertificado ? 'kpi-riesgo' : 'kpi-sano'">
+        <div class="kpi-texto">
+          <span class="kpi-valor">{{ informe.resumenActual.subaplicativosSinCertificado }}</span>
+          <span class="kpi-label">Sub-aplicativos sin certificado</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- ---------- Actividad del periodo ---------- -->
+    <h2 class="subtitulo-seccion">Actividad del periodo</h2>
+    <div class="kpis-grid">
+      <div class="kpi-card kpi-info kpi-sano">
+        <div class="kpi-texto">
+          <span class="kpi-valor">{{ informe.altasConexionesBdEnPeriodo }}</span>
+          <span class="kpi-label">Conexiones BD registradas</span>
+        </div>
+        <span class="pill-comparacion" [ngClass]="claseComparacion(cambioConexionesBd)">
+          {{ textoComparacion(cambioConexionesBd) }}
+        </span>
+      </div>
+    </div>
+
+    <!-- ---------- Tendencia ---------- -->
+    <div class="panel-analitica panel-analitica-ancho">
+      <h3>Tendencia — conexiones a bases de datos registradas</h3>
+      <p class="panel-atencion-subtitulo">Evolución por periodo (el tamaño de cada cubeta se ajusta automáticamente a la ventana de tiempo seleccionada)</p>
+      <app-line-chart [etiquetas]="etiquetasTendencia" [series]="serieConexionesBd"></app-line-chart>
+    </div>
+
+    <!-- ---------- Distribución actual + rankings ---------- -->
+    <div class="analitica-paneles-secundarios">
+      <div class="panel-analitica">
+        <h3>Servidores con aplicativos vs. sin aplicativos</h3>
+        <app-donut-chart [segmentos]="segmentosServidores" centroEtiqueta="Servidores"></app-donut-chart>
+      </div>
+      <div class="panel-analitica">
+        <h3>Sub-aplicativos con certificado vs. sin certificado</h3>
+        <app-donut-chart [segmentos]="segmentosCertificados" centroEtiqueta="Sub-aplicativos"></app-donut-chart>
+      </div>
+      <div class="panel-analitica">
+        <h3>Sub-aplicativos por nivel de criticidad</h3>
+        <app-bar-list [items]="informe.criticidadSubaplicativos" colorVar="var(--ax-chart-series-1)"></app-bar-list>
+      </div>
+      <div class="panel-analitica">
+        <h3>Motores de base de datos más usados (todo el inventario)</h3>
+        <app-bar-list [items]="informe.topMotoresBd" colorVar="var(--ax-chart-series-2)"></app-bar-list>
+      </div>
+    </div>
+
+    <!-- ---------- Servidores sin aplicativos ---------- -->
+    <div class="panel-analitica panel-atencion panel-analitica-ancho">
+      <h3>Servidores sin aplicativos registrados</h3>
+      <div class="tabla-atencion" *ngIf="informe.servidoresSinAplicativos.length; else sinServidoresHuerfanos">
+        <div class="tabla-atencion-header cols-2">
+          <span>Servidor</span>
+          <span>IP</span>
+        </div>
+        <div class="tabla-atencion-fila cols-2" *ngFor="let s of informe.servidoresSinAplicativos; trackBy: trackServidor">
+          <span>{{ s.Hostname }}</span>
+          <span>{{ s.IP }}</span>
+        </div>
+      </div>
+      <ng-template #sinServidoresHuerfanos>
+        <p class="sin-datos">Todos los servidores activos tienen al menos un aplicativo registrado.</p>
+      </ng-template>
+    </div>
+
+    <!-- ---------- Sub-aplicativos sin certificado ---------- -->
+    <div class="panel-analitica panel-atencion panel-analitica-ancho">
+      <h3>Sub-aplicativos sin certificado asociado</h3>
+      <div class="tabla-atencion" *ngIf="informe.subaplicativosSinCertificado.length; else sinFaltantesCert">
+        <div class="tabla-atencion-header cols-2">
+          <span>Sub-aplicativo</span>
+          <span>Servidor</span>
+        </div>
+        <div class="tabla-atencion-fila cols-2" *ngFor="let sa of informe.subaplicativosSinCertificado; trackBy: trackSubaplicativo">
+          <span [title]="sa.Nombre">{{ sa.Nombre }}</span>
+          <span>{{ sa.Hostname || 'Sin asignar' }}</span>
+        </div>
+      </div>
+      <ng-template #sinFaltantesCert>
+        <p class="sin-datos">Todos los sub-aplicativos tienen un certificado asociado.</p>
+      </ng-template>
+    </div>
+
+    <!-- ---------- Conexiones BD en el periodo ---------- -->
+    <div class="panel-analitica panel-atencion panel-analitica-ancho">
+      <h3>Conexiones a bases de datos registradas en el periodo — detalle ({{ informe.altasConexionesBdEnPeriodo }})</h3>
+      <div class="tabla-atencion" *ngIf="informe.conexionesBdEnPeriodo.length; else sinConexiones">
+        <div class="tabla-atencion-header cols-5">
+          <span>Aplicativo</span>
+          <span>Motor</span>
+          <span>Base de datos</span>
+          <span>Servidor BD</span>
+          <span>Registrada</span>
+        </div>
+        <div class="tabla-atencion-fila cols-5" *ngFor="let c of informe.conexionesBdEnPeriodo; trackBy: trackConexion">
+          <span [title]="c.AplicativoNombre || ''">{{ c.AplicativoNombre || 'Sin asignar' }}</span>
+          <span>{{ c.motor_bd }}</span>
+          <span [title]="c.nombre_base_datos">{{ c.nombre_base_datos }}</span>
+          <span>{{ c.ServidorBdHostname || '-' }}</span>
+          <span>{{ formatoFecha(c.fecha_registro) }}</span>
+        </div>
+      </div>
+      <ng-template #sinConexiones>
+        <p class="sin-datos">No se registraron conexiones a bases de datos en este periodo.</p>
+      </ng-template>
+    </div>
+  </section>
+</ng-container>

@@ -1,0 +1,179 @@
+<div class="modal-overlay" (click)="intentarCerrar()">
+  <div class="modal-card modal-conexion" (click)="$event.stopPropagation()" role="dialog" aria-modal="true" aria-label="Conexión con Azure DevOps">
+    <div class="modal-header">
+      <div>
+        <h2><app-ico n="conexion"></app-ico>Conexión con Azure DevOps</h2>
+        <p class="sub">Tokens de acceso (PAT) y datos del proyecto. Solo el ADMIN_POD puede verlo y cambiarlo.</p>
+      </div>
+      <button type="button" class="close-btn" (click)="intentarCerrar()" aria-label="Cerrar"><app-ico n="cerrar" class="solo"></app-ico></button>
+    </div>
+
+    <div class="cargando" *ngIf="cargando"><div class="spinner"></div><p>Cargando la conexión…</p></div>
+    <div class="error-state" *ngIf="error"><app-ico n="alerta"></app-ico>{{ error }}</div>
+
+    <ng-container *ngIf="datos">
+      <div class="aviso-aviso" *ngIf="!datos.cifradoListo">
+        <strong>No se pueden guardar tokens todavía.</strong> El servidor no tiene una clave para cifrarlos.
+        Define <code>AZURE_TOKENS_KEY</code> (o <code>JWT_SECRET</code>) en el <code>.env</code> del backend y reinicia el contenedor.
+      </div>
+      <div class="aviso-aviso" *ngIf="datos.cifradoListo && !datos.tabla">
+        <strong>Falta crear la tabla de tokens.</strong> Ejecuta una sola vez en la base de datos el script
+        <code>crear_tabla_azure_devops_tokens.sql</code> y vuelve a abrir este panel.
+      </div>
+
+      <!-- ===== TOKENS ===== -->
+      <section class="bloque">
+        <div class="bloque-cab">
+          <h3>Tokens de acceso</h3>
+          <span class="chip">{{ tokens.length }} guardado(s)</span>
+        </div>
+        <p class="ayuda">
+          Puedes guardar uno o varios. Se <strong>complementan por permisos</strong>: para cada sección el servidor usa el primero (por orden) que tenga permiso de leerla,
+          así que puedes tener, por ejemplo, un token solo para código y otro para pipelines y releases.
+          El valor se guarda cifrado y no se vuelve a mostrar; solo verás los últimos 4 caracteres.
+        </p>
+
+        <ul class="tokens" *ngIf="tokens.length">
+          <li class="token" *ngFor="let t of tokens; let i = index; let primero = first; let ultimo = last; trackBy: trackId" [class.inactivo]="!t.activo">
+            <div class="tk-cab">
+              <span class="tk-ico"><app-ico n="llave" class="solo"></app-ico></span>
+              <div class="tk-id">
+                <ng-container *ngIf="editandoId !== t.id; else editarNombre">
+                  <strong class="tk-nombre">{{ t.nombre }}</strong>
+                </ng-container>
+                <ng-template #editarNombre>
+                  <form class="en-linea" (ngSubmit)="guardarNombre(t)">
+                    <input class="entrada" name="nom{{ t.id }}" [(ngModel)]="editNombre" maxlength="80" aria-label="Nombre del token" />
+                    <button type="submit" class="btn btn-purple btn-sm">Guardar</button>
+                    <button type="button" class="btn btn-ghost btn-sm" (click)="editandoId = null">Cancelar</button>
+                  </form>
+                </ng-template>
+                <span class="tk-mask mono">•••• {{ t.ultimos4 }}</span>
+              </div>
+              <div class="tk-estado">
+                <span class="est" [class.est-ok]="t.activo && t.legible" [class.est-nulo]="!t.activo" [class.est-mal]="t.activo && !t.legible">
+                  {{ !t.legible ? 'No se puede descifrar' : t.activo ? 'Activo' : 'Desactivado' }}
+                </span>
+                <span class="est" [ngClass]="'est-' + claseResumen(resultadoDe(t))">{{ resumenPrueba(resultadoDe(t)) }}</span>
+              </div>
+              <div class="tk-orden">
+                <button type="button" class="ico-btn" (click)="mover(t, -1)" [disabled]="primero || trabajandoId === t.id" aria-label="Subir prioridad" title="Subir prioridad"><app-ico n="subirOrden" class="solo"></app-ico></button>
+                <button type="button" class="ico-btn" (click)="mover(t, 1)" [disabled]="ultimo || trabajandoId === t.id" aria-label="Bajar prioridad" title="Bajar prioridad"><app-ico n="bajarOrden" class="solo"></app-ico></button>
+              </div>
+            </div>
+
+            <div class="tk-acciones">
+              <button type="button" class="btn btn-ghost btn-sm" (click)="probar(t.id)" [disabled]="trabajandoId === t.id || !t.legible"><app-ico n="prueba"></app-ico>{{ trabajandoId === t.id ? 'Probando…' : 'Probar permisos' }}</button>
+              <button type="button" class="btn btn-ghost btn-sm" (click)="empezarRenombrar(t)" [disabled]="editandoId === t.id"><app-ico n="editar"></app-ico>Renombrar</button>
+              <button type="button" class="btn btn-ghost btn-sm" (click)="empezarReemplazo(t)"><app-ico n="refrescar"></app-ico>Cambiar valor</button>
+              <button type="button" class="btn btn-ghost btn-sm" (click)="alternarActivo(t)" [disabled]="trabajandoId === t.id">
+                <app-ico [n]="t.activo ? 'ojoNo' : 'ojo'"></app-ico>{{ t.activo ? 'Desactivar' : 'Activar' }}
+              </button>
+              <span class="espacio"></span>
+              <ng-container *ngIf="confirmarEliminarId !== t.id; else confirmar">
+                <button type="button" class="btn btn-ghost btn-sm peligro" (click)="confirmarEliminarId = t.id"><app-ico n="basura"></app-ico>Eliminar</button>
+              </ng-container>
+              <ng-template #confirmar>
+                <span class="confirmar">¿Eliminar este token?
+                  <button type="button" class="btn btn-sm btn-peligro" (click)="eliminar(t)" [disabled]="trabajandoId === t.id">Sí, eliminar</button>
+                  <button type="button" class="btn btn-ghost btn-sm" (click)="confirmarEliminarId = null">No</button>
+                </span>
+              </ng-template>
+            </div>
+
+            <form class="en-linea reemplazo" *ngIf="reemplazandoId === t.id" (ngSubmit)="guardarReemplazo(t)" autocomplete="off">
+              <input class="entrada" type="password" name="rep{{ t.id }}" [(ngModel)]="reemplazoToken" placeholder="Pega aquí el token nuevo" autocomplete="new-password" spellcheck="false" aria-label="Valor nuevo del token" />
+              <button type="submit" class="btn btn-purple btn-sm" [disabled]="!reemplazoToken.trim() || trabajandoId === t.id">Guardar y probar</button>
+              <button type="button" class="btn btn-ghost btn-sm" (click)="reemplazandoId = null">Cancelar</button>
+            </form>
+
+            <div class="error-linea" *ngIf="errorFila && errorFila.id === t.id"><app-ico n="alerta"></app-ico>{{ errorFila.texto }}</div>
+
+            <ng-container *ngIf="resultadoDe(t) as r">
+              <button type="button" class="enlace ver-det" (click)="alternarDetalle('' + t.id)" [attr.aria-expanded]="abiertos.has('' + t.id)">
+                {{ abiertos.has('' + t.id) ? 'Ocultar' : 'Ver' }} qué secciones puede leer
+                <small *ngIf="t.probadoEn || r.probadoEn"> · probado {{ fecha(r.probadoEn || t.probadoEn) }}</small>
+              </button>
+              <div class="det-areas" *ngIf="abiertos.has('' + t.id)">
+                <div class="aviso-aviso" *ngIf="r.sinRed">No se pudo contactar a Azure DevOps desde el servidor; el resultado no es concluyente.</div>
+                <span class="area" *ngFor="let a of r.detalle" [class.ok]="a.ok" [class.mal]="!a.ok" [title]="a.permiso">
+                  <app-ico [n]="a.ok ? 'check' : 'x'" class="solo"></app-ico>{{ a.nombre }}
+                </span>
+                <p class="nota" *ngIf="r.ok < r.total">Las secciones sin marca de verificación las atenderá otro token que sí tenga el permiso. Pasa el cursor sobre cada una para ver cuál hace falta.</p>
+              </div>
+            </ng-container>
+          </li>
+        </ul>
+
+        <div class="vacio-tk" *ngIf="!tokens.length">Todavía no hay tokens guardados en la aplicación.</div>
+
+        <!-- Token del .env (solo informativo) -->
+        <div class="token env" *ngIf="datos.tokenEnv.presente">
+          <div class="tk-cab">
+            <span class="tk-ico"><app-ico n="candado" class="solo"></app-ico></span>
+            <div class="tk-id">
+              <strong class="tk-nombre">Token del servidor (.env)</strong>
+              <span class="tk-mask mono">•••• {{ datos.tokenEnv.ultimos4 }}</span>
+            </div>
+            <div class="tk-estado">
+              <span class="est" [class.est-info]="datos.tokenEnv.enUso" [class.est-nulo]="!datos.tokenEnv.enUso">{{ datos.tokenEnv.enUso ? 'En uso (no hay tokens guardados)' : 'De respaldo' }}</span>
+            </div>
+          </div>
+          <div class="tk-acciones">
+            <button type="button" class="btn btn-ghost btn-sm" (click)="probar('env')" [disabled]="trabajandoId === 'env'"><app-ico n="prueba"></app-ico>{{ trabajandoId === 'env' ? 'Probando…' : 'Probar permisos' }}</button>
+          </div>
+          <div class="error-linea" *ngIf="errorFila && errorFila.id === 'env'"><app-ico n="alerta"></app-ico>{{ errorFila.texto }}</div>
+          <ng-container *ngIf="pruebas['env'] as r">
+            <div class="det-areas">
+              <span class="area" *ngFor="let a of r.detalle" [class.ok]="a.ok" [class.mal]="!a.ok" [title]="a.permiso"><app-ico [n]="a.ok ? 'check' : 'x'" class="solo"></app-ico>{{ a.nombre }}</span>
+            </div>
+          </ng-container>
+          <p class="nota">Este token viene de la configuración del servidor y solo se usa mientras no haya tokens guardados aquí. Cuando agregues uno, puedes quitarlo del <code>.env</code>.</p>
+        </div>
+
+        <!-- Alta -->
+        <form class="alta" (ngSubmit)="agregar()" autocomplete="off" *ngIf="datos.cifradoListo">
+          <h4><app-ico n="mas"></app-ico>Agregar un token</h4>
+          <div class="alta-campos">
+            <label class="campo-v">
+              <span>Nombre</span>
+              <input class="entrada" name="nuevoNombre" [(ngModel)]="nuevoNombre" maxlength="80" placeholder="Ej. Lectura de código" autocomplete="off" />
+            </label>
+            <label class="campo-v grande">
+              <span>Token (PAT)</span>
+              <span class="con-ojo">
+                <input class="entrada" name="nuevoToken" [type]="verNuevo ? 'text' : 'password'" [(ngModel)]="nuevoToken" placeholder="Pega aquí el token de Azure DevOps" autocomplete="new-password" spellcheck="false" />
+                <button type="button" class="ico-btn" (click)="verNuevo = !verNuevo" [attr.aria-label]="verNuevo ? 'Ocultar token' : 'Mostrar token'"><app-ico [n]="verNuevo ? 'ojoNo' : 'ojo'" class="solo"></app-ico></button>
+              </span>
+            </label>
+            <button type="submit" class="btn btn-purple" [disabled]="agregando || !nuevoNombre.trim() || !nuevoToken.trim()">{{ agregando ? 'Guardando…' : 'Guardar y probar' }}</button>
+          </div>
+          <div class="error-linea" *ngIf="errorAlta"><app-ico n="alerta"></app-ico>{{ errorAlta }}</div>
+          <p class="nota">
+            En Azure DevOps: <em>User settings → Personal access tokens → New token</em>. Este módulo solo lee, así que basta con permisos de <strong>lectura</strong>
+            (Code, Build, Release, Work Items, Wiki, Project and Team, etc.). Al guardarlo se prueba y verás qué secciones puede leer.
+          </p>
+        </form>
+      </section>
+
+      <!-- ===== AJUSTES ===== -->
+      <section class="bloque">
+        <div class="bloque-cab"><h3>Organización y repositorio</h3></div>
+        <p class="ayuda">Si dejas un campo vacío se usa el valor del servidor (el que aparece como sugerencia).</p>
+        <form class="ajustes" (ngSubmit)="guardarAjustes()" autocomplete="off">
+          <label class="campo-v"><span>Organización</span><input class="entrada" name="org" [(ngModel)]="aj.org" [placeholder]="datos.porDefecto.org || 'organización'" maxlength="120" /></label>
+          <label class="campo-v"><span>Proyecto</span><input class="entrada" name="project" [(ngModel)]="aj.project" [placeholder]="datos.porDefecto.project || 'proyecto'" maxlength="120" /></label>
+          <label class="campo-v"><span>Repositorio por defecto</span><input class="entrada" name="repo" [(ngModel)]="aj.repo" [placeholder]="datos.porDefecto.repo || 'repositorio'" maxlength="120" /></label>
+          <label class="campo-v"><span>Rama por defecto</span><input class="entrada" name="branch" [(ngModel)]="aj.branch" [placeholder]="datos.porDefecto.branch || 'main'" maxlength="120" /></label>
+          <div class="ajustes-acc">
+            <button type="submit" class="btn btn-purple btn-sm" [disabled]="guardandoAj || !ajustesCambiaron">{{ guardandoAj ? 'Guardando…' : 'Guardar ajustes' }}</button>
+            <button type="button" class="btn btn-ghost btn-sm" (click)="restablecerAjustes()" [disabled]="!aj.org && !aj.project && !aj.repo && !aj.branch">Usar los del servidor</button>
+            <span class="vigente">En uso: <b>{{ datos.vigente.org }} / {{ datos.vigente.project }} / {{ datos.vigente.repo }}</b> <span class="chip">{{ datos.vigente.branch }}</span></span>
+          </div>
+          <div class="ok-linea" *ngIf="mensajeAj"><app-ico n="ok"></app-ico>{{ mensajeAj }}</div>
+          <div class="error-linea" *ngIf="errorAj"><app-ico n="alerta"></app-ico>{{ errorAj }}</div>
+        </form>
+      </section>
+    </ng-container>
+  </div>
+</div>

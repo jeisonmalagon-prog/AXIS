@@ -1,0 +1,73 @@
+<!-- ============ TRÁFICO DE NODOS ============ -->
+<ng-container *ngIf="id === 'f5_trafico' && trafico as d">
+  <p class="vacio" *ngIf="!d.configurado">No hay balanceadores F5 configurados en el servidor.</p>
+  <ng-container *ngIf="d.configurado">
+    <div class="ctl-fila">
+      <app-inicio-selector *ngIf="itemsDisp.length > 1" etiqueta="Equipos" todosTexto="Todos" [items]="itemsDisp" [seleccion]="dispSel" (cambio)="elegirDispositivos($event)"></app-inicio-selector>
+      <div class="selector-dias" role="tablist" aria-label="Rango de tiempo">
+        <button type="button" *ngFor="let r of rangos" [class.activo]="opTraf.horas === r.v" (click)="cambiar({ horas: r.v })">{{ r.t }}</button>
+      </div>
+      <button type="button" class="ctl-reset" *ngIf="hayFiltro" (click)="limpiar()">Restablecer</button>
+    </div>
+    <div class="mini-kpis" *ngIf="d.ultimo">
+      <div class="mk"><span class="et">Entrada</span><span class="v">{{ fmtBps(d.ultimo.inBps) }}</span><span class="s" *ngIf="d.picos">pico {{ fmtBps(d.picos.inBps) }}</span></div>
+      <div class="mk"><span class="et">Salida</span><span class="v">{{ fmtBps(d.ultimo.outBps) }}</span><span class="s" *ngIf="d.picos">pico {{ fmtBps(d.picos.outBps) }}</span></div>
+      <div class="mk"><span class="et">Conexiones</span><span class="v">{{ n(d.ultimo.conn) }}</span><span class="s" *ngIf="d.picos">pico {{ n(d.picos.conn) }}</span></div>
+    </div>
+    <div class="f5-cuerpo">
+      <div class="f5-grafica">
+        <app-inicio-linea [series]="series" [fmt]="fmtBps" [alto]="190" [etiqueta]="'Tráfico de entrada y salida de los nodos del balanceador en ' + rangoTexto"></app-inicio-linea>
+        <p class="nota">{{ rangoTexto === 'la última hora' ? 'Última hora' : 'Últimas ' + opTraf.horas + ' horas' }}, suma de todos los nodos · {{ d.dispositivos?.join(', ') }}.</p>
+      </div>
+      <div class="f5-top">
+        <h3 class="titulo-sec">Nodos con más tráfico ({{ opTraf.horas }} h)</h3>
+        <ul class="barras dos" *ngIf="d.topNodos?.length">
+          <li *ngFor="let t of d.topNodos" [title]="t.miembro + ' · pool ' + t.pool + ' · ↓ ' + fmtBps(t.inBps) + ' ↑ ' + fmtBps(t.outBps) + (t.conn !== null ? ' · ' + t.conn + ' conexiones' : '')">
+            <span class="nombre">{{ t.miembro }}<small>{{ t.pool }}</small></span>
+            <span class="pista"><i class="ent" [style.width.%]="pct(t.inBps, maxNodo())"></i><i class="sal" [style.width.%]="pct(t.outBps, maxNodo())"></i></span>
+            <span class="val">{{ fmtBps(t.bps) }}</span>
+          </li>
+        </ul>
+        <div class="mini-leyenda" *ngIf="d.topNodos?.length"><span class="ent"><i></i>Entrada</span><span class="sal"><i></i>Salida</span></div>
+        <p class="vacio" *ngIf="!d.topNodos?.length">Aún no hay lecturas de tráfico.</p>
+      </div>
+    </div>
+  </ng-container>
+</ng-container>
+
+<!-- ============ SALUD DE VIRTUAL SERVERS ============ -->
+<ng-container *ngIf="id === 'f5_salud' && salud as d">
+  <p class="vacio" *ngIf="!d.configurado">No hay balanceadores F5 configurados en el servidor.</p>
+  <ng-container *ngIf="d.configurado && d.totales as t">
+    <div class="ctl-fila">
+      <app-inicio-selector *ngIf="itemsDisp.length > 1" etiqueta="Equipos" todosTexto="Todos" [items]="itemsDisp" [seleccion]="dispSel" (cambio)="elegirDispositivos($event)"></app-inicio-selector>
+      <button type="button" class="chip-tog" [class.activo]="opSalud.soloProblemas" (click)="alternarProblemas()">Solo con problemas <b>{{ d.problemas }}</b></button>
+      <input class="ctl" type="search" placeholder="Buscar Virtual Server" [(ngModel)]="busca" name="f5s-busca" autocomplete="off" />
+      <button type="button" class="ctl-reset" *ngIf="hayFiltro || busca" (click)="limpiar()">Restablecer</button>
+    </div>
+    <div class="barra-segmentos" role="img" [attr.aria-label]="t.disponibles + ' disponibles, ' + t.noDisponibles + ' sin servicio'">
+      <span class="s-ok" [style.flex]="t.disponibles" *ngIf="t.disponibles"></span>
+      <span class="s-mal" [style.flex]="t.noDisponibles" *ngIf="t.noDisponibles"></span>
+      <span class="s-aviso" [style.flex]="t.desconocidos" *ngIf="t.desconocidos"></span>
+      <span class="s-nulo" [style.flex]="t.deshabilitados" *ngIf="t.deshabilitados"></span>
+    </div>
+    <ul class="leyenda-est">
+      <li><i class="s-ok"></i>Disponibles <b>{{ t.disponibles }}</b></li>
+      <li><i class="s-mal"></i>Sin servicio <b>{{ t.noDisponibles }}</b></li>
+      <li><i class="s-aviso"></i>Desconocidos <b>{{ t.desconocidos }}</b></li>
+      <li><i class="s-nulo"></i>Deshabilitados <b>{{ t.deshabilitados }}</b></li>
+    </ul>
+    <p class="nota" *ngIf="t.nodosTotal">Nodos arriba: <b>{{ t.nodosArriba }}</b> de {{ t.nodosTotal }}.</p>
+    <ul class="lista-compacta" *ngIf="listaVisible.length">
+      <li *ngFor="let v of listaVisible">
+        <span class="chip" [ngClass]="claseVs(v)">{{ etiquetaVs(v) }}</span>
+        <span class="nombre" [title]="v.motivo || ''">{{ v.nombre }}<small>{{ v.dispositivo }}<ng-container *ngIf="v.destino"> · {{ v.destino }}</ng-container></small></span>
+        <span class="val"><ng-container *ngIf="v.nodosTotal !== null">{{ v.nodosArriba }}/{{ v.nodosTotal }} nodos</ng-container><ng-container *ngIf="v.conexiones !== null"> · {{ n(v.conexiones) }} con.</ng-container></span>
+      </li>
+    </ul>
+    <button type="button" class="ver-mas" *ngIf="listaVs.length > 8" (click)="alternarVerTodos()">{{ verTodos ? 'Ver menos' : 'Ver los ' + listaVs.length + ' Virtual Servers' }}</button>
+    <p class="ok-linea" *ngIf="!listaVs.length && !busca">{{ opSalud.soloProblemas ? 'Todos los Virtual Servers habilitados responden con todos sus nodos.' : 'No hay Virtual Servers para mostrar.' }}</p>
+    <p class="ok-linea" *ngIf="!listaVs.length && busca">Sin coincidencias para «{{ busca }}».</p>
+    <div class="aviso-aviso" *ngFor="let e of d.errores">{{ e.dispositivo }}: {{ e.error }}</div>
+  </ng-container>
+</ng-container>

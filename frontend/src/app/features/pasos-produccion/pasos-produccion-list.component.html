@@ -1,0 +1,936 @@
+<header class="page-header">
+  <div>
+    <h1>Bitácora de Pasos a Producción</h1>
+    <p class="subtitle">Ejecución de RFC por ambiente (QA, Desarrollo, Producción), con motivo si se cancela, reagenda o hay rollback.</p>
+  </div>
+  <div class="header-acciones" *ngIf="puedeEditar">
+    <button type="button" class="btn btn-outline-purple" (click)="mostrarCasosGlpi = true" title="Lista los casos del equipo en la mesa de ayuda, con filtros y opción de copiar solo los números">Casos del equipo (GLPI)</button>
+    <button type="button" class="btn btn-outline-purple" (click)="abrirImportar()" title="Lee un caso de GLPI y propone el registro con su checklist">Importar desde GLPI</button>
+    <button type="button" class="btn btn-primary" (click)="abrirCrear()">+ Nuevo Registro</button>
+  </div>
+</header>
+
+<app-bitacora-vistas
+  [abrirAccesos]="abrirAccesosPanel"
+  [refresco]="refrescoVistas"
+  (estadoChange)="alCambiarEstadoBitacora($event)"
+  (seleccionChange)="alCambiarSeleccion($event)"
+  (accesosAbiertos)="accesosAbiertos()"
+  (cambioDatos)="cargar()"
+></app-bitacora-vistas>
+
+<!-- Vistas: principal / ocultos (los que YO oculté) / eliminados (eliminación lógica, restaurable). -->
+<nav class="vistas-tabs" aria-label="Vistas de la bitácora">
+  <button type="button" class="vista-tab" [class.activo]="vista === 'principal'" (click)="cambiarVista('principal')">
+    Principal <span class="vista-tab__n" *ngIf="conteos">{{ conteos.principal }}</span>
+  </button>
+  <button type="button" class="vista-tab" [class.activo]="vista === 'ocultos'" (click)="cambiarVista('ocultos')" title="Pasos que quitaste de tu vista principal (los demás los siguen viendo)">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
+    Ocultos <span class="vista-tab__n" *ngIf="conteos">{{ conteos.ocultos }}</span>
+  </button>
+  <button type="button" class="vista-tab vista-tab--eliminados" [class.activo]="vista === 'eliminados'" (click)="cambiarVista('eliminados')" title="Pasos eliminados lógicamente: se pueden restaurar o borrar definitivamente">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+    Eliminados <span class="vista-tab__n" *ngIf="conteos">{{ conteos.eliminados }}</span>
+  </button>
+  <span class="vistas-tabs__relleno"></span>
+  <button type="button" class="btn btn-sm" *ngIf="pasos.length" [class.btn-outline-purple]="modoSeleccion" (click)="alternarModoSeleccion()" title="Marcar varios registros para actuar sobre todos a la vez">
+    {{ modoSeleccion ? 'Salir de la selección' : 'Seleccionar varios' }}
+  </button>
+</nav>
+<p class="vista-descripcion" *ngIf="vista === 'ocultos'">Los pasos que quitaste de tu vista principal. Siguen existiendo y los demás los ven igual; usa «Mostrar» para devolverlos.</p>
+<p class="vista-descripcion" *ngIf="vista === 'eliminados'">Pasos eliminados lógicamente: no cuentan en el tablero, los avisos ni los informes, y son de solo lectura. Puedes <strong>restaurarlos</strong> o <strong>eliminarlos definitivamente</strong> (borra todo su registro).</p>
+<div class="aviso-esquema" *ngIf="conteos?.aviso">
+  <strong>Falta un paso de base de datos.</strong> {{ conteos?.aviso }} Mientras tanto, el botón de eliminar borra definitivamente.
+</div>
+
+<div class="filtros-fila">
+  <div class="buscador">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+    <input type="text" [(ngModel)]="terminoBusqueda" placeholder="Buscar RFC, título, servicio o persona…">
+    <button type="button" class="buscador__limpiar" *ngIf="terminoBusqueda" (click)="terminoBusqueda = ''" title="Limpiar búsqueda">×</button>
+  </div>
+  <select [(ngModel)]="filtroEntorno" (change)="cargar()">
+    <option value="">Todos los ambientes</option>
+    <option value="DESARROLLO">Desarrollo</option>
+    <option value="QA">QA</option>
+    <option value="PRODUCCION">Producción</option>
+  </select>
+  <select [(ngModel)]="filtroEstado" (change)="cargar()">
+    <option value="">Todos los estados</option>
+    <option value="PROGRAMADO">Programado</option>
+    <option value="EJECUTADO">Ejecutado</option>
+    <option value="CANCELADO">Cancelado</option>
+    <option value="REAGENDADO">Reagendado</option>
+    <option value="ROLLBACK">Rollback</option>
+  </select>
+</div>
+
+<div class="error-banner" *ngIf="error">{{ error }}</div>
+
+<div class="resultado-accion" *ngIf="resultadoAccion as ra" [class.resultado-accion--error]="ra.error" role="status">
+  <div class="resultado-accion__texto">
+    <span>{{ ra.texto }}</span>
+    <ul *ngIf="ra.omitidos.length"><li *ngFor="let o of ra.omitidos"><strong>{{ o.titulo || ('Registro ' + o.id) }}:</strong> {{ o.motivo }}</li></ul>
+  </div>
+  <button type="button" class="resultado-accion__cerrar" (click)="cerrarResultado()" title="Cerrar">×</button>
+</div>
+
+<!-- Barra de acciones sobre los registros marcados. -->
+<div class="barra-masiva" *ngIf="modoSeleccion">
+  <label class="barra-masiva__todos"><input type="checkbox" [checked]="todosSeleccionados()" [disabled]="!pasosFiltrados().length" (change)="alternarTodos()"> Todos ({{ pasosFiltrados().length }})</label>
+  <span class="barra-masiva__n">{{ seleccionados.size }} seleccionado{{ seleccionados.size === 1 ? '' : 's' }}</span>
+  <span class="barra-masiva__relleno"></span>
+  <ng-container *ngIf="seleccionados.size">
+    <button type="button" class="btn btn-sm" *ngIf="vista === 'principal' && puedeOcultar" [disabled]="trabajandoMasivo" (click)="accionSeleccionados('ocultar')">Ocultar</button>
+    <button type="button" class="btn btn-sm" *ngIf="vista === 'ocultos'" [disabled]="trabajandoMasivo" (click)="accionSeleccionados('mostrar')">Mostrar</button>
+    <button type="button" class="btn btn-sm" *ngIf="vista === 'eliminados' && puedeEditar" [disabled]="trabajandoMasivo" (click)="accionSeleccionados('restaurar')">Restaurar</button>
+    <button type="button" class="btn btn-sm btn-peligro" *ngIf="puedeEditar" [disabled]="trabajandoMasivo" (click)="eliminarSeleccionados()">{{ vista === 'eliminados' ? 'Eliminar definitivamente…' : 'Eliminar…' }}</button>
+  </ng-container>
+  <span class="barra-masiva__ayuda" *ngIf="!seleccionados.size">Marca registros de la lista para actuar sobre varios a la vez.</span>
+</div>
+
+<div class="aviso-duplicados" *ngIf="vista === 'principal' && !cargando && cantidadConDuplicados() as n">
+  <strong>Hay pasos repetidos.</strong> {{ n }} paso{{ n === 1 ? ' tiene' : 's tienen' }} otro registro con el mismo RFC y ambiente. Un paso de producción debe existir una sola vez: usa «Fusionar» para dejarlo en uno, con todos sus participantes y su checklist.
+</div>
+
+<div class="carga-inicial" *ngIf="cargando">Cargando bitácora…</div>
+<div class="empty" *ngIf="!cargando && !pasos.length">{{ mensajeVacio() }}</div>
+<div class="empty" *ngIf="!cargando && pasos.length && !pasosFiltrados().length">Ningún registro coincide con "{{ terminoBusqueda }}".</div>
+
+<!-- Lista de filas (no tabla): con 8 datos por registro y títulos que a veces
+     son bastante largos, cualquier tabla de columnas fijas termina o
+     necesitando scroll horizontal o truncando información real. Cada
+     registro es ahora una fila que se acomoda a su propio contenido --
+     el título puede ocupar varias líneas si hace falta, y el resto de datos
+     se acomoda debajo en una línea de metadatos que se envuelve sola en
+     pantallas angostas. Nada se corta, nada obliga a desplazarse de lado. -->
+<div class="bitacora-lista" *ngIf="!cargando && pasosFiltrados().length">
+  <div class="bitacora-fila" *ngFor="let p of pasosFiltrados()" (click)="clicFila(p)" [ngClass]="'fila-' + p.Entorno.toLowerCase()" [class.fila-eliminada]="p.Eliminado" [class.fila-seleccionada]="estaSeleccionado(p)">
+    <div class="bitacora-fila__cabecera">
+      <input type="checkbox" class="fila-check" *ngIf="modoSeleccion" [checked]="estaSeleccionado(p)" (click)="alternarSeleccion(p, $event)" aria-label="Seleccionar este registro">
+      <span class="badge-entorno" [ngClass]="'entorno-' + p.Entorno.toLowerCase()">{{ p.Entorno }}</span>
+      <span class="bitacora-fila__titulo">{{ p.Titulo }}</span>
+      <span class="status-pill" [ngClass]="'estado-' + p.Estado.toLowerCase()">{{ etiquetaEstado(p.Estado) }}</span>
+      <span class="badge-cumplimiento" *ngIf="estadoCumplimiento(p) as cump" [ngClass]="'cumplimiento-' + cump">{{ cump === 'a-tiempo' ? 'A tiempo' : 'Tardío' }}</span>
+      <span class="tipo-bus" *ngIf="p.Tipo === 'BUS'">BUS</span>
+      <span class="dueno" *ngIf="bitacoraDisponible && !p.soyParticipante">de {{ p.CreadoPorNombre }}</span>
+      <span class="nivel-tag" *ngIf="etiquetaNivel(p) as nv">{{ nv }}</span>
+      <span class="dup-tag" *ngIf="p.duplicados?.length" title="Hay otro paso con el mismo RFC y ambiente">Posible duplicado</span>
+      <button type="button" class="btn-compartir-fila btn-fusionar" *ngIf="puedeFusionar(p)" (click)="abrirFusion(p, $event)" title="Unir este paso con su duplicado en uno solo">Fusionar</button>
+      <button type="button" class="btn-compartir-fila" *ngIf="puedeCompartir(p)" (click)="abrirCompartir(p, $event)" title="Compartir solo este paso con otras personas o un equipo">Compartir</button>
+      <span class="tag-eliminado" *ngIf="p.Eliminado">Eliminado</span>
+      <span class="tag-oculto" *ngIf="vista === 'ocultos'">Oculto</span>
+      <!-- Acciones de la fila (no abren el detalle). -->
+      <button type="button" class="btn-compartir-fila btn-restaurar" *ngIf="p.Eliminado && puedeEliminarLogico(p) && !modoSeleccion" (click)="restaurar(p, $event)" title="Devolverlo a la bitácora principal">Restaurar</button>
+      <button type="button" class="btn-icono" *ngIf="!p.Eliminado && vista === 'principal' && puedeOcultar && !modoSeleccion" (click)="ocultar(p, $event)" title="Ocultar de mi vista principal (los demás lo siguen viendo)" aria-label="Ocultar">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
+      </button>
+      <button type="button" class="btn-compartir-fila" *ngIf="vista === 'ocultos' && !modoSeleccion" (click)="mostrar(p, $event)" title="Devolverlo a mi vista principal">Mostrar</button>
+      <button type="button" class="btn-eliminar" *ngIf="puedeBorrarFila(p) && !modoSeleccion" (click)="eliminar(p, $event)" [title]="p.Eliminado ? 'Eliminar definitivamente' : 'Eliminar…'" aria-label="Eliminar">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+      </button>
+    </div>
+    <div class="bitacora-fila__eliminado" *ngIf="p.Eliminado">
+      Eliminado<ng-container *ngIf="p.EliminadoPorNombre"> por <strong>{{ p.EliminadoPorNombre }}</strong></ng-container><ng-container *ngIf="p.EliminadoEn"> el {{ p.EliminadoEn | date:'d MMM y, HH:mm' }}</ng-container><ng-container *ngIf="p.MotivoEliminacion"> · Motivo: {{ p.MotivoEliminacion }}</ng-container>
+    </div>
+    <div class="bitacora-fila__meta">
+      <span class="meta-item mono">{{ p.FechaHoraProgramada | date:'d MMM y, HH:mm' }}</span>
+      <ng-container *ngIf="p.FechaHoraEstimadaFin">
+        <span class="meta-flecha">→</span>
+        <span class="meta-item mono">{{ p.FechaHoraEstimadaFin | date:'d MMM, HH:mm' }}</span>
+      </ng-container>
+      <span class="meta-punto"></span>
+      <span class="meta-item mono">RFC {{ p.Rfc || 'sin asignar' }}</span>
+      <ng-container *ngIf="p.Aplicativos?.length">
+        <span class="meta-punto"></span>
+        <span class="aplicativo-tag" [title]="p.AplicativosTexto || ''">{{ p.Aplicativos[0].Nombre }}</span>
+        <span class="servidor-tag" *ngFor="let a of p.Aplicativos">{{ a.ServidorHostname || 'sin servidor' }}</span>
+      </ng-container>
+      <ng-container *ngIf="p.servicios?.length">
+        <span class="meta-punto"></span>
+        <span class="servicio-tag" *ngFor="let s of p.servicios!.slice(0, 4)" [title]="s.nombre">{{ etiquetaServicio(s) }}</span>
+        <span class="servicio-tag servicio-tag--mas" *ngIf="p.servicios!.length > 4">+{{ p.servicios!.length - 4 }}</span>
+      </ng-container>
+      <ng-container *ngIf="p.EjecutadoPorNombre">
+        <span class="meta-punto"></span>
+        <span class="meta-item">Ejecutado por {{ p.EjecutadoPorNombre }}</span>
+      </ng-container>
+      <ng-container *ngIf="bitacoraDisponible && p.equipo?.length">
+        <span class="meta-punto"></span>
+        <span class="meta-item" [title]="nombresParticipantes(p)">Participan: {{ nombresParticipantes(p) }}</span>
+      </ng-container>
+      <ng-container *ngIf="p.CommitId">
+        <span class="meta-punto"></span>
+        <a class="commit-chip" [href]="p.CommitUrl" target="_blank" rel="noopener" (click)="$event.stopPropagation()" [title]="p.CommitMensaje || ''">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><line x1="3" y1="12" x2="9" y2="12"/><line x1="15" y1="12" x2="21" y2="12"/></svg>
+          {{ p.CommitId.substring(0, 8) }}
+        </a>
+      </ng-container>
+    </div>
+
+    <!-- Checklist en línea: todo registro no culminado (cualquier estado
+         distinto de Ejecutado, incluido Rollback) muestra acá su checklist,
+         marcable sin tener que entrar al detalle. Marcar exige pantallazo de
+         evidencia (ver toggleItemChecklistInline). -->
+    <div class="bitacora-fila__checklist" *ngIf="mostrarChecklistInline(p)" (click)="$event.stopPropagation()">
+      <div class="checklist-mini-cargando" *ngIf="checklistInlineCargando[p.Id]">Cargando checklist…</div>
+      <ng-container *ngIf="!checklistInlineCargando[p.Id] && checklistPorPaso[p.Id]?.length">
+        <div class="checklist-mini-item" *ngFor="let item of checklistPorPaso[p.Id]">
+          <label class="checklist-mini-item__check">
+            <input type="checkbox" [checked]="item.Completado" [disabled]="!editaPaso(p) || subiendoEvidenciaItemId === item.Id" (change)="toggleItemChecklistInline(p, item, $event)">
+            <span [class.tachado]="item.Completado">{{ item.Descripcion }}</span>
+          </label>
+          <span class="checklist-mini-item__subiendo" *ngIf="subiendoEvidenciaItemId === item.Id">Subiendo evidencia…</span>
+          <span class="checklist-mini-item__meta" *ngIf="subiendoEvidenciaItemId !== item.Id">
+            <ng-container *ngIf="item.Completado">{{ item.FechaCompletado | date:'d MMM, HH:mm' }}</ng-container>
+            <button type="button" class="link-evidencia" *ngIf="cantidadEvidencias(item) > 0" (click)="verEvidenciaChecklist(p, item, $event)">{{ textoVerEvidencias(item) }}</button>
+            <button type="button" class="link-evidencia link-evidencia--mas" *ngIf="editaPaso(p)" (click)="abrirAgregarEvidencias(p, item, $event)" title="Agregar otra imagen de evidencia">+ Imagen</button>
+          </span>
+        </div>
+      </ng-container>
+    </div>
+  </div>
+</div>
+
+<!-- Input de archivo oculto y único -- queda como alternativa (botón
+     "Selecciona un archivo" del modal de abajo) para cuando no hay nada
+     copiado en el portapapeles. -->
+<input #inputEvidenciaChecklist type="file" accept="image/*" multiple hidden (change)="onEvidenciaSeleccionada($event)">
+<!-- Banner de error "flotante": cubre los errores de subida que llegan
+     DESPUÉS de cerrado el modal de evidencia (el modal se cierra apenas
+     arranca la subida -- ver procesarEvidenciaArchivo). -->
+<div class="error-banner error-banner--flotante" *ngIf="errorEvidencia && !pendienteEvidencia">{{ errorEvidencia }}</div>
+
+<!-- MODAL: EVIDENCIA (pantallazos del ítem del checklist). Acepta VARIAS imágenes:
+     cada Ctrl+V suma una. No se cierra al hacer clic afuera, para no perder lo
+     pegado -- solo con Cancelar o al guardar. -->
+<div class="overlay overlay--pegar-evidencia" *ngIf="pendienteEvidencia">
+  <div class="modal modal-evidencia">
+    <div class="modal-header">
+      <h2>{{ pendienteEvidencia.marcar ? 'Evidencia de' : 'Agregar imágenes a' }} "{{ pendienteEvidencia.item.Descripcion }}"</h2>
+    </div>
+    <div class="modal-body">
+      <p class="text-gray">Copia la captura de pantalla (p. ej. con Win+Shift+S) y pégala acá con Ctrl+V. Puedes pegar <strong>varias imágenes</strong>, una tras otra.</p>
+      <div class="zona-pegar-evidencia" tabindex="0" #zonaPegarEvidencia (paste)="onPegarEvidencia($event)">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="4" y="4" width="16" height="16" rx="2"/><circle cx="9" cy="10" r="1.5"/><path d="M4 16l4.5-4.5a2 2 0 0 1 2.8 0L16 16M14 14l1.5-1.5a2 2 0 0 1 2.8 0L20 14"/></svg>
+        <span>Haz clic acá y presiona <strong>Ctrl+V</strong> para pegar la imagen…</span>
+      </div>
+
+      <div class="evidencia-miniaturas" *ngIf="pendienteEvidencia.imagenes.length">
+        <div class="evidencia-miniatura" *ngFor="let img of pendienteEvidencia.imagenes; let i = index">
+          <img [src]="img.previewUrl" [alt]="img.nombre">
+          <button type="button" class="evidencia-miniatura__quitar" *ngIf="!pendienteEvidencia.subiendo" (click)="quitarImagenPendiente(i)" title="Quitar esta imagen">×</button>
+          <span class="evidencia-miniatura__nombre">{{ img.nombre }}</span>
+        </div>
+      </div>
+
+      <p class="error-banner" *ngIf="errorEvidencia">{{ errorEvidencia }}</p>
+      <p class="evidencia-alternativa">
+        ¿No tienes nada copiado?
+        <button type="button" class="link-evidencia" [disabled]="pendienteEvidencia.subiendo" (click)="inputEvidenciaChecklist.click()">Selecciona archivos</button>
+      </p>
+    </div>
+    <div class="modal-footer">
+      <button type="button" class="btn btn-outline-purple" [disabled]="pendienteEvidencia.subiendo" (click)="cancelarEvidenciaPendiente()">Cancelar</button>
+      <button type="button" class="btn btn-primary" [disabled]="pendienteEvidencia.subiendo || !pendienteEvidencia.imagenes.length" (click)="confirmarEvidencias()">
+        {{ pendienteEvidencia.subiendo ? 'Subiendo…' : (pendienteEvidencia.marcar ? 'Guardar y marcar' : 'Guardar imágenes') }}
+        <ng-container *ngIf="!pendienteEvidencia.subiendo && pendienteEvidencia.imagenes.length"> ({{ pendienteEvidencia.imagenes.length }})</ng-container>
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- GALERÍA DE EVIDENCIAS del ítem (todas las imágenes, con navegación) -->
+<div class="overlay overlay--evidencia" *ngIf="galeria || cargandoEvidenciaPreview" (click)="cerrarEvidenciaPreview()">
+  <div class="evidencia-preview" (click)="$event.stopPropagation()">
+    <button type="button" class="btn-cerrar-evidencia" (click)="cerrarEvidenciaPreview()" title="Cerrar">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6 6 18M6 6l12 12"/></svg>
+    </button>
+    <div class="evidencia-preview__cargando" *ngIf="cargandoEvidenciaPreview">Cargando evidencia…</div>
+    <ng-container *ngIf="galeria as g">
+      <div class="galeria">
+        <div class="galeria__cabecera">
+          <span class="galeria__titulo">{{ g.item.Descripcion }}</span>
+          <span class="galeria__contador">{{ g.indice + 1 }} / {{ g.imagenes.length }}</span>
+          <button type="button" class="galeria__eliminar" *ngIf="galeria && editaPaso(galeria.paso)" (click)="eliminarImagenGaleria()" title="Eliminar esta imagen">Eliminar imagen</button>
+        </div>
+        <div class="galeria__visor">
+          <button type="button" class="galeria__nav galeria__nav--ant" *ngIf="g.imagenes.length > 1" (click)="moverGaleria(-1)" title="Anterior">‹</button>
+          <img [src]="g.imagenes[g.indice].url" [alt]="g.imagenes[g.indice].nombre">
+          <button type="button" class="galeria__nav galeria__nav--sig" *ngIf="g.imagenes.length > 1" (click)="moverGaleria(1)" title="Siguiente">›</button>
+        </div>
+        <p class="galeria__pie">
+          {{ g.imagenes[g.indice].nombre }}
+          <ng-container *ngIf="g.imagenes[g.indice].autor || g.imagenes[g.indice].fecha"> · {{ g.imagenes[g.indice].autor }} <ng-container *ngIf="g.imagenes[g.indice].fecha">{{ g.imagenes[g.indice].fecha | date:'d MMM y, HH:mm' }}</ng-container></ng-container>
+        </p>
+        <div class="galeria__miniaturas" *ngIf="g.imagenes.length > 1">
+          <button type="button" *ngFor="let img of g.imagenes; let i = index" [class.activa]="i === g.indice" (click)="irAImagenGaleria(i)">
+            <img [src]="img.url" [alt]="img.nombre">
+          </button>
+        </div>
+      </div>
+    </ng-container>
+  </div>
+</div>
+
+<app-glpi-casos-equipo *ngIf="mostrarCasosGlpi" (cerrar)="mostrarCasosGlpi = false" (importar)="importarDesdeListado($event)"></app-glpi-casos-equipo>
+
+<!-- MODAL: IMPORTAR DESDE GLPI -->
+<!-- Solo pide el número de caso; no crea nada: abre el formulario de Nuevo Registro con la propuesta. -->
+<div class="overlay" *ngIf="mostrarImportar">
+  <div class="modal modal-glpi">
+    <div class="modal-header"><h2>Importar desde GLPI</h2></div>
+    <div class="modal-body">
+      <p class="glpi-intro">Escribe el número del caso (o pega su link). AXIS lo lee en la mesa de ayuda y te muestra una propuesta del registro, con checklist; lo que no encuentre queda como pendiente. Nada se guarda hasta que pulses «Crear Registro».</p>
+
+      <label class="form-label">Número de caso GLPI</label>
+      <input class="form-input" type="text" inputmode="numeric" [(ngModel)]="casoGlpi" placeholder="Ej. 407934" (keyup.enter)="importarDesdeGlpi()" [disabled]="importandoGlpi" autofocus>
+
+      <p class="aviso-glpi-config" *ngIf="glpiConfigurado === false">La lectura automática de GLPI aún no está configurada en el servidor (faltan los tokens de la API). Mientras tanto puedes pegar el contenido del caso.</p>
+
+      <label class="checkbox-row glpi-pegar">
+        <input type="checkbox" [(ngModel)]="pegarContenidoGlpi" [disabled]="importandoGlpi">
+        Pegar el contenido del caso a mano (en vez de leerlo de GLPI)
+      </label>
+      <textarea *ngIf="pegarContenidoGlpi" class="form-input" rows="8" [(ngModel)]="contenidoGlpi" [disabled]="importandoGlpi"
+                placeholder="Copia desde GLPI la sección «Datos del formulario» y pégala acá…"></textarea>
+
+      <p class="error-banner" *ngIf="errorImportarGlpi">{{ errorImportarGlpi }}</p>
+    </div>
+    <div class="modal-footer">
+      <button type="button" class="btn" [disabled]="importandoGlpi" (click)="cerrarImportar()">Cancelar</button>
+      <button type="button" class="btn btn-primary" [disabled]="importandoGlpi || !casoGlpi.trim()" (click)="importarDesdeGlpi()">
+        {{ importandoGlpi ? 'Leyendo el caso…' : 'Leer caso y proponer' }}
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: NUEVO REGISTRO -->
+<!-- No se cierra al hacer clic afuera (se perdería lo escrito): solo con Cancelar o al crear. -->
+<div class="overlay" *ngIf="mostrarForm">
+  <div class="modal">
+    <div class="modal-header"><h2>Nuevo Registro de Bitácora</h2></div>
+    <div class="modal-body">
+      <p class="aviso-evento" *ngIf="form.googleEventId">Pre-cargado desde el calendario.</p>
+
+      <!-- Propuesta importada de GLPI: resumen y datos pendientes de completar -->
+      <div class="glpi-banner" *ngIf="importacion">
+        <div class="glpi-banner__titulo">
+          Propuesta del caso GLPI
+          <a *ngIf="importacion.caso.url" [href]="importacion.caso.url" target="_blank" rel="noopener">#{{ importacion.caso.id }}</a>
+          <span *ngIf="!importacion.caso.url">#{{ importacion.caso.id }}</span>
+          <span class="glpi-banner__estado" *ngIf="importacion.caso.estado">{{ importacion.caso.estado }}</span>
+          <span class="glpi-banner__estado" *ngIf="importacion.origen === 'manual'">contenido pegado</span>
+        </div>
+        <p class="glpi-banner__texto">Revisa los datos antes de crear: no se guarda nada hasta que pulses «Crear Registro».</p>
+        <div class="glpi-banner__duplicado" *ngIf="importacion.duplicados.length">
+          Ya existe{{ importacion.duplicados.length === 1 ? '' : 'n' }} registro{{ importacion.duplicados.length === 1 ? '' : 's' }} con este RFC:
+          <span *ngFor="let d of importacion.duplicados; let ult = last">«{{ d.titulo }}» ({{ d.estado }}){{ ult ? '' : ', ' }}</span>.
+        </div>
+        <ul class="glpi-banner__pendientes" *ngIf="pendientesVisibles.length; else sinPendientesGlpi">
+          <li *ngFor="let p of pendientesVisibles"><strong>{{ p.etiqueta }}:</strong> {{ p.motivo }}</li>
+        </ul>
+        <ng-template #sinPendientesGlpi><p class="glpi-banner__ok">Sin datos pendientes.</p></ng-template>
+      </div>
+
+      <label class="form-label">RFC</label>
+      <input class="form-input" type="text" [(ngModel)]="form.rfc" placeholder="Ej. RFC-2026-0451">
+
+      <label class="form-label">Título</label>
+      <input class="form-input" type="text" [(ngModel)]="form.titulo">
+
+      <label class="form-label">Ambiente</label>
+      <select class="form-input" [class.campo-pendiente]="camposPendientes.has('entorno')" [(ngModel)]="form.entorno" (ngModelChange)="confirmarPendiente('entorno')">
+        <option value="DESARROLLO">Desarrollo</option>
+        <option value="QA">QA</option>
+        <option value="PRODUCCION">Producción</option>
+      </select>
+
+      <ng-container *ngIf="bitacoraEstado?.serviciosDisponible">
+        <label class="form-label">Tipo de paso</label>
+        <div class="tipo-toggle">
+          <button type="button" [class.activo]="form.tipo === 'APLICACION'" (click)="elegirTipo('APLICACION')">Aplicación / servidores</button>
+          <button type="button" [class.activo]="form.tipo === 'BUS'" (click)="elegirTipo('BUS')">Servicios del BUS</button>
+        </div>
+        <p class="servidores-ayuda">Los pasos de aplicaciones y del BUS viven en la misma bitácora; esto solo indica sobre qué actúa el paso.</p>
+      </ng-container>
+
+      <ng-container *ngIf="form.tipo === 'BUS'">
+        <label class="form-label">Servicios del BUS</label>
+        <div class="servidores-elegidos" *ngIf="form.servicios.length">
+          <span class="chip-servidor" *ngFor="let s of form.servicios">
+            <span class="chip-servidor__nombre">{{ etiquetaServicio(s) }}</span>
+            <button type="button" (click)="quitarServicio(s.id, 'crear')" title="Quitar">×</button>
+          </span>
+        </div>
+        <app-selector-buscable
+          [opciones]="opcionesServicios"
+          [valor]="selectorServicio"
+          (valorChange)="agregarServicio($event, 'crear')"
+          [permitirLimpiar]="false"
+          placeholder="Buscar servicio por código o nombre..."
+          [textoVacio]="errorServicios || 'No hay servicios en el inventario.'"
+        ></app-selector-buscable>
+        <p class="servidores-ayuda">Puedes elegir varios. Salen del inventario de Servicios.</p>
+      </ng-container>
+
+      <ng-container *ngIf="form.tipo !== 'BUS'">
+      <label class="form-label">Aplicativo / Sub-aplicativo y servidores</label>
+      <div class="campo-pendiente-caja" *ngIf="camposPendientes.has('componenteIds')">
+        <span *ngIf="servidoresNoAsociadosGlpi().length">Sin asociar al inventario: {{ servidoresNoAsociadosGlpi().join(', ') }}. </span>Elígelos con el buscador.
+      </div>
+      <div class="servidores-elegidos" *ngIf="form.componenteIds.length">
+        <span class="chip-servidor" *ngFor="let id of form.componenteIds">
+          <span class="chip-servidor__nombre">{{ nombreServidor(id) }}</span>
+          <span class="chip-servidor__host" *ngIf="hostServidor(id)">{{ hostServidor(id) }}</span>
+          <button type="button" (click)="quitarServidor('crear', id)" title="Quitar">×</button>
+        </span>
+      </div>
+      <app-selector-buscable
+        [opciones]="opcionesServidoresCrear"
+        [valor]="valorSelectorServidorCrear"
+        (valorChange)="agregarServidor('crear', $event)"
+        [permitirLimpiar]="false"
+        placeholder="Buscar y agregar sub-aplicativo o servidor..."
+        [textoVacio]="'No hay más sub-aplicativos disponibles en el inventario.'"
+      ></app-selector-buscable>
+      <p class="servidores-ayuda">Puedes agregar varios: un paso suele ejecutarse en todos los nodos de la aplicación.</p>
+      <button type="button" class="link-evidencia servidores-hermanos" *ngFor="let h of hermanosCrear; trackBy: trackHermano" (click)="agregarHermanos('crear', h.nombre)">
+        + Agregar los {{ h.cantidad }} servidor{{ h.cantidad === 1 ? '' : 'es' }} restante{{ h.cantidad === 1 ? '' : 's' }} de «{{ h.nombre }}»
+      </button>
+
+      </ng-container>
+
+      <label class="form-label">Fecha/hora programada</label>
+      <input class="form-input" type="datetime-local" [class.campo-pendiente]="camposPendientes.has('fechaHoraProgramada')" [(ngModel)]="form.fechaHoraProgramada" (ngModelChange)="confirmarPendiente('fechaHoraProgramada')">
+
+      <label class="form-label">Hora estimada de finalización (opcional)</label>
+      <input class="form-input" type="datetime-local" [class.campo-pendiente]="camposPendientes.has('fechaHoraEstimadaFin')" [min]="form.fechaHoraProgramada || null" [(ngModel)]="form.fechaHoraEstimadaFin" (ngModelChange)="confirmarPendiente('fechaHoraEstimadaFin')">
+      <small class="error-fechas" *ngIf="finEstimadoAnterior">La hora estimada de finalización no puede ser anterior a la fecha/hora programada.</small>
+
+      <label class="form-label">Descripción</label>
+      <textarea class="form-input" [attr.rows]="importacion ? 9 : 3" [(ngModel)]="form.descripcion" placeholder="Qué se va a ejecutar…"></textarea>
+
+      <label class="form-label">Participantes</label>
+      <p class="servidores-ayuda" style="margin-top: 0">Quienes participen en el paso lo ven en su propia bitácora y pueden editarlo: es un solo registro, no se copia. Tú quedas como creador.</p>
+      <div class="lista-usuarios" [class.campo-pendiente]="camposPendientes.has('equipo')">
+        <label class="checkbox-row" *ngFor="let u of usuarios">
+          <input type="checkbox" [checked]="form.equipo.includes(u.id)" (change)="toggleEquipo(u.id, $event)">
+          {{ u.nombre_completo }}
+        </label>
+      </div>
+
+      <!-- Checklist (opcional, armado antes de crear -- ver agregarItemChecklistCrear) -->
+      <label class="form-label">Checklist (opcional)</label>
+      <div class="checklist-item checklist-item--crear" *ngFor="let descripcion of form.checklistNuevo; let i = index">
+        <span class="checklist-item__check" style="flex:1">{{ descripcion }}</span>
+        <button type="button" class="btn-eliminar" (click)="quitarItemChecklistCrear(i)" title="Quitar ítem">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+        </button>
+      </div>
+      <div class="checklist-nuevo">
+        <input class="form-input" type="text" [(ngModel)]="nuevoItemChecklistCrear" placeholder="Nuevo ítem… ej. Backup realizado" (keyup.enter)="agregarItemChecklistCrear()">
+        <button type="button" class="btn btn-outline-purple" [disabled]="!nuevoItemChecklistCrear.trim()" (click)="agregarItemChecklistCrear()">Agregar</button>
+      </div>
+
+      <!-- Commit de Azure DevOps asociado (opcional): primero el repo, que
+           habilita el desplegable de commits de ESE repo. -->
+      <label class="form-label">Commit asociado (opcional)</label>
+      <div class="commit-elegido" *ngIf="form.commit; else selectorCommitCrear">
+        <div class="commit-elegido__info">
+          <span class="mono">{{ form.commit.idCorto }}</span>
+          <span>{{ form.commit.comentario || '(sin mensaje)' }}</span>
+          <span class="text-gray">{{ form.commit.autor }}</span>
+        </div>
+        <button type="button" class="btn-eliminar" (click)="quitarCommitCrear()" title="Quitar commit">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+        </button>
+      </div>
+      <ng-template #selectorCommitCrear>
+        <p class="error-banner" *ngIf="errorRepos">{{ errorRepos }}</p>
+        <app-selector-buscable
+          [opciones]="opcionesRepos"
+          [valor]="commitSelectorCrear.repo || null"
+          (valorChange)="onCambioRepoCommit('crear', $event)"
+          placeholder="Buscar repositorio..."
+          [deshabilitado]="cargandoRepos"
+          [textoVacio]="cargandoRepos ? 'Cargando repositorios…' : 'No hay repositorios disponibles.'"
+        ></app-selector-buscable>
+        <ng-container *ngIf="commitSelectorCrear.repo">
+          <p class="error-banner" *ngIf="commitSelectorCrear.error">{{ commitSelectorCrear.error }}</p>
+          <app-selector-buscable
+            [opciones]="opcionesCommits(commitSelectorCrear)"
+            [valor]="form.commit"
+            (valorChange)="elegirCommitCrear($event)"
+            placeholder="Buscar commit por mensaje o autor..."
+            [deshabilitado]="commitSelectorCrear.cargandoCommits"
+            [textoVacio]="commitSelectorCrear.cargandoCommits ? 'Cargando commits…' : 'Sin commits recientes en este repositorio.'"
+          ></app-selector-buscable>
+        </ng-container>
+      </ng-template>
+    </div>
+    <div class="aviso-duplicado" *ngIf="duplicado">
+      <strong>Ya existe un paso igual</strong>
+      <span *ngIf="duplicado.visible">«{{ duplicado.titulo }}» ({{ duplicado.rfc || 'sin RFC' }} · {{ duplicado.entorno }}), creado por {{ duplicado.creadoPor }}. Si participas en él, pídele que te agregue como participante en lugar de crear otro.</span>
+      <span *ngIf="!duplicado.visible">Lo creó {{ duplicado.creadoPor }} (mismo RFC y ambiente) y no tienes acceso a él. Pídele que te agregue como participante, o solicita acceso a su bitácora desde «Accesos».</span>
+      <button type="button" class="btn btn-sm" [disabled]="guardando" (click)="guardar(true)">Crear de todos modos</button>
+    </div>
+    <div class="modal-footer">
+      <button type="button" class="btn" (click)="cerrarFormulario()">Cancelar</button>
+      <button type="button" class="btn btn-primary" [disabled]="guardando || !form.titulo.trim() || !form.fechaHoraProgramada || finEstimadoAnterior" (click)="guardar()">
+        {{ guardando ? 'Guardando…' : 'Crear Registro' }}
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: DETALLE / CAMBIAR ESTADO -->
+<!-- No se cierra al hacer clic afuera (podría haber cambios sin guardar): solo con Cerrar. -->
+<div class="overlay" *ngIf="pasoSeleccionado">
+  <div class="modal modal-detalle">
+    <div class="modal-header"><h2>{{ pasoSeleccionado.Titulo }}</h2></div>
+
+    <div class="tabs-detalle">
+      <button type="button" class="tab-detalle" [class.activo]="pestanaDetalle === 'detalle'" (click)="seleccionarPestana('detalle')">Detalle</button>
+      <button type="button" class="tab-detalle" [class.activo]="pestanaDetalle === 'checklist'" (click)="seleccionarPestana('checklist')">
+        Checklist <span class="tab-contador" *ngIf="checklistCargado">{{ progresoChecklist().completados }}/{{ progresoChecklist().total }}</span>
+      </button>
+      <button type="button" class="tab-detalle" [class.activo]="pestanaDetalle === 'historial'" (click)="seleccionarPestana('historial')">Historial</button>
+    </div>
+
+    <div class="modal-body">
+      <div class="aviso-eliminado" *ngIf="pasoSeleccionado.Eliminado">
+        Este registro está en <strong>Eliminados</strong><ng-container *ngIf="pasoSeleccionado.EliminadoPorNombre"> (por {{ pasoSeleccionado.EliminadoPorNombre }}<ng-container *ngIf="pasoSeleccionado.EliminadoEn"> el {{ pasoSeleccionado.EliminadoEn | date:'d MMM y, HH:mm' }}</ng-container>)</ng-container> y es de solo lectura.<ng-container *ngIf="pasoSeleccionado.MotivoEliminacion"> Motivo: {{ pasoSeleccionado.MotivoEliminacion }}.</ng-container> Restáuralo para volver a modificarlo.
+      </div>
+      <!-- ---------- PESTAÑA: DETALLE ---------- -->
+      <ng-container *ngIf="pestanaDetalle === 'detalle'">
+        <div class="detalle-meta">
+          <span>RFC: <strong>{{ pasoSeleccionado.Rfc || '—' }}</strong></span>
+          <span>Ambiente: <strong>{{ pasoSeleccionado.Entorno }}</strong></span>
+          <span *ngIf="pasoSeleccionado.Aplicativos?.length">
+            Aplicativo<ng-container *ngIf="pasoSeleccionado.Aplicativos.length > 1">s</ng-container>:
+            <strong>{{ pasoSeleccionado.Aplicativos[0].Nombre }}</strong>
+            <span class="servidor-tag" *ngFor="let a of pasoSeleccionado.Aplicativos">{{ a.ServidorHostname || 'sin servidor' }}</span>
+          </span>
+          <span *ngIf="pasoSeleccionado.AplicativoNegocioNombre">Aplicación de negocio: <strong>{{ pasoSeleccionado.AplicativoNegocioNombre }}</strong></span>
+          <span>Programado: <strong>{{ pasoSeleccionado.FechaHoraProgramada | date:'d MMM y, HH:mm' }}</strong></span>
+          <span>Creado por: <strong>{{ pasoSeleccionado.CreadoPorNombre }}</strong></span>
+          <span *ngIf="bitacoraDisponible && pasoSeleccionado.equipo.length">Participan: <strong>{{ nombresParticipantes(pasoSeleccionado) }}</strong></span>
+        </div>
+
+        <!-- Servidores / sub-aplicativos del paso (editable: se puede agregar o quitar nodos) -->
+        <div class="estimado-fin" *ngIf="editaDetalle">
+          <span class="form-label">Servidores / sub-aplicativos</span>
+          <div class="servidores-elegidos" *ngIf="servidoresEditar.length">
+            <span class="chip-servidor" *ngFor="let id of servidoresEditar">
+              <span class="chip-servidor__nombre">{{ nombreServidor(id) }}</span>
+              <span class="chip-servidor__host" *ngIf="hostServidor(id)">{{ hostServidor(id) }}</span>
+              <button type="button" (click)="quitarServidor('editar', id)" title="Quitar">×</button>
+            </span>
+          </div>
+          <p class="servidores-ayuda" *ngIf="!servidoresEditar.length">Sin servidores asociados todavía.</p>
+          <app-selector-buscable
+            [opciones]="opcionesServidoresEditar"
+            [valor]="valorSelectorServidorEditar"
+            (valorChange)="agregarServidor('editar', $event)"
+            [permitirLimpiar]="false"
+            placeholder="Buscar y agregar sub-aplicativo o servidor..."
+            [textoVacio]="'No hay más sub-aplicativos disponibles en el inventario.'"
+          ></app-selector-buscable>
+          <button type="button" class="link-evidencia servidores-hermanos" *ngFor="let h of hermanosEditar; trackBy: trackHermano" (click)="agregarHermanos('editar', h.nombre)">
+            + Agregar los {{ h.cantidad }} servidor{{ h.cantidad === 1 ? '' : 'es' }} restante{{ h.cantidad === 1 ? '' : 's' }} de «{{ h.nombre }}»
+          </button>
+          <button type="button" class="btn btn-sm btn-outline-purple commit-guardar" *ngIf="servidoresEditarCambiaron" [disabled]="guardandoServidores" (click)="guardarServidores()">
+            {{ guardandoServidores ? 'Guardando…' : 'Guardar servidores' }}
+          </button>
+        </div>
+
+        <p class="aviso-solo-lectura" *ngIf="puedeEditar && !editaDetalle">{{ avisoSoloLectura(pasoSeleccionado) }}</p>
+
+        <!-- Servicios del BUS vinculados al paso -->
+        <div class="estimado-fin" *ngIf="bitacoraEstado?.serviciosDisponible && (editaDetalle || serviciosEditar.length)">
+          <span class="form-label">Servicios del BUS</span>
+          <div class="servidores-elegidos" *ngIf="serviciosEditar.length">
+            <span class="chip-servidor" *ngFor="let s of serviciosEditar">
+              <span class="chip-servidor__nombre">{{ etiquetaServicio(s) }}</span>
+              <button type="button" *ngIf="editaDetalle" (click)="quitarServicio(s.id, 'editar')" title="Quitar">×</button>
+            </span>
+          </div>
+          <ng-container *ngIf="editaDetalle">
+            <p class="servidores-ayuda" *ngIf="!serviciosEditar.length">Sin servicios del BUS. Agrégalos si este paso actúa sobre alguno.</p>
+            <app-selector-buscable
+              [opciones]="opcionesServicios"
+              [valor]="selectorServicio"
+              (valorChange)="agregarServicio($event, 'editar')"
+              [permitirLimpiar]="false"
+              placeholder="Buscar servicio por código o nombre..."
+              [textoVacio]="errorServicios || 'No hay servicios en el inventario.'"
+            ></app-selector-buscable>
+            <button type="button" class="btn btn-sm btn-outline-purple commit-guardar" *ngIf="serviciosEditarCambiaron" [disabled]="guardandoServicios" (click)="guardarServicios()">
+              {{ guardandoServicios ? 'Guardando…' : 'Guardar servicios' }}
+            </button>
+          </ng-container>
+        </div>
+
+        <div class="estimado-fin" *ngIf="editaDetalle">
+          <span class="form-label">Hora estimada de finalización</span>
+          <div class="estimado-fin__fila">
+            <input class="form-input" type="datetime-local" [(ngModel)]="formEstimadoFin" [min]="inicioPasoSeleccionadoInput || null">
+            <button type="button" class="btn btn-sm btn-outline-purple" [disabled]="guardandoEstimadoFin || estimadoFinDetalleAnterior" (click)="guardarEstimadoFin()">
+              {{ guardandoEstimadoFin ? 'Guardando…' : 'Guardar' }}
+            </button>
+          </div>
+          <small class="error-fechas" *ngIf="estimadoFinDetalleAnterior">No puede ser anterior al inicio programado ({{ pasoSeleccionado.FechaHoraProgramada | date:'dd/MM/yyyy HH:mm' }}).</small>
+        </div>
+        <p class="detalle-meta" *ngIf="!editaDetalle && pasoSeleccionado.FechaHoraEstimadaFin">
+          Hora estimada de finalización: <strong>{{ pasoSeleccionado.FechaHoraEstimadaFin | date:'d MMM y, HH:mm' }}</strong>
+        </p>
+        <p class="descripcion" *ngIf="pasoSeleccionado.Descripcion">{{ pasoSeleccionado.Descripcion }}</p>
+
+        <!-- Commit de Azure DevOps asociado -->
+        <div class="estimado-fin" *ngIf="editaDetalle">
+          <span class="form-label">Commit asociado</span>
+          <div class="commit-elegido" *ngIf="formCommit; else buscadorCommitEditar">
+            <div class="commit-elegido__info">
+              <a class="mono" [href]="formCommit.url" target="_blank" rel="noopener">{{ formCommit.idCorto }}</a>
+              <span>{{ formCommit.comentario || '(sin mensaje)' }}</span>
+              <span class="text-gray">{{ formCommit.autor }}</span>
+            </div>
+            <button type="button" class="btn-eliminar" (click)="quitarCommitEditar()" title="Quitar commit">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+            </button>
+          </div>
+          <ng-template #buscadorCommitEditar>
+            <p class="error-banner" *ngIf="errorRepos">{{ errorRepos }}</p>
+            <app-selector-buscable
+              [opciones]="opcionesRepos"
+              [valor]="commitSelectorEditar.repo || null"
+              (valorChange)="onCambioRepoCommit('editar', $event)"
+              placeholder="Buscar repositorio..."
+              [deshabilitado]="cargandoRepos"
+              [textoVacio]="cargandoRepos ? 'Cargando repositorios…' : 'No hay repositorios disponibles.'"
+            ></app-selector-buscable>
+            <ng-container *ngIf="commitSelectorEditar.repo">
+              <p class="error-banner" *ngIf="commitSelectorEditar.error">{{ commitSelectorEditar.error }}</p>
+              <app-selector-buscable
+                [opciones]="opcionesCommits(commitSelectorEditar)"
+                [valor]="formCommit"
+                (valorChange)="elegirCommitEditar($event)"
+                placeholder="Buscar commit por mensaje o autor..."
+                [deshabilitado]="commitSelectorEditar.cargandoCommits"
+                [textoVacio]="commitSelectorEditar.cargandoCommits ? 'Cargando commits…' : 'Sin commits recientes en este repositorio.'"
+              ></app-selector-buscable>
+            </ng-container>
+          </ng-template>
+          <button type="button" class="btn btn-sm btn-outline-purple commit-guardar" [disabled]="guardandoCommit" (click)="guardarCommit()">
+            {{ guardandoCommit ? 'Guardando…' : 'Guardar Commit' }}
+          </button>
+        </div>
+        <p class="detalle-meta" *ngIf="!editaDetalle && pasoSeleccionado.CommitId">
+          Commit asociado: <a [href]="pasoSeleccionado.CommitUrl" target="_blank" rel="noopener"><strong>{{ pasoSeleccionado.CommitId.substring(0, 8) }}</strong></a> — {{ pasoSeleccionado.CommitMensaje }}
+        </p>
+
+        <div class="asignados" *ngIf="pasoSeleccionado.equipo.length">
+          <span class="chip" *ngFor="let e of pasoSeleccionado.equipo">{{ e.nombreCompleto }}</span>
+        </div>
+
+        <!-- Duración programada vs. real -->
+        <div class="duracion-real" *ngIf="pasoSeleccionado.FechaHoraInicioReal || pasoSeleccionado.FechaHoraFinReal">
+          <span class="form-label">Duración real de ejecución</span>
+          <div class="duracion-real__filas">
+            <span *ngIf="pasoSeleccionado.FechaHoraInicioReal">Inicio real: <strong>{{ pasoSeleccionado.FechaHoraInicioReal | date:'d MMM y, HH:mm' }}</strong></span>
+            <span *ngIf="pasoSeleccionado.FechaHoraFinReal">Fin real: <strong>{{ pasoSeleccionado.FechaHoraFinReal | date:'d MMM y, HH:mm' }}</strong></span>
+            <span *ngIf="pasoSeleccionado.FechaHoraInicioReal && pasoSeleccionado.FechaHoraFinReal">
+              Duración: <strong>{{ formatoDuracion(minutosEntre(pasoSeleccionado.FechaHoraInicioReal, pasoSeleccionado.FechaHoraFinReal)) }}</strong>
+            </span>
+            <span class="badge-cumplimiento" *ngIf="estadoCumplimiento(pasoSeleccionado) as cump" [ngClass]="'cumplimiento-' + cump">
+              {{ cump === 'a-tiempo' ? 'A tiempo vs. lo estimado' : 'Tardío vs. lo estimado' }}
+            </span>
+          </div>
+        </div>
+
+        <div class="historial" *ngIf="pasoSeleccionado.MotivoEstado">
+          <span class="form-label">Motivo registrado</span>
+          <p>{{ pasoSeleccionado.MotivoEstado }}</p>
+        </div>
+        <div class="historial" *ngIf="pasoSeleccionado.ResultadoEjecucion">
+          <span class="form-label">Resultado de la ejecución</span>
+          <p>{{ pasoSeleccionado.ResultadoEjecucion }}</p>
+        </div>
+
+        <div class="cambiar-estado" *ngIf="editaDetalle">
+          <span class="form-label">Documentar / cambiar estado</span>
+          <select class="form-input" [(ngModel)]="formEstado.estado" (ngModelChange)="onCambioEstadoSeleccionado()">
+            <option value="PROGRAMADO">Programado</option>
+            <option value="EJECUTADO">Ejecutado</option>
+            <option value="CANCELADO">Cancelado</option>
+            <option value="REAGENDADO">Reagendado</option>
+            <option value="ROLLBACK">Rollback</option>
+          </select>
+
+          <ng-container *ngIf="requiereMotivo()">
+            <label class="form-label">Motivo (obligatorio para {{ etiquetaEstado(formEstado.estado).toLowerCase() }})</label>
+            <textarea class="form-input" rows="2" [(ngModel)]="formEstado.motivo" placeholder="Explica el motivo…"></textarea>
+          </ng-container>
+
+          <ng-container *ngIf="requiereNuevaFecha()">
+            <label class="form-label">Nueva fecha y hora de despliegue (obligatoria para {{ etiquetaEstado(formEstado.estado).toLowerCase() }})</label>
+            <input class="form-input" type="datetime-local" [(ngModel)]="formEstado.nuevaFecha" name="nueva-fecha-despliegue">
+            <small style="color:#64748b;font-size:12px" *ngIf="pasoSeleccionado.FechaHoraProgramada">Fecha actual: {{ pasoSeleccionado.FechaHoraProgramada | date: 'dd/MM/yyyy HH:mm' }}. Al guardar, el paso queda programado en la nueva fecha (la hora estimada de fin se corre igual).</small>
+          </ng-container>
+
+          <ng-container *ngIf="formEstado.estado === 'EJECUTADO'">
+            <label class="form-label">Resultado de la ejecución</label>
+            <textarea class="form-input" rows="3" [(ngModel)]="formEstado.resultadoEjecucion" placeholder="Qué se hizo, validaciones, observaciones…"></textarea>
+
+            <div class="fila-duracion-real">
+              <div>
+                <label class="form-label">Inicio real</label>
+                <input class="form-input" type="datetime-local" [(ngModel)]="formEstado.fechaHoraInicioReal">
+              </div>
+              <div>
+                <label class="form-label">Fin real</label>
+                <input class="form-input" type="datetime-local" [(ngModel)]="formEstado.fechaHoraFinReal" [min]="formEstado.fechaHoraInicioReal || null">
+              </div>
+            </div>
+            <small class="error-fechas" *ngIf="finRealAnterior">El fin real no puede ser anterior al inicio real.</small>
+          </ng-container>
+
+          <button type="button" class="btn btn-outline-purple" [disabled]="guardandoEstado || estadoIncompleto()" (click)="guardarEstado()">
+            {{ guardandoEstado ? 'Guardando…' : 'Guardar Estado' }}
+          </button>
+        </div>
+      </ng-container>
+
+      <!-- ---------- PESTAÑA: CHECKLIST ---------- -->
+      <ng-container *ngIf="pestanaDetalle === 'checklist'">
+        <div class="carga-inicial" *ngIf="cargandoChecklist">Cargando checklist…</div>
+        <ng-container *ngIf="!cargandoChecklist">
+          <div class="checklist-progreso" *ngIf="checklist.length">
+            <div class="checklist-progreso__barra">
+              <div class="checklist-progreso__relleno" [style.width.%]="(progresoChecklist().completados / progresoChecklist().total) * 100"></div>
+            </div>
+            <span>{{ progresoChecklist().completados }} de {{ progresoChecklist().total }} completados</span>
+          </div>
+
+          <p class="error-banner" *ngIf="errorEvidencia">{{ errorEvidencia }}</p>
+
+          <!-- Marcar exige pantallazo(s) de evidencia asociados a este ítem (ver
+               toggleItemChecklist -> toggleItemChecklistInline); desmarcar es
+               un simple reabrir que conserva las imágenes. Fila principal (checkbox + eliminar) y fila
+               de detalle (meta/evidencia) separadas para que no se amontonen
+               en una sola línea cuando hay varios datos a la vez. -->
+          <div class="checklist-item" *ngFor="let item of checklist">
+            <div class="checklist-item__fila">
+              <label class="checklist-item__check">
+                <input type="checkbox" [checked]="item.Completado" [disabled]="!editaDetalle || subiendoEvidenciaItemId === item.Id" (change)="toggleItemChecklist(item, $event)">
+                <span [class.tachado]="item.Completado">{{ item.Descripcion }}</span>
+              </label>
+              <button type="button" class="btn-eliminar" *ngIf="editaDetalle" (click)="eliminarItemChecklist(item)" title="Eliminar ítem">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+              </button>
+            </div>
+            <div class="checklist-item__detalle" *ngIf="subiendoEvidenciaItemId === item.Id || item.Completado || cantidadEvidencias(item) > 0 || editaDetalle">
+              <span class="checklist-mini-item__subiendo" *ngIf="subiendoEvidenciaItemId === item.Id">Subiendo evidencia…</span>
+              <span class="checklist-item__meta" *ngIf="subiendoEvidenciaItemId !== item.Id">
+                <ng-container *ngIf="item.Completado">{{ item.CompletadoPorNombre }} · {{ item.FechaCompletado | date:'d MMM, HH:mm' }}</ng-container>
+                <button type="button" class="link-evidencia" *ngIf="cantidadEvidencias(item) > 0" (click)="verEvidenciaChecklist(pasoSeleccionado, item, $event)">{{ textoVerEvidencias(item) }}</button>
+                <button type="button" class="link-evidencia link-evidencia--mas" *ngIf="editaDetalle" (click)="abrirAgregarEvidencias(pasoSeleccionado, item, $event)" title="Agregar otra imagen de evidencia">+ Imagen</button>
+              </span>
+            </div>
+          </div>
+          <p class="text-gray" *ngIf="!checklist.length">Todavía no hay ítems en el checklist.</p>
+
+          <div class="checklist-nuevo" *ngIf="editaDetalle">
+            <input class="form-input" type="text" [(ngModel)]="nuevoItemChecklist" placeholder="Nuevo ítem… ej. Backup realizado" (keyup.enter)="agregarItemChecklist()">
+            <button type="button" class="btn btn-outline-purple" [disabled]="guardandoItemChecklist || !nuevoItemChecklist.trim()" (click)="agregarItemChecklist()">
+              {{ guardandoItemChecklist ? 'Agregando…' : 'Agregar' }}
+            </button>
+          </div>
+        </ng-container>
+      </ng-container>
+
+      <!-- ---------- PESTAÑA: HISTORIAL ---------- -->
+      <ng-container *ngIf="pestanaDetalle === 'historial'">
+        <div class="carga-inicial" *ngIf="cargandoHistorial">Cargando historial…</div>
+        <ng-container *ngIf="!cargandoHistorial">
+          <div class="historial-evento" *ngFor="let e of historial">
+            <div class="historial-evento__cabecera">
+              <strong>{{ etiquetaAccionHistorial(e.Accion) }}</strong>
+              <span>{{ e.FechaEvento | date:'d MMM y, HH:mm' }}</span>
+            </div>
+            <p class="historial-evento__autor">{{ e.RealizadoPorUsername || 'Sistema' }}</p>
+            <p class="historial-evento__resumen" *ngIf="resumenEventoHistorial(e)">{{ resumenEventoHistorial(e) }}</p>
+          </div>
+          <p class="text-gray" *ngIf="!historial.length">Todavía no hay eventos registrados.</p>
+        </ng-container>
+      </ng-container>
+    </div>
+    <div class="modal-footer">
+      <button type="button" class="btn btn-outline-purple" *ngIf="editaDetalle && pasoSeleccionado.Rfc" (click)="abrirPublicarGlpi()" title="Agrega la documentación de este registro como seguimiento del caso en GLPI">Publicar en GLPI</button>
+      <button type="button" class="btn btn-outline-purple" *ngIf="puedeCompartir(pasoSeleccionado)" (click)="abrirCompartir(pasoSeleccionado)" title="Compartir solo este paso con otras personas o un equipo">Compartir paso</button>
+      <button type="button" class="btn btn-outline-purple" *ngIf="pasoSeleccionado.Eliminado && puedeEliminarLogico(pasoSeleccionado)" (click)="restaurar(pasoSeleccionado)" title="Devolverlo a la bitácora principal">Restaurar</button>
+      <button type="button" class="btn btn-peligro" *ngIf="pasoSeleccionado.Eliminado && puedeEliminar(pasoSeleccionado)" (click)="eliminar(pasoSeleccionado)" title="Borra el registro y todo lo que cuelga de él">Eliminar definitivamente…</button>
+      <button type="button" class="btn" (click)="cerrarDetalle()">Cerrar</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: PUBLICAR SEGUIMIENTO EN GLPI -->
+<!-- Escribe en GLPI: se ve completo y editable antes; solo se publica al pulsar el botón. -->
+<div class="overlay overlay--glpi-pub" *ngIf="glpiPubAbierto">
+  <div class="modal modal-glpi-pub">
+    <div class="modal-header"><h2>Publicar en GLPI</h2></div>
+    <div class="modal-body">
+      <div class="carga-inicial" *ngIf="glpiPubCargando">Preparando el seguimiento…</div>
+
+      <ng-container *ngIf="!glpiPubCargando">
+        <!-- Resultado -->
+        <div class="glpi-pub-ok" *ngIf="glpiPubResultado">
+          <strong>{{ glpiPubResultado.tipo === 'SOLUCION' ? 'Solución publicada en el caso #' + glpiPubResultado.caso + '. El caso queda resuelto en GLPI (o pendiente de aprobación del solicitante, según la configuración de la mesa).' : 'Seguimiento publicado en el caso #' + glpiPubResultado.caso + '.' }}</strong>
+          <span *ngIf="glpiPubEstadoCaso">Estado actual del caso en GLPI: <strong>{{ glpiPubEstadoCaso.estado }}</strong></span>
+          <a [href]="glpiPubResultado.url" target="_blank" rel="noopener">Abrir el caso en GLPI</a>
+          <ul class="glpi-pub-archivos-res" *ngIf="glpiPubResultado.archivos.length">
+            <li *ngFor="let a of glpiPubResultado.archivos" [class.glpi-pub-fallo]="!a.ok">
+              {{ a.nombre }} — {{ a.ok ? (a.incrustada ? 'insertada en el texto de la respuesta' : (a.enRespuesta === false ? 'subido al caso, pero no quedó dentro de la respuesta' : 'adjunta a la respuesta (no se pudo insertar en el texto)')) : (a.error || 'no se pudo subir') }}
+            </li>
+          </ul>
+        </div>
+
+        <ng-container *ngIf="!glpiPubResultado">
+          <label class="form-label">Tipo de respuesta</label>
+          <div class="glpi-pub-tipos" role="radiogroup" aria-label="Tipo de respuesta en GLPI">
+            <button type="button" role="radio" class="glpi-pub-tipo" [class.glpi-pub-tipo--activo]="glpiPubTipo === 'SEGUIMIENTO'" [attr.aria-checked]="glpiPubTipo === 'SEGUIMIENTO'"
+                    [disabled]="glpiPubPublicando || glpiPubCasoCerrado" (click)="elegirTipoGlpi('SEGUIMIENTO')">
+              <strong>Seguimiento</strong>
+              <span>Comentario en el caso con la documentación. No cambia el estado del caso.</span>
+            </button>
+            <button type="button" role="radio" class="glpi-pub-tipo glpi-pub-tipo--cierre" [class.glpi-pub-tipo--activo]="glpiPubTipo === 'SOLUCION'" [attr.aria-checked]="glpiPubTipo === 'SOLUCION'"
+                    [disabled]="glpiPubPublicando || glpiPubCasoCerrado" (click)="elegirTipoGlpi('SOLUCION')">
+              <strong>Solución (cierre del caso)</strong>
+              <span>Respuesta de cierre armada con las evidencias. Deja el caso Resuelto en GLPI.</span>
+            </button>
+          </div>
+
+          <p class="glpi-intro" *ngIf="glpiPubTipo === 'SEGUIMIENTO'">Se agregará como seguimiento del caso, con la documentación de este registro. Revisa y edita el texto: <strong>no se envía nada hasta que pulses «Publicar»</strong>.</p>
+          <p class="glpi-intro" *ngIf="glpiPubTipo === 'SOLUCION'">Se armó la respuesta de cierre con lo registrado en AXIS (ejecución, actividades realizadas y sus evidencias). La ve el solicitante. Revisa y edita el texto: <strong>no se envía nada hasta que pulses «Publicar»</strong>.</p>
+
+          <div class="glpi-banner__duplicado" *ngIf="glpiPubYaPublicado.length">
+            Ya se publicó {{ glpiPubYaPublicado[0].tipo === 'SOLUCION' ? 'una solución (cierre)' : 'un seguimiento' }} de este registro ({{ glpiPubYaPublicado[0].fecha | date:'d MMM y, HH:mm' }}{{ glpiPubYaPublicado[0].usuario ? ' por ' + glpiPubYaPublicado[0].usuario : '' }}). Si publicas de nuevo se agregará {{ glpiPubTipo === 'SOLUCION' ? 'otra solución (GLPI la rechaza si el caso ya está resuelto)' : 'otro comentario al caso' }}.
+          </div>
+
+          <ul class="glpi-pub-avisos" *ngIf="glpiPubTipo === 'SOLUCION' && glpiPubAvisosCierre.length">
+            <li *ngFor="let a of glpiPubAvisosCierre">{{ a }}</li>
+          </ul>
+
+          <label class="form-label">Caso de GLPI</label>
+          <input class="form-input glpi-pub-caso" type="text" inputmode="numeric" [(ngModel)]="glpiPubCaso" (ngModelChange)="alCambiarCasoGlpi()" placeholder="Ej. 405428" [disabled]="glpiPubPublicando">
+
+          <div class="glpi-pub-estado glpi-pub-estado--cargando" *ngIf="glpiPubConsultandoEstado">Consultando el estado del caso en GLPI…</div>
+          <div class="glpi-pub-estado" *ngIf="glpiPubEstadoCaso as e" [class.glpi-pub-estado--cerrado]="e.cerrado" [class.glpi-pub-estado--pendiente]="e.codigo === 4">
+            <div class="glpi-pub-estado__linea">
+              <span class="glpi-pub-estado__rotulo">Estado en GLPI</span>
+              <span class="glpi-pub-estado__chip">{{ e.estado }}</span>
+              <span class="glpi-pub-estado__titulo" *ngIf="e.titulo">{{ e.titulo }}</span>
+              <a [href]="e.url" target="_blank" rel="noopener">Ver en GLPI</a>
+            </div>
+            <p class="glpi-pub-estado__bloqueo" *ngIf="e.cerrado">Este caso ya está {{ e.estado.toLowerCase() }} en GLPI: no se puede responder ni cerrar desde AXIS.</p>
+          </div>
+          <p class="servidores-ayuda" *ngIf="glpiPubEstadoAviso">{{ glpiPubEstadoAviso }}</p>
+
+          <label class="form-label">{{ glpiPubTipo === 'SOLUCION' ? 'Texto de la solución (cierre)' : 'Texto del seguimiento' }}</label>
+          <textarea class="form-input glpi-pub-texto" rows="16" [(ngModel)]="glpiPubTexto" [disabled]="glpiPubPublicando"></textarea>
+
+          <ng-container *ngIf="glpiPubArchivos.length">
+            <label class="form-label">Evidencias que se insertan en {{ glpiPubTipo === 'SOLUCION' ? 'la solución' : 'la respuesta' }} ({{ glpiPubSeleccionados }} de {{ glpiPubArchivos.length }})</label>
+            <p class="servidores-ayuda">Cada imagen se coloca dentro del texto, justo debajo de la actividad a la que pertenece; las demás van al final.</p>
+            <div class="glpi-pub-archivos">
+              <label class="checkbox-row" *ngFor="let a of glpiPubArchivos">
+                <input type="checkbox" [(ngModel)]="a.seleccionado" [disabled]="glpiPubPublicando">
+                <span class="glpi-pub-archivo__nombre">{{ a.nombre }}</span>
+                <span class="text-gray glpi-pub-archivo__meta">{{ tamanoLegible(a.tamano) }}{{ a.item ? ' · evidencia de «' + a.item + '»' : '' }}{{ a.esImagen ? '' : ' · no es imagen' }}</span>
+              </label>
+            </div>
+            <p class="servidores-ayuda" *ngIf="glpiPubSeleccionados > 10">Máximo 10 archivos por seguimiento.</p>
+          </ng-container>
+
+          <label class="checkbox-row glpi-pub-privado" *ngIf="glpiPubTipo === 'SEGUIMIENTO'">
+            <input type="checkbox" [(ngModel)]="glpiPubPrivado" [disabled]="glpiPubPublicando">
+            Seguimiento privado (solo lo ven los técnicos; desmárcalo para que también lo vea el solicitante)
+          </label>
+          <label class="checkbox-row glpi-pub-privado glpi-pub-confirma" *ngIf="glpiPubTipo === 'SOLUCION'">
+            <input type="checkbox" [(ngModel)]="glpiPubConfirmaCierre" [disabled]="glpiPubPublicando">
+            Entiendo que esto publica la solución y deja el caso #{{ glpiPubCaso.trim() || '…' }} resuelto en GLPI.
+          </label>
+        </ng-container>
+
+        <p class="error-banner" *ngIf="glpiPubError">{{ glpiPubError }}</p>
+      </ng-container>
+    </div>
+    <div class="modal-footer">
+      <button type="button" class="btn" [disabled]="glpiPubPublicando" (click)="cerrarPublicarGlpi()">{{ glpiPubResultado ? 'Cerrar' : 'Cancelar' }}</button>
+      <button type="button" class="btn btn-primary" *ngIf="!glpiPubResultado" [disabled]="!glpiPubPuedePublicar" (click)="publicarEnGlpi()">
+        {{ glpiPubPublicando ? 'Publicando…' : (glpiPubTipo === 'SOLUCION' ? 'Publicar solución en el caso #' : 'Publicar en el caso #') + (glpiPubCaso.trim() || '…') }}
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- Compartir un solo paso (va al final para quedar por encima de los demás modales) -->
+<app-compartir-paso *ngIf="pasoCompartir" [pasoId]="pasoCompartir.Id" [titulo]="(pasoCompartir.Rfc ? pasoCompartir.Rfc + ' · ' : '') + pasoCompartir.Titulo" (cerrar)="pasoCompartir = null"></app-compartir-paso>
+
+<!-- Fusionar pasos duplicados -->
+<app-fusionar-pasos *ngIf="fusionOpciones" [opciones]="fusionOpciones" [preseleccion]="fusionPreseleccion" (cerrar)="fusionOpciones = null" (fusionado)="alFusionar()"></app-fusionar-pasos>
+
+<!-- MODAL: ELIMINAR (lógico o definitivo). No se cierra al hacer clic afuera. -->
+<div class="overlay" *ngIf="dialogoEliminar as d">
+  <div class="modal modal-eliminar" role="dialog" aria-modal="true" aria-labelledby="titulo-eliminar">
+    <div class="modal-header">
+      <h2 id="titulo-eliminar">{{ d.pasos.length === 1 ? 'Eliminar registro' : 'Eliminar ' + d.pasos.length + ' registros' }}</h2>
+    </div>
+    <div class="modal-body">
+      <p class="eliminar-objetivo">{{ nombresDialogo(d) }}</p>
+
+      <div class="aviso-esquema" *ngIf="d.faltaScript">
+        Todavía no se ejecutó el script de «Eliminados» en la base de datos, por eso solo está disponible la eliminación definitiva.
+      </div>
+
+      <div class="opciones-eliminar">
+        <label class="opcion-eliminar" *ngIf="!d.soloDefinitivo" [class.opcion-eliminar--sel]="d.modo === 'logico'">
+          <input type="radio" name="modoEliminar" value="logico" [(ngModel)]="d.modo">
+          <span class="opcion-eliminar__cuerpo">
+            <span class="opcion-eliminar__titulo">Mover a Eliminados <span class="pildora pildora--ok">Se puede restaurar</span></span>
+            <small>Sale de la bitácora principal, del tablero, de los avisos y de los informes, y queda en la pestaña «Eliminados» (solo lectura). Puedes restaurarlo cuando quieras.</small>
+          </span>
+        </label>
+        <label class="opcion-eliminar opcion-eliminar--peligro" [class.opcion-eliminar--sel]="d.modo === 'definitivo'" [class.opcion-eliminar--off]="!d.puedeDefinitivo">
+          <input type="radio" name="modoEliminar" value="definitivo" [(ngModel)]="d.modo" [disabled]="!d.puedeDefinitivo">
+          <span class="opcion-eliminar__cuerpo">
+            <span class="opcion-eliminar__titulo">Eliminar definitivamente <span class="pildora pildora--peligro">No se puede deshacer</span></span>
+            <small>Borra el registro de la base de datos junto con su checklist, evidencias, participantes, servidores y servicios, y los accesos compartidos. Solo queda constancia en la auditoría.</small>
+            <small class="opcion-eliminar__sin-permiso" *ngIf="!d.puedeDefinitivo">Solo quien creó el paso puede eliminarlo definitivamente{{ d.pasos.length > 1 ? ' (en la selección hay pasos de otras personas)' : '' }}.</small>
+          </span>
+        </label>
+      </div>
+
+      <div class="campo-eliminar" *ngIf="d.modo === 'logico'">
+        <label for="motivo-eliminar">Motivo <span class="text-gray">(opcional)</span></label>
+        <input id="motivo-eliminar" type="text" maxlength="500" [(ngModel)]="d.motivo" placeholder="Ej.: duplicado, se creó por error…">
+      </div>
+
+      <label class="confirmo-eliminar" *ngIf="d.modo === 'definitivo' && d.puedeDefinitivo">
+        <input type="checkbox" [(ngModel)]="d.confirmo">
+        <span>Entiendo que se borrará de forma permanente{{ d.pasos.length > 1 ? ' (' + d.pasos.length + ' registros)' : '' }} y no se podrá recuperar.</span>
+      </label>
+
+      <div class="error-banner" *ngIf="d.error">{{ d.error }}</div>
+    </div>
+    <div class="modal-footer">
+      <button type="button" class="btn" [disabled]="d.procesando" (click)="cerrarDialogoEliminar()">Cancelar</button>
+      <button type="button" class="btn" [class.btn-primary]="d.modo === 'logico'" [class.btn-peligro-solido]="d.modo === 'definitivo'" [disabled]="!puedeConfirmarEliminar(d)" (click)="confirmarEliminar()">
+        {{ d.procesando ? 'Procesando…' : (d.modo === 'logico' ? 'Mover a Eliminados' : 'Eliminar definitivamente') }}
+      </button>
+    </div>
+  </div>
+</div>

@@ -1,0 +1,125 @@
+// Estilos compartidos por las pestañas del tablero de App Móvil. Parte del
+// lenguaje visual de las vistas de análisis (flujo-comun) y agrega los
+// componentes propios del tablero: tarjetas KPI con sparkline, barras,
+// hallazgos y tablas. Todo con variables CSS: el modo oscuro cambia la paleta.
+@use '../app-movil-logs/flujo-comun';
+
+$texto:    var(--ax-text, #1e293b);
+$suave:    var(--ax-text-muted, #64748b);
+$surface:  var(--ax-surface, #ffffff);
+$surface2: var(--ax-surface-2, #f8fafc);
+$borde:    var(--ax-border, #e2e8f0);
+$brand:    var(--ax-brand-primary, #673ab7);
+
+.panel-diagrama { margin-bottom: 18px; }
+.vacio-int { text-align: center; color: $suave; padding: 26px 12px; font-size: 13px; }
+.txt-error { color: var(--f-err-ink); font-weight: 700; }
+.nota { font-size: 12px; color: $suave; margin: 10px 0 0; a { color: var(--f-brand-ink); font-weight: 700; } }
+.enlace-btn { text-decoration: none; display: inline-flex; align-items: center; }
+.btn-link { border: none; background: transparent; color: var(--f-brand-ink); font-weight: 700; font-size: 12.5px; cursor: pointer; padding: 2px 0; font-family: inherit; &:hover { text-decoration: underline; } }
+.btn-limpiar { padding: 9px 16px; border-radius: 10px; border: 1px dashed $borde; background: transparent; color: $suave; font-size: 13px; font-weight: 600; cursor: pointer; font-family: inherit; &:hover { color: var(--f-err); border-color: var(--f-err); } }
+.error-texto { color: var(--f-err-ink); font-size: 12.5px; font-weight: 600; margin: -6px 0 12px; }
+.buscar { padding: 8px 12px; border-radius: 10px; border: 1px solid $borde; font-size: 13px; font-family: inherit; background: $surface2; color: $texto; min-width: 230px; }
+
+// --- Filtros del resumen ---
+.barra-filtros {
+  display: flex; flex-wrap: wrap; align-items: flex-end; gap: 14px 18px; margin-bottom: 16px;
+  .campo { min-width: 190px; }
+  .campo--documento { flex: 0 1 300px; min-width: 240px; }
+  .grupo { display: flex; gap: 8px; input { flex: 1; min-width: 0; } }
+}
+.cliente-banner {
+  display: flex; align-items: center; gap: 10px; background: var(--f-brand-soft); border: 1px solid rgba(var(--ax-brand-primary-rgb, 103, 58, 183), 0.3);
+  color: var(--f-brand-ink); border-radius: 12px; padding: 10px 16px; margin-bottom: 16px; font-size: 13px; font-weight: 600;
+  svg { width: 18px; height: 18px; flex-shrink: 0; }
+  span { flex: 1; }
+  strong { font-family: 'JetBrains Mono', monospace; }
+  a { color: inherit; text-decoration: underline; font-weight: 700; white-space: nowrap; }
+  button { border: none; background: transparent; color: inherit; font-size: 20px; line-height: 1; cursor: pointer; opacity: .7; &:hover { opacity: 1; } }
+}
+.atenuado { opacity: 0.55; transition: opacity .2s; pointer-events: none; }
+
+// --- Hallazgos ---
+.hallazgos {
+  background: $surface; border: 1px solid $borde; border-radius: 20px; padding: 18px 22px 8px; margin-bottom: 18px; box-shadow: var(--f-sombra);
+  header { display: flex; justify-content: space-between; align-items: baseline; flex-wrap: wrap; gap: 4px 14px; margin-bottom: 8px; h2 { font-size: 17px; font-weight: 800; margin: 0; } .sub { margin: 0; } }
+  ul { list-style: none; margin: 0; padding: 0; }
+}
+.hallazgo {
+  display: flex; align-items: flex-start; gap: 12px; padding: 12px 0; border-top: 1px solid $borde;
+  &:first-child { border-top: none; }
+  &__icono { width: 30px; height: 30px; border-radius: 10px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; svg { width: 18px; height: 18px; } }
+  &__texto { flex: 1 1 220px; min-width: 0; display: flex; flex-direction: column; gap: 2px; strong { font-size: 14px; } span { font-size: 12.5px; color: $suave; line-height: 1.45; } }
+  &__accion { border: 1px solid $borde; background: transparent; color: var(--f-brand-ink); font-weight: 700; font-size: 12px; border-radius: 8px; padding: 6px 12px; cursor: pointer; white-space: nowrap; align-self: center; font-family: inherit; &:hover { background: $surface2; } }
+  &--critico &__icono { background: var(--f-err-bg); color: var(--f-err-ink); }
+  &--aviso &__icono { background: var(--f-warn-bg); color: var(--f-warn-ink); }
+  &--info &__icono { background: var(--f-info-bg); color: var(--f-info-ink); }
+  &--ok &__icono { background: var(--f-ok-bg); color: var(--f-ok-ink); }
+}
+@media (max-width: 640px) { .hallazgo { flex-wrap: wrap; &__accion { margin-left: 42px; align-self: flex-start; } } .lentos li { grid-template-columns: minmax(0, 1fr) auto 50px; app-sparkline { display: none; } } }
+
+// --- KPIs con sparkline ---
+.kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 14px; margin-bottom: 18px; }
+.kpis--6 { grid-template-columns: repeat(3, minmax(0, 1fr)); @media (max-width: 900px) { grid-template-columns: repeat(2, minmax(0, 1fr)); } @media (max-width: 520px) { grid-template-columns: 1fr; } @media (min-width: 1600px) { grid-template-columns: repeat(6, minmax(0, 1fr)); } }
+.kpi {
+  background: $surface; border: 1px solid $borde; border-radius: 18px; padding: 14px 16px 12px; display: flex; flex-direction: column; gap: 6px; min-width: 0;
+  box-shadow: var(--f-sombra); border-top: 3px solid transparent;
+  &--ok { border-top-color: var(--f-ok); }
+  &--warn { border-top-color: var(--f-warn); }
+  &--error { border-top-color: var(--f-err); }
+  &__cab { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+  &__etiqueta { font-size: 11.5px; font-weight: 800; color: $suave; text-transform: uppercase; letter-spacing: .4px; }
+  &__cuerpo { display: flex; align-items: flex-end; justify-content: space-between; gap: 10px; }
+  &__valor { font-size: 28px; font-weight: 800; letter-spacing: -0.8px; line-height: 1.05; font-variant-numeric: tabular-nums; }
+  &--ok &__valor { color: var(--f-ok); }
+  &--warn &__valor { color: var(--f-warn); }
+  &--error &__valor { color: var(--f-err); }
+  &__pie { font-size: 11.5px; color: $suave; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+}
+.delta { font-size: 11.5px; font-weight: 800; white-space: nowrap; cursor: help;
+  &--ok { color: var(--f-ok-ink); background: var(--f-ok-bg); padding: 2px 8px; border-radius: 999px; }
+  &--mal { color: var(--f-err-ink); background: var(--f-err-bg); padding: 2px 8px; border-radius: 999px; }
+  &--neutro { color: $suave; background: var(--f-neutro-bg); padding: 2px 8px; border-radius: 999px; }
+}
+
+// --- Rejillas ---
+.rejilla-3 { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 18px; margin-bottom: 0; > .panel-diagrama { margin-bottom: 18px; } @media (max-width: 1100px) { grid-template-columns: repeat(2, minmax(0, 1fr)); } @media (max-width: 720px) { grid-template-columns: 1fr; } }
+.rejilla-2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; > .panel-diagrama { margin-bottom: 18px; } @media (max-width: 900px) { grid-template-columns: 1fr; } }
+
+// --- Barras horizontales ---
+.barras { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 14px;
+  &__top { display: flex; justify-content: space-between; gap: 10px; margin-bottom: 5px; font-size: 13px;
+    span { font-weight: 600; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    b { font-size: 12px; color: $suave; white-space: nowrap; font-variant-numeric: tabular-nums; small { font-weight: 600; } } }
+  &__pista { height: 7px; border-radius: 999px; background: $surface2; overflow: hidden; i { display: block; height: 100%; border-radius: inherit; background: $brand; opacity: .85; &.roja { background: var(--f-err); opacity: .9; } } }
+  &--clic li { cursor: pointer; border-radius: 8px; padding: 2px 4px; margin: -2px -4px; &:hover, &:focus-visible { background: $surface2; outline: none; } }
+}
+
+// --- Patrón semanal ---
+.semana { list-style: none; margin: 4px 0 0; padding: 0; display: grid; grid-template-columns: repeat(7, 1fr); gap: 6px; align-items: start;
+  li { display: flex; flex-direction: column; align-items: center; gap: 4px; min-width: 0; }
+  &__valor { font-size: 11px; font-weight: 700; color: $suave; font-variant-numeric: tabular-nums; }
+  &__barra { width: 100%; max-width: 34px; height: 110px; display: flex; align-items: flex-end; i { display: block; width: 100%; border-radius: 6px 6px 3px 3px; background: $brand; opacity: .45; min-height: 3px; } }
+  &--max &__barra i { opacity: 1; }
+  &--max &__valor { color: $texto; }
+  &__dia { font-size: 12px; font-weight: 700; }
+  &__err { font-size: 11px; font-weight: 700; color: $suave; &--alto { color: var(--f-err-ink); } }
+}
+
+// --- Servicios lentos ---
+.lentos { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column;
+  li { display: grid; grid-template-columns: minmax(0, 1fr) auto auto 54px; align-items: center; gap: 12px; padding: 9px 0; border-top: 1px solid $borde; &:first-child { border-top: none; padding-top: 0; } }
+  &__nombre { min-width: 0; display: flex; flex-direction: column; span { font-size: 13px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; } small { font-size: 11px; color: $suave; } }
+  &__valor { min-width: 62px; justify-content: center; font-variant-numeric: tabular-nums; }
+  &__delta { font-size: 11.5px; font-weight: 800; color: $suave; text-align: right; &--mal { color: var(--f-err-ink); } &--bien { color: var(--f-ok-ink); } }
+}
+
+// --- Tablas ---
+.fn-nombre { font-weight: 700; font-size: 13px; }
+.fn-tec { color: $suave; font-size: 11px; margin-top: 1px; }
+.celda-barra { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; min-width: 110px; i { display: block; height: 4px; border-radius: 3px; background: $brand; opacity: .55; min-width: 2px; } }
+.btn-detalle { padding: 5px 12px; border-radius: 8px; border: 1px solid $borde; background: transparent; color: var(--f-brand-ink); font-size: 12px; font-weight: 700; cursor: pointer; white-space: nowrap; font-family: inherit; &:hover { background: $surface2; } }
+.ver-mas { text-align: center; margin-top: 14px; }
+th.orden { cursor: pointer; user-select: none; }
+
+.grafico-panel { overflow: visible; }

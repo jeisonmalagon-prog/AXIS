@@ -1,0 +1,99 @@
+<header class="cab">
+  <div>
+    <h1>Biometrías por fecha</h1>
+    <p class="sub">Todos los casos de biometría de ORQBIOMETRIA en un rango de fechas: cuántos hay, en qué estado quedaron y con qué resultado. Filtra por estado o resultado y abre cualquier cliente con un clic.</p>
+  </div>
+  <div class="cab-acciones">
+    <a class="btn btn-ghost btn-sm" routerLink="/biometria">Consultar un cliente</a>
+    <a class="btn btn-ghost btn-sm" routerLink="/biometria/reintentos">Reintentos de firma</a>
+    <button type="button" class="btn btn-ghost btn-sm" *ngIf="datos && datos.filas.length" (click)="exportarExcel()">Exportar Excel</button>
+  </div>
+</header>
+
+<section class="tarjeta filtro-fechas">
+  <div class="filtro-fila">
+    <label class="etiqueta">Desde
+      <input class="entrada" type="date" [(ngModel)]="desde" name="g-desde" (ngModelChange)="cambioManual()" [disabled]="consultando" />
+    </label>
+    <label class="etiqueta">Hasta
+      <input class="entrada" type="date" [(ngModel)]="hasta" name="g-hasta" (ngModelChange)="cambioManual()" [disabled]="consultando" />
+    </label>
+    <div class="presets" role="group" aria-label="Rangos rápidos">
+      <button type="button" class="chip-filtro" [class.activo]="presetActivo === 'hoy'" (click)="elegirPreset('hoy')" [disabled]="consultando">Hoy</button>
+      <button type="button" class="chip-filtro" [class.activo]="presetActivo === 'ayer'" (click)="elegirPreset('ayer')" [disabled]="consultando">Ayer</button>
+      <button type="button" class="chip-filtro" [class.activo]="presetActivo === '7'" (click)="elegirPreset('7')" [disabled]="consultando">7 días</button>
+      <button type="button" class="chip-filtro" [class.activo]="presetActivo === '15'" (click)="elegirPreset('15')" [disabled]="consultando">15 días</button>
+      <button type="button" class="chip-filtro" [class.activo]="presetActivo === '30'" (click)="elegirPreset('30')" [disabled]="consultando">30 días</button>
+    </div>
+    <button type="button" class="btn btn-purple" *ngIf="puedeEditar" (click)="consultar()" [disabled]="consultando || !rangoValido">
+      <span class="spinner chico" *ngIf="consultando"></span>{{ consultando ? 'Consultando…' : 'Consultar' }}
+    </button>
+  </div>
+  <p class="ayuda" *ngIf="!puedeEditar">Este módulo no está habilitado para tu usuario.</p>
+  <p class="ayuda" *ngIf="puedeEditar">Máximo 31 días por consulta. Solo lee ORQBIOMETRIA: no consulta MotorFirma ni el servidor de biometría.</p>
+</section>
+
+<div class="error-state" *ngIf="error">{{ error }}</div>
+
+<section class="tarjeta vacio-inicial" *ngIf="!datos && !consultando && !error">
+  <h2>Elige un rango y pulsa «Consultar»</h2>
+  <p>Verás el total de casos del rango, cuántos quedaron en cada estado y con qué resultado, y el listado para abrir cada cliente.</p>
+</section>
+<div class="cargando chico-v" *ngIf="consultando && !datos"><div class="spinner"></div><p>Consultando ORQBIOMETRIA… (puede tardar unos segundos)</p></div>
+
+<ng-container *ngIf="datos as d">
+  <p class="resumen-consulta">
+    Casos del <strong>{{ fechaCorta(d.filtro.desde) }}</strong> al <strong>{{ fechaCorta(d.filtro.hasta) }}</strong>
+    · consultado {{ d.generado | date: 'dd/MM/yyyy HH:mm' }} ({{ d.duracionMs / 1000 | number: '1.1-1' }} s)
+  </p>
+
+  <div class="kpis kpis-3">
+    <div class="kpi"><span class="kpi-et">Casos en el rango</span><span class="kpi-v">{{ d.totalRango }}</span><span class="kpi-s">según la fecha «{{ d.columnaFecha }}»</span></div>
+    <div class="kpi"><span class="kpi-et">Listados</span><span class="kpi-v">{{ d.filas.length }}{{ d.truncado ? '+' : '' }}</span><span class="kpi-s">{{ hayFiltros ? 'con los filtros elegidos' : 'sin filtros' }}</span></div>
+    <div class="kpi"><span class="kpi-et">Estados distintos</span><span class="kpi-v">{{ d.porEstado.length }}</span><span class="kpi-s">{{ d.porResultado.length }} resultado(s) distintos</span></div>
+  </div>
+
+  <section class="tarjeta filtros-card" *ngIf="d.porEstado.length || d.porResultado.length">
+    <div class="filtros-bloque" *ngIf="d.porEstado.length">
+      <span class="filtros-et">Estado</span>
+      <button type="button" class="chip-filtro" *ngFor="let e of d.porEstado" [class.activo]="d.filtro.estado === e.estado" (click)="elegirEstado(e.estado)" [disabled]="consultando">{{ e.estado }} <span>{{ e.total }}</span></button>
+    </div>
+    <div class="filtros-bloque" *ngIf="d.porResultado.length">
+      <span class="filtros-et">Resultado</span>
+      <button type="button" class="chip-filtro" *ngFor="let r of d.porResultado" [class.activo]="d.filtro.resultado === r.resultado" (click)="elegirResultado(r.resultado)" [disabled]="consultando">{{ r.resultado }} <span>{{ r.total }}</span></button>
+    </div>
+    <div class="filtros-pie" *ngIf="hayFiltros">
+      <span class="gris">Filtrando por {{ d.filtro.estado ? 'estado «' + d.filtro.estado + '»' : '' }}{{ d.filtro.estado && d.filtro.resultado ? ' y ' : '' }}{{ d.filtro.resultado ? 'resultado «' + d.filtro.resultado + '»' : '' }}.</span>
+      <button type="button" class="btn btn-ghost btn-sm" (click)="quitarFiltros()" [disabled]="consultando">Quitar filtros</button>
+    </div>
+  </section>
+
+  <div class="aviso-aviso" *ngIf="d.truncado">Hay más de {{ d.filas.length }} casos con esos filtros: se muestran los más recientes. Acorta el rango o filtra por estado/resultado.</div>
+
+  <section class="tarjeta">
+    <div class="vacio" *ngIf="!d.filas.length">No hay casos con esos filtros en el rango.</div>
+    <div class="tabla-wrap tabla-alta" *ngIf="d.filas.length">
+      <table class="tabla">
+        <thead><tr><th>Caso</th><th>Fecha</th><th>Cédula</th><th>Nombre</th><th>Estado</th><th>Canal</th><th>Último resultado</th><th aria-label="Abrir"></th></tr></thead>
+        <tbody>
+          <tr *ngFor="let f of paginaFilas; trackBy: trackFila">
+            <td class="mono">{{ f.idCaso }}</td>
+            <td>{{ fecha(f.fecha) }}</td>
+            <td class="mono">{{ f.cc || '—' }}</td>
+            <td>{{ f.nombre || '—' }}</td>
+            <td><span class="est" [ngClass]="claseNivel(nivel(f.estado))">{{ f.estado || 'Sin estado' }}</span></td>
+            <td>{{ f.idCanal || '—' }}</td>
+            <td class="td-resultado" [title]="f.resultado || ''"><span class="cortar">{{ f.resultado || '—' }}</span></td>
+            <td><a class="btn btn-ghost btn-sm" *ngIf="f.cc" routerLink="/biometria" [queryParams]="{ cc: f.cc }">Ver cliente</a></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="paginador" *ngIf="totalPaginas > 1">
+      <button type="button" class="btn-mini" (click)="cambiarPagina(-1)" [disabled]="pagina <= 1">Anterior</button>
+      <span>Página {{ pagina }} de {{ totalPaginas }} · {{ d.filas.length }} casos</span>
+      <button type="button" class="btn-mini" (click)="cambiarPagina(1)" [disabled]="pagina >= totalPaginas">Siguiente</button>
+    </div>
+  </section>
+  <p class="ayuda" *ngIf="tiempos">Tiempos: {{ tiempos }}</p>
+</ng-container>

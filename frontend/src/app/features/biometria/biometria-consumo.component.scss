@@ -1,0 +1,242 @@
+@use '../../repositorio/azure/azure-base' as *;
+@include base;
+
+// ASISA = serie 1 (color de marca), OLIMPIA = serie 2: tokens del tema (claro y oscuro). Cada proveedor también tiene su forma
+// (círculo / cuadrado) para no depender solo del color.
+$s1: var(--ax-chart-series-1, #673ab7);
+$s2: var(--ax-chart-series-2, #d81b60);
+$grid: var(--ax-chart-grid, #e2e8f0);
+$sup: var(--ax-chart-surface, #ffffff);
+
+.cab { display: flex; justify-content: space-between; align-items: flex-end; gap: 16px; flex-wrap: wrap; margin-bottom: 18px;
+  h1 { font-size: 30px; font-weight: 800; margin: 0; letter-spacing: -0.5px; }
+  .sub { margin: 6px 0 0; font-size: 14px; color: $brand-gray; max-width: 860px; } }
+.cab-acciones { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.mono { font-family: 'JetBrains Mono', monospace; }
+.chico-v { padding: 20px 0; }
+.ayuda { margin: 6px 0 0; font-size: 12px; color: $brand-gray; code { font-family: 'JetBrains Mono', monospace; font-size: 11.5px; } }
+.btn .spinner.chico { margin-right: 6px; border-top-color: #fff; border-color: rgba(255, 255, 255, 0.4); }
+.btn-ghost .spinner.chico { border-color: $border-light; border-top-color: $brand; }
+.vacio-inicial { text-align: center; padding: 40px 20px; display: flex; flex-direction: column; align-items: center; gap: 10px; p { margin: 0; color: $brand-gray; max-width: 620px; } }
+.filtro-fechas { margin-bottom: 14px; padding: 14px 16px; }
+.filtro-fila { display: flex; align-items: flex-end; gap: 14px; flex-wrap: wrap; .etiqueta { margin: 0; display: block; font-size: 12px; font-weight: 700; color: $brand-gray; } .entrada { width: 170px; } }
+.entrada { display: block; margin-top: 5px; font-family: inherit; font-size: 13px; padding: 9px 11px; border: 1px solid $border-light; border-radius: 8px; background: $surface-bg; color: $brand-dark; &:focus { outline: none; border-color: $brand; } }
+.presets { display: flex; gap: 6px; flex-wrap: wrap; padding-bottom: 2px; }
+.chip-filtro { font-family: inherit; font-size: 12px; font-weight: 600; color: $brand-gray; background: $surface-bg; border: 1px solid $border-light; border-radius: 999px; padding: 5px 11px; cursor: pointer;
+  &:hover:not(:disabled) { border-color: rgba($brand-rgb, 0.5); }
+  &.activo { background: rgba($brand-rgb, 0.12); border-color: $brand; color: $brand; }
+  &:disabled { opacity: 0.55; cursor: not-allowed; } }
+.resumen-consulta { margin: 4px 0 10px; font-size: 13px; color: $brand-gray; strong { color: $brand-dark; } }
+.check-chico { display: flex; align-items: center; gap: 6px; font-size: 12px; color: $brand-dark; cursor: pointer; input { accent-color: var(--ax-brand-primary, #673ab7); } }
+.tarjeta { margin-bottom: 14px; }
+.error-state { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+
+// Marcas de proveedor (color + forma)
+.marca { display: inline-block; width: 10px; height: 10px; margin-right: 7px; vertical-align: baseline; flex: none;
+  &.s1 { background: $s1; border-radius: 50%; }
+  &.s2 { background: $s2; border-radius: 2px; } }
+
+// Hallazgos
+.hallazgos { display: grid; gap: 8px; margin-bottom: 14px; }
+.hallazgo { display: flex; gap: 12px; align-items: flex-start; background: $surface; border: 1px solid $border-light; border-left: 4px solid $border-light; border-radius: 10px; padding: 10px 14px; font-size: 13px; line-height: 1.45;
+  .hz-det { display: block; color: $brand-gray; font-size: 12.5px; margin-top: 2px; }
+  .hz-nivel { flex: none; font-size: 10.5px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.4px; padding: 3px 8px; border-radius: 999px; margin-top: 1px; background: $surface-bg; color: $brand-gray; }
+  &.hz-alto { border-left-color: $danger; .hz-nivel { background: rgba(239, 68, 68, 0.14); color: $danger; } }
+  &.hz-medio { border-left-color: $warn; .hz-nivel { background: rgba(245, 158, 11, 0.16); color: $warn; } }
+  &.hz-info { border-left-color: $brand; .hz-nivel { background: rgba($brand-rgb, 0.12); color: $brand; } } }
+
+// KPIs
+.kpis { margin-bottom: 14px; }
+.kpi.kpi-alerta { border-color: rgba(239, 68, 68, 0.5); .kpi-v { color: $danger; } }
+.kpi-s.var-sube { color: $warn; font-weight: 600; }
+.kpi-s.var-baja { color: $ok; font-weight: 600; }
+.kpi .marca { margin-right: 6px; }
+
+// Tarjetas de proveedor
+.prov-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; margin-bottom: 14px; @media (max-width: 900px) { grid-template-columns: minmax(0, 1fr); } .tarjeta { margin-bottom: 0; } }
+.prov-cifras { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; margin-bottom: 14px; @media (max-width: 520px) { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  div { display: flex; flex-direction: column; } .cifra { font-size: 22px; font-weight: 800; line-height: 1.1; } .cifra-et { font-size: 11.5px; color: $brand-gray; margin-top: 2px; } }
+.barra-estados { display: flex; height: 12px; border-radius: 999px; overflow: hidden; background: $surface-bg; gap: 2px;
+  span { display: block; height: 100%; min-width: 0; &:first-child { border-radius: 999px 0 0 999px; } &:last-child { border-radius: 0 999px 999px 0; } } }
+.seg-ok { background: $ok; } .seg-warn { background: $warn; } .seg-mal { background: $danger; } .seg-otro { background: $grid; }
+.leyenda-estados { list-style: none; margin: 10px 0 0; padding: 0; display: flex; flex-wrap: wrap; gap: 6px 16px; font-size: 12px; color: $brand-gray;
+  li { display: inline-flex; align-items: center; gap: 5px; } strong { color: $brand-dark; } small { color: $brand-gray; }
+  .punto { width: 9px; height: 9px; border-radius: 50%; display: inline-block; } }
+.prov-nota { margin: 12px 0 0; font-size: 12.5px; color: $brand-gray; line-height: 1.5; strong { color: $brand-dark; } }
+.cupos { margin-top: 14px; padding-top: 12px; border-top: 1px solid $border-light; display: grid; gap: 12px; }
+.cupo-cab { display: flex; justify-content: space-between; gap: 10px; font-size: 12.5px; margin-bottom: 5px; flex-wrap: wrap; }
+.progreso { height: 8px; border-radius: 999px; background: $surface-bg; overflow: hidden; margin-bottom: 4px; span { display: block; height: 100%; border-radius: 999px; }
+  .cupo-ok { background: $ok; } .cupo-aviso { background: $warn; } .cupo-mal { background: $danger; } }
+
+// Gráficos
+.leyenda { display: flex; gap: 16px; flex-wrap: wrap; font-size: 12px; color: $brand-gray; margin: 0 0 6px; align-items: center; span { display: inline-flex; align-items: center; }
+  .raya-cupo { width: 18px; height: 0; border-top: 2px dashed $brand-gray; margin-right: 6px; } }
+.grafico { position: relative;
+  svg { width: 100%; height: auto; display: block; overflow: visible; touch-action: pan-y; }
+  .rejilla line { stroke: $grid; stroke-width: 1; }
+  .eje { font-size: 11px; fill: var(--ax-text-muted, #64748b); font-family: inherit; }
+  .linea { fill: none; stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; &.s1 { stroke: $s1; } &.s2 { stroke: $s2; } }
+  .cupo-linea { stroke-width: 1.5; stroke-dasharray: 5 4; opacity: 0.75; &.s1 { stroke: $s1; } &.s2 { stroke: $s2; } }
+  .punto-g { stroke: $sup; stroke-width: 2; &.s1 { fill: $s1; } &.s2 { fill: $s2; } }
+  .mira { stroke: var(--ax-text-muted, #64748b); stroke-width: 1; stroke-dasharray: 3 3; opacity: 0.6; pointer-events: none; }
+  .zona { fill: transparent; }
+  .barra-g { &.s1 { fill: $s1; } &.s2 { fill: $s2; } }
+  .fondo-hora { fill: rgba($brand-rgb, 0.08); pointer-events: none; } }
+.tooltip { position: absolute; top: 6px; z-index: 5; min-width: 170px; background: $surface; border: 1px solid $border-light; border-radius: 10px; padding: 9px 12px; font-size: 12px; box-shadow: 0 8px 22px rgba(0, 0, 0, 0.14); pointer-events: none;
+  strong { display: block; margin-bottom: 4px; font-size: 12px; } .tt-fila { display: flex; align-items: center; gap: 2px; line-height: 1.6; b { margin-left: auto; padding-left: 14px; } small { color: $brand-gray; } }
+  .tt-sub { color: $brand-gray; font-size: 11px; margin-top: 4px; padding-top: 4px; border-top: 1px solid $border-light; } }
+.selector-dias { flex-wrap: wrap; }
+
+// Tablas
+.tabla-alta { max-height: 62vh; }
+.tabla td.td-nombre { max-width: 240px; .cortar { display: block; max-width: 240px; } }
+.tabla td.td-barra { white-space: nowrap; min-width: 200px; display: table-cell; strong { margin: 0 8px 0 8px; } }
+.mini-barra { display: inline-block; vertical-align: middle; width: 90px; height: 8px; border-radius: 999px; background: $surface-bg; overflow: hidden; span { display: block; height: 100%; border-radius: 999px; }
+  .mb-ok { background: $brand; } .mb-mal { background: $danger; } .mb-neutro { background: $brand; opacity: 0.7; } }
+.tabla-cupos td { vertical-align: middle; .entrada { margin-top: 0; width: 100%; min-width: 110px; } }
+
+// Modal de configuración
+.modal-config { max-width: 860px; }
+.sub-modal { margin: 4px 0 0; font-size: 12.5px; color: $brand-gray; }
+.sec { margin: 20px 0 6px; font-size: 13px; text-transform: uppercase; letter-spacing: 0.3px; color: $brand; font-weight: 800; &:first-of-type { margin-top: 4px; } }
+.etiqueta { display: block; margin: 10px 0 0; font-size: 12px; font-weight: 700; color: $brand-gray; }
+.modal-config .entrada { width: 100%; &.corto { max-width: 180px; } }
+.fila-campos { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 0 14px; }
+.check { display: flex; align-items: flex-start; gap: 8px; margin-top: 8px; font-size: 13px; cursor: pointer; input { margin-top: 3px; accent-color: var(--ax-brand-primary, #673ab7); } small { color: $brand-gray; } }
+.prueba-bloque { display: flex; flex-direction: column; gap: 10px; align-items: flex-start; margin-top: 12px; }
+.resultado-prueba { align-self: stretch; border: 1px solid $border-light; border-left: 4px solid $ok; border-radius: 10px; padding: 10px 14px; font-size: 13px; line-height: 1.6; &.mal { border-left-color: $danger; } .mono { font-size: 12px; } }
+.pie-form { display: flex; justify-content: flex-end; gap: 10px; margin-top: 18px; padding-top: 12px; border-top: 1px solid $border-light; flex-wrap: wrap; }
+
+@media (prefers-reduced-motion: reduce) { .spinner { animation-duration: 2.5s; } }
+
+// Marca «n desde app» (intentos del canal 1) junto a los intentos de un cliente.
+.chip.chip-app { margin-left: 6px; background: $surface-bg; color: $brand-gray; border: 1px solid $border-light; font-weight: 600; }
+select.entrada { cursor: pointer; &:disabled { opacity: .6; cursor: not-allowed; } }
+
+// ---------------------------------------------------------------- Pestañas, reuso, días no hábiles y detalle
+$nohabil: var(--ax-chart-nohabil, rgba(100, 116, 139, 0.14));
+.kpis.kpis-6 { grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); }
+.kpi.kpi-aviso { border-color: rgba(245, 158, 11, 0.55); .kpi-v { color: $warn; } }
+.pestanas { display: flex; gap: 6px; flex-wrap: wrap; margin: 4px 0 14px; padding-bottom: 8px; border-bottom: 1px solid $border-light;
+  button { font-family: inherit; font-size: 13px; font-weight: 700; color: $brand-gray; background: transparent; border: 1px solid transparent; border-radius: 999px; padding: 7px 14px; cursor: pointer;
+    &:hover { background: $surface-bg; }
+    &.activa { background: rgba($brand-rgb, 0.12); border-color: $brand; color: $brand; }
+    &:focus-visible { outline: 2px solid $brand; outline-offset: 2px; } }
+  .pestana-n { margin-left: 7px; font-size: 11px; font-weight: 800; background: $brand; color: #fff; border-radius: 999px; padding: 1px 7px; } }
+
+.reuso-bloque { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; margin: 14px 0 4px; padding: 10px 12px; border: 1px solid $border-light; border-radius: 10px; background: $surface-bg;
+  @media (max-width: 520px) { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  div { display: flex; flex-direction: column; } .cifra { font-size: 19px; font-weight: 800; line-height: 1.1; } .cifra-et { font-size: 11px; color: $brand-gray; margin-top: 2px; line-height: 1.3; } }
+.t-warn { color: $warn; .cifra { color: $warn; } }
+
+.chip-dia { display: inline-block; font-size: 10.5px; font-weight: 700; border-radius: 999px; padding: 1px 8px; margin-left: 6px; border: 1px solid $border-light; color: $brand-gray; background: $surface-bg; white-space: nowrap;
+  &.chip-nohabil { color: $warn; border-color: rgba(245, 158, 11, 0.5); background: rgba(245, 158, 11, 0.1); }
+  &.chip-habil { color: $ok; border-color: rgba(16, 185, 129, 0.45); background: rgba(16, 185, 129, 0.08); margin-left: 0; } }
+.td-barra .chip-dia, td .chip-dia:first-child { margin-left: 0; }
+.chip.chip-evitable { margin-left: 6px; background: rgba(245, 158, 11, 0.14); color: $warn; border: 1px solid rgba(245, 158, 11, 0.4); font-weight: 700; }
+.chip.chip-reuso { background: rgba($brand-rgb, 0.12); color: $brand; border: 1px solid rgba($brand-rgb, 0.35); font-weight: 700; }
+.chip.chip-aviso { margin-left: 6px; background: rgba(245, 158, 11, 0.14); color: $warn; border: 1px solid rgba(245, 158, 11, 0.4); font-weight: 700; }
+.chip.chip-canal { background: $surface-bg; color: $brand-gray; border: 1px solid $border-light; font-weight: 600; &.canal-app { color: $brand; border-color: rgba($brand-rgb, 0.4); } }
+.banda-nohabil { fill: $nohabil; pointer-events: none; }
+.raya-nohabil { display: inline-block; width: 16px; height: 10px; margin-right: 6px; background: $nohabil; border: 1px solid $border-light; border-radius: 2px; }
+.tt-nohabil { color: $warn; font-weight: 700; }
+
+.tabla tr.fila-click { cursor: pointer; transition: background 0.12s;
+  &:hover, &:focus-visible { background: rgba($brand-rgb, 0.07); outline: none; }
+  .ver-detalle { font-size: 12px; font-weight: 700; color: $brand; white-space: nowrap; opacity: 0.75; }
+  &:hover .ver-detalle, &:focus-visible .ver-detalle { opacity: 1; text-decoration: underline; } }
+
+.pasos-calculo { margin: 0 0 14px; padding-left: 20px; font-size: 13px; line-height: 1.6; color: $brand-dark; li { margin-bottom: 4px; } strong { color: $brand-dark; } }
+.tabla-reglas td { vertical-align: top; }
+.td-uso { white-space: nowrap; .mini-barra { width: 60px; margin-right: 6px; } strong { margin-right: 2px; } }
+
+// Modal de detalle
+.modal-detalle { max-width: 1180px; width: 96vw; max-height: 92vh; overflow-y: auto;
+  .modal-header { align-items: flex-start; } .sec { margin-top: 22px; } .tabla-alta { max-height: 44vh; } }
+.det-kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 10px; margin: 6px 0 4px;
+  div { display: flex; flex-direction: column; padding: 10px 12px; border: 1px solid $border-light; border-radius: 10px; background: $surface-bg; }
+  .cifra { font-size: 18px; font-weight: 800; line-height: 1.15; } .cifra-et { font-size: 11px; color: $brand-gray; margin-top: 3px; line-height: 1.3; }
+  .t-mal .cifra { color: $danger; } }
+.tabla-linea { td.td-marcas { white-space: nowrap; .chip { margin: 0 4px 0 0; } }
+  tr.fila-foco td:first-child { box-shadow: inset 3px 0 0 $brand; }
+  tr.fila-reuso:not(.fila-foco) { opacity: 0.92; }
+  .res-linea { display: block; max-width: 260px; font-size: 12px; } }
+.chip-estado { display: inline-block; font-size: 11px; font-weight: 700; border-radius: 999px; padding: 2px 9px; border: 1px solid $border-light;
+  &.est-ok { color: $ok; background: rgba(16, 185, 129, 0.1); border-color: rgba(16, 185, 129, 0.4); }
+  &.est-mal { color: $danger; background: rgba(239, 68, 68, 0.1); border-color: rgba(239, 68, 68, 0.4); }
+  &.est-warn { color: $warn; background: rgba(245, 158, 11, 0.12); border-color: rgba(245, 158, 11, 0.45); }
+  &.est-otro { color: $brand-gray; background: $surface-bg; } }
+.grafico-hist { svg { max-height: 170px; } .eje-valor { font-weight: 700; fill: var(--ax-text, #1e293b); } }
+.horas-mini { display: grid; grid-template-columns: repeat(24, minmax(0, 1fr)); gap: 3px; align-items: end; height: 84px; padding-top: 4px;
+  .hm { display: flex; flex-direction: column; justify-content: flex-end; align-items: center; height: 100%; }
+  .hm-barra { display: block; width: 100%; min-height: 2px; background: $brand; border-radius: 3px 3px 0 0; opacity: 0.85; }
+  small { font-size: 9.5px; color: $brand-gray; height: 12px; line-height: 12px; } }
+
+.bloque { display: block; margin-top: 2px; }
+.tabla td.td-cap { white-space: normal; min-width: 130px; max-width: 220px; font-size: 12px; line-height: 1.35; }
+.td-fecha { white-space: nowrap; .chip-dia { display: block; width: fit-content; margin: 3px 0 0; } }
+.tabla td.td-barra { min-width: 0; max-width: 170px; white-space: normal; .mini-barra { width: 36px; } .chip { margin: 3px 4px 0 0; display: inline-block; } strong { margin: 0 6px 0 6px; } }
+.tabla td.td-nombre { max-width: 130px; .cortar { max-width: 130px; } }
+.tabla td.td-reusos { white-space: normal; text-align: right; .chip { display: block; width: fit-content; margin: 3px 0 0 auto; } }
+.tabla-linea { .res-linea { max-width: 220px; } td.td-marcas { white-space: normal; min-width: 150px; .chip { margin: 0 4px 3px 0; display: inline-block; } } }
+.sub-modal .chip-dia { margin: 0 4px; }
+.tabla td.td-ver { white-space: nowrap; }
+.tabla td.td-cons { white-space: normal; min-width: 150px; max-width: 240px; font-size: 12.5px; line-height: 1.35; }
+.td-uso .mini-barra { width: 40px !important; }
+
+// Regla (id) con su producto/subproducto debajo; homologación del resultado del proveedor.
+.tabla td.td-regla { min-width: 110px; max-width: 190px; small { white-space: normal; line-height: 1.25; } }
+.homolog { font-style: normal; font-size: 10.5px; font-weight: 700; letter-spacing: 0.2px; &.h-ok { color: $ok; } &.h-mal { color: $danger; } &.h-warn { color: $warn; } &.h-neutro { color: $brand-gray; } }
+
+// ===================================================================== Responsive de toda la vista
+.tabla td.td-caso { white-space: nowrap; font-size: 12px; }
+.tabla-linea { font-size: 12.5px; th, td { padding-left: 7px; padding-right: 7px; } }
+.tabla-wrap { max-width: 100%; }
+
+@media (max-width: 1100px) {
+  .tabla td.td-cap { min-width: 110px; }
+  .tabla td.td-cons { min-width: 130px; }
+  .modal-detalle { width: 98vw; }
+}
+
+@media (max-width: 760px) {
+  .cab h1 { font-size: 24px; }
+  .cab-acciones { width: 100%; .btn { flex: 1 1 auto; } }
+  .filtro-fila { align-items: stretch; > div:not(.presets) { flex: 1 1 140px; } .entrada { width: 100%; } }
+  .presets { width: 100%; }
+  .kpis, .kpis.kpis-6, .kpis.kpis-5 { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+  .kpi { padding: 12px; .kpi-v { font-size: 22px; } }
+  .det-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .prov-grid { grid-template-columns: minmax(0, 1fr); }
+  .tarjeta-cab { flex-wrap: wrap; gap: 6px; }
+
+  // Pestañas en una sola fila desplazable
+  .pestanas { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: thin; -webkit-overflow-scrolling: touch;
+    button { flex: none; white-space: nowrap; padding: 7px 12px; } }
+
+  // Detalle a pantalla completa
+  .modal-detalle { width: 100vw; max-width: 100vw; height: 100dvh; max-height: 100dvh; border-radius: 0; }
+}
+.tabla-apilada { th, td { padding-left: 8px; padding-right: 8px; } }
+
+// Tablas en tarjetas según el ANCHO REAL del contenedor (no de la pantalla): cada fila es una tarjeta y cada celda lleva su título.
+.tabla-wrap:has(.tabla-apilada) { container-type: inline-size; }
+@mixin apilar($t) {
+  #{$t} { display: block; width: 100%; min-width: 0 !important;
+    thead { display: none; }
+    tbody { display: block; }
+    tr { display: block; margin: 0 0 10px; padding: 6px 12px; border: 1px solid $border-light; border-radius: 10px; background: $surface; }
+    tr.fila-foco { border-left: 3px solid $brand; }
+    td, td.td-barra, td.td-cap, td.td-cons, td.td-nombre, td.td-reusos, td.td-regla, td.td-marcas, td.td-fecha, td.td-uso, td.td-ver {
+      display: block !important; position: relative; width: auto; min-width: 0 !important; max-width: none !important; padding: 5px 0 5px 42% !important;
+      border: 0 !important; text-align: left !important; white-space: normal !important; min-height: 22px; }
+    td[data-label]::before { content: attr(data-label); position: absolute; left: 0; top: 6px; width: 38%; font-size: 10.5px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.3px; color: $brand-gray; line-height: 1.3; }
+    td.td-ver { padding-left: 0 !important; text-align: right !important; }
+    .cortar, .res-linea { max-width: none !important; white-space: normal !important; }
+    .td-reusos .chip { display: inline-block !important; margin: 0 0 0 6px !important; }
+    .mini-barra { width: 60px !important; }
+  }
+}
+@container (max-width: 880px) { @include apilar('.tabla-apilada.tabla-cli'); }
+@container (max-width: 1060px) { @include apilar('.tabla-apilada:not(.tabla-cli)'); }
+.tabla td.td-cliente { min-width: 120px; max-width: 190px; .cortar { max-width: 180px; font-size: 12px; } }

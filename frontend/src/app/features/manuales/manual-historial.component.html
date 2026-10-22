@@ -1,0 +1,56 @@
+<div class="modal-overlay" (click)="cerrar.emit()" role="presentation">
+  <div class="modal-card hist" role="dialog" aria-modal="true" aria-label="Versiones anteriores" (click)="$event.stopPropagation()">
+    <div class="modal-header">
+      <div>
+        <h2>Versiones anteriores</h2>
+        <p class="gris sub">{{ tituloPagina }}</p>
+      </div>
+      <button type="button" class="close-btn" aria-label="Cerrar" (click)="cerrar.emit()">&#10005;</button>
+    </div>
+
+    @if (error) { <div class="error-state">{{ error }}</div> }
+
+    @if (cargando) {
+      <div class="cargando"><div class="spinner"></div><span>Cargando versiones…</span></div>
+    } @else if (!versiones.length && !error) {
+      <p class="vacio">Todavía no hay versiones anteriores. Cada vez que alguien edita esta página, el sistema guarda una copia del contenido previo (como máximo una cada 10 minutos).</p>
+    } @else if (versiones.length) {
+      <div class="hist-cuerpo">
+        <ul class="hist-lista" aria-label="Lista de versiones">
+          @for (v of versiones; track v.id) {
+            <li>
+              <button type="button" [class.sel]="elegida?.id === v.id" (click)="elegir(v)">
+                <strong>{{ corta(v.fecha, true) }}</strong>
+                <span class="gris">{{ v.guardadoPor || 'Sin dato' }} · {{ tamano(v.tamano) }}</span>
+              </button>
+            </li>
+          }
+        </ul>
+        <div class="hist-vista">
+          @if (cargandoVersion) {
+            <div class="cargando"><div class="spinner"></div></div>
+          } @else if (elegida) {
+            <div class="hist-barra">
+              <div class="min0">
+                <div class="hist-tit">{{ elegida.titulo }}</div>
+                <div class="gris peq">Así estaba el {{ larga(elegida.fecha, true) }}</div>
+              </div>
+              @if (puedeEditar) {
+                @if (!confirmando) {
+                  <button type="button" class="btn btn-purple btn-sm" (click)="confirmando = true">Restaurar esta versión</button>
+                } @else {
+                  <span class="confirma">
+                    <span class="peq">La versión actual se guardará en el historial antes de reemplazarla.</span>
+                    <button type="button" class="btn btn-purple btn-sm" [disabled]="restaurando" (click)="restaurar()">{{ restaurando ? 'Restaurando…' : 'Sí, restaurar' }}</button>
+                    <button type="button" class="btn btn-ghost btn-sm" [disabled]="restaurando" (click)="confirmando = false">Cancelar</button>
+                  </span>
+                }
+              }
+            </div>
+            <div class="man-contenido hist-contenido" [innerHTML]="vista"></div>
+          }
+        </div>
+      </div>
+    }
+  </div>
+</div>

@@ -1,0 +1,188 @@
+<div class="velo" (click)="cerrar.emit()" aria-hidden="true"></div>
+
+<aside class="panel-det" role="dialog" aria-modal="true" aria-label="Detalle del registro del log">
+  <header class="panel-det__cab">
+    <div class="panel-det__titulo">
+      <ng-container *ngIf="detalle as d; else cabCarga">
+        <h2>{{ d.servicio }}</h2>
+        <p class="sub">
+          <span class="mono">{{ d.fechaTxt }}</span> · registro <span class="mono">#{{ d.codigo }}</span>
+          <ng-container *ngIf="d.documento"> · cliente <span class="mono">{{ d.documento }}</span></ng-container>
+        </p>
+      </ng-container>
+      <ng-template #cabCarga><h2>Detalle del registro</h2></ng-template>
+    </div>
+    <div class="panel-det__acciones">
+      <button type="button" class="btn-secundario btn-mini" (click)="fijarArbol('todo')" title="Abrir todos los grupos de datos">Expandir todo</button>
+      <button type="button" class="btn-secundario btn-mini" (click)="fijarArbol('ninguno')" title="Cerrar todos los grupos de datos">Contraer</button>
+      <button type="button" class="cerrar" (click)="cerrar.emit()" aria-label="Cerrar detalle">×</button>
+    </div>
+  </header>
+
+  <div class="panel-det__cuerpo">
+    <div class="carga-inicial" *ngIf="cargando">Leyendo el registro…</div>
+    <div class="error-banner" *ngIf="error">{{ error }}</div>
+
+    <ng-container *ngIf="!cargando && detalle as d">
+      <!-- RESUMEN EN PALABRAS SENCILLAS -->
+      <section class="resumen" [class]="'resumen resumen--' + d.traduccion.estado">
+        <span class="resumen__icono" aria-hidden="true">{{ icono(d.traduccion.estado) }}</span>
+        <div class="resumen__texto">
+          <div class="resumen__fila">
+            <span [class]="claseEstado(d.traduccion.estado)">{{ d.traduccion.tipoTexto }}</span>
+          </div>
+          <p class="resumen__estado">{{ d.traduccion.estadoTexto }}</p>
+          <p class="resumen__linea" *ngIf="d.traduccion.queHace"><strong>Qué hace este servicio:</strong> {{ d.traduccion.queHace }}</p>
+          <p class="resumen__linea" *ngIf="d.traduccion.servicioDetalle">{{ d.traduccion.servicioDetalle }}</p>
+          <p class="resumen__linea" *ngIf="d.descripcion"><strong>Descripción en el log:</strong> <span class="mono">{{ d.descripcion }}</span></p>
+        </div>
+      </section>
+
+      <!-- DATOS GENERALES -->
+      <div class="datos">
+        <div><span>Cliente (CC)</span><strong class="mono">{{ d.documento || '—' }}</strong></div>
+        <div><span>Dispositivo</span><strong>{{ d.equipo || d.dispositivo }}</strong></div>
+        <div *ngIf="d.nodo"><span>Nodo</span><strong>{{ d.nodo }}</strong></div>
+        <div><span>Versión de la app</span><strong>{{ d.version || 'No detectada' }}</strong></div>
+        <div><span>Dirección IP</span><strong class="mono">{{ d.ip || '—' }}</strong></div>
+        <div><span>Funcionalidad</span><strong>{{ d.funcionalidadCodigo ?? '—' }}</strong></div>
+        <div><span>Proceso</span><strong>{{ d.procesoCodigo ?? '—' }}</strong></div>
+        <div><span>Tipo de registro</span><strong>{{ d.tipoCodigo ?? '—' }}</strong></div>
+        <div><span>Canal</span><strong>{{ d.canalCodigo ?? '—' }}</strong></div>
+        <div *ngIf="d.transaccion"><span>Transacción</span><strong class="mono">{{ d.transaccion }}</strong></div>
+        <div *ngIf="d.clase"><span>Clase / método</span><strong class="mono">{{ d.clase }}.{{ d.metodo }}</strong></div>
+      </div>
+
+      <!-- ACLARACIÓN IMPORTANTE -->
+      <p class="aclaracion" *ngIf="!d.traduccion.rs && !d.traduccion.rq && !d.traduccion.datos">
+        Este registro del log no trae petición, respuesta ni datos adicionales. <strong>Eso no significa que el servicio no haya respondido:</strong>
+        muchos registros son solo avisos internos de la app o del servidor (por ejemplo, "inicia el flujo" o un paso intermedio) y por diseño no guardan esos campos.
+        La respuesta real del servicio está en los registros relacionados de abajo.
+      </p>
+
+      <!-- LAS TRES SECCIONES -->
+      <ng-container *ngTemplateOutlet="seccion; context: { s: d.traduccion.rq, clave: 'rq', titulo: 'Lo que se envió (petición / Rq)', ayuda: 'Lo que la app o el servidor le pidió al servicio.', vacio: d.traduccion.vacios.rq }"></ng-container>
+      <ng-container *ngTemplateOutlet="seccion; context: { s: d.traduccion.rs, clave: 'rs', titulo: 'Lo que respondió (respuesta / Rs)', ayuda: 'Lo que el servicio contestó.', vacio: d.traduccion.vacios.rs }"></ng-container>
+      <ng-container *ngTemplateOutlet="seccion; context: { s: d.traduccion.datos, clave: 'datos', titulo: 'Datos adicionales', ayuda: 'Información extra que el sistema guardó junto a este registro.', vacio: d.traduccion.vacios.datos }"></ng-container>
+      <ng-container *ngIf="d.sesion">
+        <ng-container *ngTemplateOutlet="seccion; context: { s: d.sesion, clave: 'sesion', titulo: 'Información de la sesión y del equipo', ayuda: 'Datos del dispositivo y de la sesión desde la que se hizo la operación.', vacio: null }"></ng-container>
+      </ng-container>
+
+      <!-- FILAS RELACIONADAS -->
+      <section class="bloque" *ngIf="d.relacionadas.length > 1">
+        <h3>Registros relacionados <span class="sub">(mismo cliente y servicio, ±90 segundos)</span></h3>
+        <p class="sub">Una misma operación deja varias filas en el log: inicio, llamadas a otros sistemas y respuesta. Toca una para abrirla.</p>
+        <ul class="relacionadas">
+          <li *ngFor="let f of d.relacionadas; trackBy: trackRel">
+            <button type="button" [class]="'rel rel--' + f.estado + (f.actual ? ' rel--actual' : '')" (click)="verRelacionada(f)" [disabled]="f.actual">
+              <span class="rel__icono" aria-hidden="true">{{ icono(f.estado) }}</span>
+              <span class="rel__hora mono">{{ f.hora }}</span>
+              <span class="rel__tipo">{{ f.tipoTexto }}</span>
+              <span class="rel__desc">{{ f.descripcion || '—' }}</span>
+              <span class="rel__marca" *ngIf="f.actual">estás aquí</span>
+            </button>
+          </li>
+        </ul>
+      </section>
+    </ng-container>
+  </div>
+</aside>
+
+<!-- ============ PLANTILLA DE SECCIÓN ============ -->
+<ng-template #seccion let-s="s" let-clave="clave" let-titulo="titulo" let-ayuda="ayuda" let-vacio="vacio">
+  <section class="bloque" [class.bloque--vacio]="!s">
+    <div class="bloque__cab">
+      <div>
+        <h3>{{ titulo }}</h3>
+        <p class="sub">{{ ayuda }}</p>
+      </div>
+      <div class="bloque__acciones" *ngIf="s">
+        <button type="button" class="btn-secundario btn-mini" (click)="copiar(clave, textoPlano(s))">{{ copiado === clave ? '✓ Copiado' : 'Copiar' }}</button>
+      </div>
+    </div>
+
+    <p class="vacio-nota" *ngIf="!s">
+      <strong>Sin contenido en este registro.</strong>
+      {{ vacio || 'Este registro no guarda este dato.' }}
+      <em>No significa que el servicio no haya respondido.</em>
+    </p>
+
+    <ng-container *ngIf="s">
+      <p class="sec-resumen" *ngIf="s.resumen">{{ s.resumen }}</p>
+
+      <div class="chips" *ngIf="s.destino || s.operacion || s.http">
+        <span class="chip" *ngIf="s.operacion"><b>Operación</b> {{ s.operacion }}</span>
+        <span class="chip chip--http" [class.chip--mal]="s.http >= 400" *ngIf="s.http"><b>Código HTTP</b> {{ s.http }}</span>
+        <span class="chip chip--ancho" *ngIf="s.destino"><b>Destino</b> <span class="mono">{{ s.destino }}</span></span>
+      </div>
+
+      <ul class="estados" *ngIf="s.estados.length">
+        <li *ngFor="let e of s.estados" [class]="'estado estado--' + e.nivel">
+          <span class="estado__icono" aria-hidden="true">{{ icono(e.nivel) }}</span>
+          <div class="estado__texto">
+            <strong>{{ e.origen }}</strong>
+            <span *ngIf="e.mensaje">: {{ e.mensaje }}</span>
+            <div class="estado__meta">
+              <span *ngIf="e.codigo !== null && e.codigo !== undefined">Código {{ e.codigo }}</span>
+              <span *ngIf="e.severidad"> · {{ e.severidad }}</span>
+            </div>
+            <div class="estado__trad" *ngIf="e.traduccion">{{ e.traduccion }}</div>
+          </div>
+        </li>
+      </ul>
+
+      <p class="sec-nota" *ngIf="s.nota">{{ s.nota }}</p>
+      <pre class="sec-texto" *ngIf="s.texto">{{ s.texto }}</pre>
+
+      <div class="arbol" *ngIf="s.nodos.length">
+        <ng-container *ngTemplateOutlet="arbol; context: { $implicit: s.nodos, nivel: 0 }"></ng-container>
+        <p class="sub" *ngIf="s.omitidos > 0">… y {{ s.omitidos }} elemento(s) más que no se muestran por su tamaño. Están completos en el texto original.</p>
+      </div>
+
+      <details class="tecnicos" *ngIf="tieneDatosTecnicos(s)">
+        <summary>Datos técnicos de la comunicación ({{ s.tecnicos.length }})</summary>
+        <ul class="lista-tec">
+          <li *ngFor="let n of s.tecnicos"><span class="et">{{ n.e }}</span><span class="va mono">{{ n.v }}</span></li>
+        </ul>
+        <pre class="sec-texto" *ngIf="s.tecnico">{{ s.tecnico }}</pre>
+      </details>
+
+      <div class="original">
+        <button type="button" class="btn-pasos" (click)="alternarOriginal(clave)" [attr.aria-expanded]="originalAbierto.has(clave)">
+          {{ originalAbierto.has(clave) ? '▾ Ocultar' : '▸ Ver' }} el texto original del log
+        </button>
+        <ng-container *ngIf="originalAbierto.has(clave)">
+          <pre class="crudo">{{ s.original }}</pre>
+          <button type="button" class="btn-secundario btn-mini" (click)="copiar(clave + '-orig', s.original)">{{ copiado === clave + '-orig' ? '✓ Copiado' : 'Copiar texto original' }}</button>
+        </ng-container>
+      </div>
+    </ng-container>
+  </section>
+</ng-template>
+
+<!-- ============ ÁRBOL RECURSIVO ============ -->
+<ng-template #arbol let-lista let-nivel="nivel">
+  <ul class="nodos" [class.nodos--raiz]="nivel === 0">
+    <li *ngFor="let n of lista" class="nodo" [class.nodo--indice]="n.indice">
+      <ng-container *ngIf="n.h && n.h.length; else hoja">
+        <details [open]="abierto(nivel)">
+          <summary>
+            <span class="nodo__et">{{ n.e }}</span>
+            <span class="nodo__cuenta" *ngIf="n.n !== undefined && n.n !== null">{{ n.n }} elemento(s)</span>
+            <span class="nodo__tec mono" *ngIf="n.t && !n.indice">{{ n.t }}</span>
+          </summary>
+          <ng-container *ngTemplateOutlet="arbol; context: { $implicit: n.h, nivel: nivel + 1 }"></ng-container>
+          <p class="sub nodo__mas" *ngIf="n.mas">… {{ n.mas }} elemento(s) más no se muestran por su tamaño.</p>
+        </details>
+      </ng-container>
+      <ng-template #hoja>
+        <div class="hoja">
+          <span class="nodo__et">{{ n.e }}</span>
+          <span class="nodo__val" [class.nodo__val--vacio]="n.v === '' || n.v === undefined">{{ n.v === '' || n.v === undefined ? '(vacío)' : n.v }}</span>
+          <span class="nodo__nota" *ngIf="n.nota">{{ n.nota }}</span>
+          <span class="nodo__tec mono" *ngIf="n.t">{{ n.t }}</span>
+        </div>
+      </ng-template>
+    </li>
+  </ul>
+</ng-template>

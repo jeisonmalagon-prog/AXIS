@@ -1,0 +1,494 @@
+<!-- FORMULARIO -->
+<div class="filtros-panel">
+  <div class="filtros-grid">
+    <div class="campo campo--documento">
+      <label for="fcDocumento">Cliente (CC)</label>
+      <input id="fcDocumento" type="text" placeholder="Número de documento completo…" [(ngModel)]="documento" (keyup.enter)="consultar()" autocomplete="off">
+    </div>
+
+    <div class="campo">
+      <span class="campo__etiqueta">Periodo</span>
+      <div class="rango-selector" role="group" aria-label="Periodo">
+        <button *ngFor="let p of periodos" type="button" class="rango-boton" [class.activo]="periodo === p.valor" (click)="elegirPeriodo(p.valor)">{{ p.etiqueta }}</button>
+      </div>
+    </div>
+
+    <ng-container *ngIf="periodo === 'rango'">
+      <div class="campo">
+        <label for="fcDesde">Desde</label>
+        <input id="fcDesde" type="date" [(ngModel)]="fechaDesde" [max]="fechaMaxima">
+      </div>
+      <div class="campo">
+        <label for="fcHasta">Hasta</label>
+        <input id="fcHasta" type="date" [(ngModel)]="fechaHasta" [max]="fechaMaxima">
+      </div>
+    </ng-container>
+
+    <div class="campo">
+      <label for="fcBrecha">Nueva sesión tras inactividad de</label>
+      <select id="fcBrecha" [(ngModel)]="brechaMin">
+        <option *ngFor="let b of brechas" [ngValue]="b">{{ b }} min</option>
+      </select>
+    </div>
+
+    <div class="campo campo--accion">
+      <button type="button" class="btn-primario" [disabled]="cargando" (click)="consultar()">
+        {{ cargando ? 'Armando…' : 'Ver recorrido' }}
+      </button>
+    </div>
+  </div>
+</div>
+
+<p class="detalle-aviso">
+  El recorrido se arma con los registros de la app: cada paso es un servicio que la app llamó, <strong>no una pantalla</strong>.
+  Un recorrido <strong>solo se considera sin problemas</strong> si no tuvo errores, avisos ni respuestas lentas (lo habitual es responder en menos de 2 s).
+  Toca cualquier fila del log para ver su contenido traducido. Cada consulta queda auditada. Máximo 7 días por consulta.
+</p>
+
+<div class="error-banner" *ngIf="error">{{ error }}</div>
+<div class="carga-inicial" *ngIf="cargando">Armando el recorrido…</div>
+
+<div class="vacio" *ngIf="!cargando && !buscoAlMenosUnaVez && !error">
+  <p>Escribe el documento de un cliente y presiona <strong>Ver recorrido</strong> para ver, paso a paso, qué hizo en la app.</p>
+</div>
+
+<!-- SIN ACTIVIDAD: diagnóstico -->
+<section class="diagnostico" *ngIf="!cargando && respuesta && !respuesta.recorridos.length">
+  <div class="diagnostico__cabecera">
+    <span class="diagnostico__icono" aria-hidden="true">∅</span>
+    <div>
+      <h2>Sin actividad del cliente {{ respuesta.documento }} entre el {{ respuesta.fechaInicio }} y el {{ respuesta.fechaFin }}</h2>
+      <p class="sub">No es un error: la consulta se ejecutó y no encontró registros de ese documento en el periodo.</p>
+    </div>
+  </div>
+
+  <ng-container *ngIf="respuesta.diagnostico as d">
+    <div class="diagnostico__bloque" *ngIf="d.diasConActividad.length">
+      <h3>Este documento sí tiene registros en estos días</h3>
+      <div class="chips-dias">
+        <button type="button" class="chip-dia" *ngFor="let dia of d.diasConActividad" (click)="verDia(dia.fecha)">
+          <strong>{{ dia.fecha }}</strong><span>{{ dia.registros | number }} registros</span>
+        </button>
+      </div>
+    </div>
+    <div class="diagnostico__bloque" *ngIf="!d.diasConActividad.length">
+      <h3>No hay registros de este documento en el mes actual ni en el anterior</h3>
+      <ul>
+        <li>Verifica el número: sin puntos, comas ni espacios, y completo.</li>
+        <li>Confirma que el cliente haya entrado a la app en ese periodo (los logs no incluyen la web).</li>
+        <li>Si es un NIT, escríbelo exactamente como se registra (con o sin dígito de verificación).</li>
+      </ul>
+    </div>
+    <div class="diagnostico__bloque diagnostico__aviso" *ngIf="d.tablasFaltantes.length">
+      <h3>Tablas de LogApp que no existen</h3>
+      <p>No se encontró la tabla <span class="mono">{{ d.tablasFaltantes.join(', ') }}</span>. Si el periodo pedido cae en ese mes, no hay datos archivados para él.</p>
+    </div>
+    <details class="diagnostico__tecnico">
+      <summary>Detalle técnico de la consulta</summary>
+      <ul>
+        <li *ngFor="let t of d.tramos"><span class="mono">{{ t.tabla }}</span> · {{ t.desde }} a {{ t.hasta }} · {{ t.existe ? (t.filas + ' filas') : 'tabla inexistente' }}</li>
+        <li *ngIf="respuesta.relojBd">Reloj de la base de datos: <span class="mono">{{ respuesta.relojBd }}</span></li>
+        <li>Tablas revisadas para buscar otros días: <span class="mono">{{ d.tablasRevisadas.join(', ') }}</span></li>
+      </ul>
+    </details>
+  </ng-container>
+</section>
+
+<ng-container *ngIf="!cargando && respuesta && respuesta.recorridos.length">
+  <div class="resumen-barra">
+    <span><strong>Cliente {{ respuesta.documento }}</strong> · del {{ respuesta.fechaInicio }} al {{ respuesta.fechaFin }}</span>
+    <span class="aviso-chip" *ngIf="respuesta.truncado">Actividad muy extensa: se muestran solo los primeros {{ respuesta.totalFilas | number }} registros del periodo.</span>
+    <span class="aviso-chip" *ngIf="respuesta.recorridosOmitidos > 0">Se omitieron {{ respuesta.recorridosOmitidos }} recorrido(s) más antiguos.</span>
+    <span class="aviso-chip" *ngIf="respuesta.tablasFaltantes.length">No existe la tabla {{ respuesta.tablasFaltantes.join(', ') }}: ese tramo del periodo no tiene datos.</span>
+  </div>
+
+  <!-- Resumen del periodo -->
+  <div class="kpis-flujo">
+    <div class="kpi-flujo"><span class="kpi-flujo__etiqueta">Recorridos</span><span class="kpi-flujo__valor">{{ respuesta.resumen.recorridos | number }}</span><span class="kpi-flujo__pie">sesiones distintas</span></div>
+    <div class="kpi-flujo"><span class="kpi-flujo__etiqueta">Llamadas</span><span class="kpi-flujo__valor">{{ respuesta.resumen.llamadas | number }}</span><span class="kpi-flujo__pie">{{ respuesta.resumen.serviciosDistintos }} servicios distintos</span></div>
+    <div class="kpi-flujo" [class.kpi-flujo--ok]="respuesta.resumen.errores === 0" [class.kpi-flujo--error]="respuesta.resumen.errores > 0">
+      <span class="kpi-flujo__etiqueta">Éxito</span><span class="kpi-flujo__valor">{{ porcentaje(respuesta.resumen.tasaExito) }}</span>
+      <span class="kpi-flujo__pie">{{ respuesta.resumen.errores | number }} con error · {{ (respuesta.resumen.advertencias ?? 0) | number }} con aviso</span>
+    </div>
+    <div class="kpi-flujo" [class.kpi-flujo--ok]="!(respuesta.resumen.lentas ?? 0)" [class.kpi-flujo--warn]="(respuesta.resumen.lentas ?? 0) > 0">
+      <span class="kpi-flujo__etiqueta">Respuestas lentas</span><span class="kpi-flujo__valor">{{ (respuesta.resumen.lentas ?? 0) | number }}</span>
+      <span class="kpi-flujo__pie">≥ 5 s · {{ (respuesta.resumen.muyLentas ?? 0) | number }} de más de 15 s</span>
+    </div>
+    <div class="kpi-flujo"><span class="kpi-flujo__etiqueta">Tiempo de respuesta</span><span class="kpi-flujo__valor">{{ formatearDuracion(respuesta.resumen.duracionPromMs) }}</span><span class="kpi-flujo__pie">promedio · 90 % en {{ formatearDuracion(respuesta.resumen.duracionP90Ms) }}</span></div>
+    <div class="kpi-flujo" *ngIf="respuesta.resumen.masLento"><span class="kpi-flujo__etiqueta">Más lento</span><span class="kpi-flujo__valor">{{ formatearDuracion(respuesta.resumen.masLento.duracionMs) }}</span><span class="kpi-flujo__pie" [title]="respuesta.resumen.masLento.servicio">{{ respuesta.resumen.masLento.servicio }}</span></div>
+    <div class="kpi-flujo" *ngIf="respuesta.resumen.dispositivos.length"><span class="kpi-flujo__etiqueta">Dispositivo</span><span class="kpi-flujo__valor">{{ respuesta.resumen.dispositivos[0].nombre }}</span><span class="kpi-flujo__pie">{{ respuesta.resumen.dispositivos.length > 1 ? '+ ' + (respuesta.resumen.dispositivos.length - 1) + ' más' : 'único dispositivo' }}</span></div>
+  </div>
+
+  <div class="cuerpo">
+    <!-- LISTA DE RECORRIDOS -->
+    <aside class="lista-recorridos" aria-label="Recorridos del cliente">
+      <button *ngFor="let r of respuesta.recorridos; trackBy: trackRecorrido" type="button" class="recorrido-item"
+              [class.activo]="seleccionado === r" [class.con-error]="r.errores > 0" [class.con-aviso]="r.errores === 0 && claseSalud(r) === 'pill pill--warn'" (click)="seleccionarRecorrido(r)">
+        <span class="recorrido-item__hora">{{ r.inicio | date:'d MMM, HH:mm:ss' }}</span>
+        <span class="recorrido-item__meta">{{ r.totalLlamadas }} llamadas · {{ formatearDuracion(r.duracionMs) }}</span>
+        <span class="recorrido-item__meta">{{ r.dispositivo }}</span>
+        <span class="recorrido-item__pie">
+          <span [class]="claseSalud(r)">{{ textoSalud(r) }}</span>
+          <span class="pill pill--warn" *ngIf="(r.lentas ?? 0) > 0 && r.errores > 0">⏱ {{ r.lentas }} lenta(s)</span>
+          <span class="pill" [class.pill--error]="r.cierre === 'termino_con_error'">{{ etiquetaCierre(r.cierre) }}</span>
+        </span>
+      </button>
+    </aside>
+
+    <!-- PANEL DEL RECORRIDO -->
+    <section class="panel-diagrama" [class.panel-diagrama--completo]="pantallaCompleta" *ngIf="seleccionado">
+      <div class="panel-diagrama__cabecera">
+        <div>
+          <h2>Recorrido del {{ seleccionado.inicio | date:'EEEE d MMM yyyy, HH:mm:ss' }}</h2>
+          <p class="sub">{{ seleccionado.dispositivo }}<ng-container *ngIf="seleccionado.ip"> · IP {{ seleccionado.ip }}</ng-container> · {{ etiquetaCierre(seleccionado.cierre) }}</p>
+        </div>
+        <div class="panel-diagrama__acciones">
+          <button type="button" class="btn-secundario btn-mini" *ngIf="pantallaCompleta" (click)="alternarResumen()">{{ resumenOculto ? 'Mostrar resumen' : 'Ocultar resumen' }}</button>
+          <button type="button" class="btn-primario btn-mini btn-completa" (click)="alternarPantallaCompleta()" [title]="pantallaCompleta ? 'Volver a la vista normal (Esc)' : 'Ver el recorrido a pantalla completa'">{{ pantallaCompleta ? '✕ Salir de pantalla completa' : '⛶ Pantalla completa' }}</button>
+          <button type="button" class="btn-secundario btn-mini" (click)="copiarResumen()" [disabled]="!seleccionado.resumenTexto" title="Copia un resumen en texto del recorrido (hallazgos y operaciones) para pegarlo en un ticket o chat">
+            {{ copiado === 'si' ? '✓ Copiado' : copiado === 'no' ? 'No se pudo copiar' : 'Copiar resumen' }}
+          </button>
+          <button type="button" class="btn-secundario btn-mini" (click)="exportarCsv()" title="Descargar las llamadas de este recorrido en CSV">Exportar CSV</button>
+        </div>
+      </div>
+
+      <div class="salud" *ngIf="seleccionado.salud && !resumenOculto" [class]="'salud salud--' + seleccionado.salud.nivel">
+        <span class="salud__icono" aria-hidden="true">{{ seleccionado.salud.nivel === 'ok' ? '✓' : seleccionado.salud.nivel === 'error' ? '✕' : '!' }}</span>
+        <div>
+          <strong>{{ seleccionado.salud.texto }}</strong>
+          <span class="salud__sub" *ngIf="(seleccionado.lentas ?? 0) > 0"> · {{ seleccionado.lentas }} respuesta(s) lenta(s), {{ seleccionado.muyLentas ?? 0 }} de más de 15 s</span>
+        </div>
+      </div>
+
+      <div class="kpis-flujo kpis-flujo--compacto" *ngIf="!resumenOculto">
+        <div class="kpi-flujo"><span class="kpi-flujo__etiqueta">Duración</span><span class="kpi-flujo__valor">{{ formatearDuracion(seleccionado.duracionMs) }}</span></div>
+        <div class="kpi-flujo"><span class="kpi-flujo__etiqueta">Llamadas</span><span class="kpi-flujo__valor">{{ seleccionado.totalLlamadas }}</span><span class="kpi-flujo__pie">{{ seleccionado.serviciosDistintos }} servicios</span></div>
+        <div class="kpi-flujo" [class.kpi-flujo--ok]="seleccionado.errores === 0" [class.kpi-flujo--error]="seleccionado.errores > 0"><span class="kpi-flujo__etiqueta">Errores</span><span class="kpi-flujo__valor">{{ seleccionado.errores }}</span><span class="kpi-flujo__pie" *ngIf="(seleccionado.advertencias ?? 0) > 0">+ {{ seleccionado.advertencias }} con aviso</span></div>
+        <div class="kpi-flujo" [class.kpi-flujo--ok]="!(seleccionado.lentas ?? 0)" [class.kpi-flujo--warn]="(seleccionado.lentas ?? 0) > 0"><span class="kpi-flujo__etiqueta">Respuestas lentas</span><span class="kpi-flujo__valor">{{ seleccionado.lentas ?? 0 }}</span><span class="kpi-flujo__pie">≥ 5 s</span></div>
+        <div class="kpi-flujo" *ngIf="seleccionado.masLento"><span class="kpi-flujo__etiqueta">Llamada más lenta</span><span class="kpi-flujo__valor">{{ formatearDuracion(seleccionado.masLento.duracionMs) }}</span><span class="kpi-flujo__pie" [title]="seleccionado.masLento.servicio">{{ seleccionado.masLento.servicio }}</span></div>
+      </div>
+
+      <div class="resumen-recorrido" *ngIf="seleccionado.narrativa && !resumenOculto">
+        <h3>Qué pasó en este recorrido</h3>
+        <p class="resumen-recorrido__texto">{{ seleccionado.narrativa }}</p>
+        <ol class="fases" *ngIf="seleccionado.fases?.length" aria-label="Momentos del recorrido">
+          <li *ngFor="let f of seleccionado.fases" class="fase" [class.fase--error]="f.errores > 0" [class.fase--aviso]="f.errores === 0 && f.avisos > 0">
+            <span class="fase__hora mono">{{ f.hora }}</span>
+            <span class="fase__nombre">{{ f.nombre }}</span>
+            <span class="fase__meta">{{ f.llamadas }} llamada(s) · #{{ f.desde }}<ng-container *ngIf="f.hasta !== f.desde">–{{ f.hasta }}</ng-container> · {{ formatearDuracion(f.duracionMs) }}</span>
+          </li>
+        </ol>
+      </div>
+
+      <ul class="hallazgos" *ngIf="hallazgos.length && !resumenOculto" aria-label="Hallazgos del recorrido">
+        <li *ngFor="let h of hallazgos" [class]="'hallazgo hallazgo--' + h.nivel">
+          <span class="hallazgo__icono" aria-hidden="true">{{ h.nivel === 'error' ? '✕' : h.nivel === 'warn' ? '!' : h.nivel === 'ok' ? '✓' : 'i' }}</span>
+          <span class="hallazgo__texto">{{ h.texto }}</span>
+          <span class="hallazgo__ver" *ngIf="h.llamadas && h.llamadas.length">
+            <button type="button" *ngFor="let n of h.llamadas.slice(0, 4)" (click)="verLlamadaNumero(n)" [title]="'Ver la llamada #' + n">#{{ n }}</button>
+            <span *ngIf="h.llamadas.length > 4">+{{ h.llamadas.length - 4 }}</span>
+          </span>
+        </li>
+      </ul>
+
+      <div class="subpestanas" role="tablist" aria-label="Vistas del recorrido">
+        <button *ngFor="let v of vistas" type="button" role="tab" class="subpestana" [class.activa]="vista === v.valor" [attr.aria-selected]="vista === v.valor" (click)="cambiarVista(v.valor)">{{ v.etiqueta }}</button>
+      </div>
+
+      <!-- ===================== LÍNEA DE TIEMPO ===================== -->
+      <div *ngIf="vista === 'tiempo'">
+        <div class="barra-herramientas">
+          <p class="sub">Cada barra es una llamada: su posición es el momento en que ocurrió y su largo, lo que tardó en responder. Las barras apiladas en el mismo instante son llamadas en paralelo.</p>
+          <div class="herramientas">
+            <label class="check-label"><input type="checkbox" [(ngModel)]="comprimirPausas" (ngModelChange)="armarLinea()"> Comprimir pausas largas</label>
+            <div class="zoom">
+              <button type="button" (click)="cambiarZoomLinea(1 / 1.4)" aria-label="Alejar">−</button>
+              <button type="button" (click)="restablecerZoomLinea()">Ajustar</button>
+              <button type="button" (click)="cambiarZoomLinea(1.4)" aria-label="Acercar">+</button>
+            </div>
+          </div>
+        </div>
+        <div class="leyenda" aria-hidden="true">
+          <span><i class="punto punto--ok"></i> ✓ Exitosa</span>
+          <span><i class="punto punto--error"></i> ✕ Con error</span>
+          <span><i class="punto punto--warn"></i> ! Con aviso / sin resultados</span>
+          <span><i class="punto punto--neutro"></i> – Solo inicio (el log no muestra el resultado)</span>
+          <span><i class="punto punto--info"></i> … En curso</span>
+          <span><i class="punto punto--lenta"></i> ⏱ Lenta (5 s o más)</span>
+          <span><i class="hueco"></i> Pausa comprimida</span>
+        </div>
+
+        <div class="cascada" #cascada>
+          <div class="cascada__scroll" *ngIf="linea">
+            <div class="cascada__ancho" [style.width.px]="linea.ancho + 288">
+              <div class="fila fila--eje">
+                <div class="fila__etiqueta">Servicio</div>
+                <div class="fila__pista" [style.width.px]="linea.ancho">
+                  <span class="marca-eje" *ngFor="let m of linea.marcas" [style.left.px]="m.x">{{ m.texto }}</span>
+                  <span class="pausa-etiqueta" *ngFor="let p of linea.pausas" [style.left.px]="p.x" [style.width.px]="p.w" [title]="'Pausa de ' + p.texto">⋯ {{ p.texto }}</span>
+                </div>
+              </div>
+              <div class="fila" *ngFor="let b of linea.barras; trackBy: trackBarra" [class.fila--activa]="llamadaActiva === b.llamada" [class.fila--error]="b.llamada.estado === 'error'" [class.fila--lenta]="!!b.llamada.lentitud">
+                <div class="fila__etiqueta" role="button" tabindex="0" (click)="elegirLlamada(b.llamada)" (keydown.enter)="elegirLlamada(b.llamada)">
+                  <span class="fila__num">{{ b.llamada.n }}</span>
+                  <span class="fila__icono" [class]="'estado-' + b.llamada.estado" aria-hidden="true">{{ iconoEstado(b.llamada.estado) }}</span>
+                  <span class="fila__nombre" [title]="b.llamada.servicio + ' (' + b.llamada.metodo + ')'">{{ b.llamada.servicio }}</span>
+                  <span class="fila__lento" *ngIf="b.llamada.lentitud" [title]="textoLentitud(b.llamada)">⏱</span>
+                </div>
+                <div class="fila__pista" [style.width.px]="linea.ancho">
+                  <i class="vlinea" *ngFor="let m of linea.marcas" [style.left.px]="m.x"></i>
+                  <i class="hueco hueco--fondo" *ngFor="let p of linea.pausas" [style.left.px]="p.x" [style.width.px]="p.w"></i>
+                  <span class="barra" [class]="'estado-' + b.llamada.estado" [class.puntual]="b.puntual" [class.lenta]="!!b.llamada.lentitud" [class.muy-lenta]="b.llamada.lentitud === 'muy_lenta'" [class.activa]="llamadaActiva === b.llamada"
+                        [style.left.px]="b.x" [style.width.px]="b.w" role="button" tabindex="0"
+                        (mousemove)="verTip($event, b)" (mouseleave)="ocultarTip()" (click)="elegirLlamada(b.llamada)" (keydown.enter)="elegirLlamada(b.llamada)"
+                        [attr.aria-label]="b.llamada.servicio + ', ' + etiquetaEstado(b.llamada) + ', ' + formatearDuracion(b.llamada.duracionMs)"></span>
+                  <span class="barra-dur" [class.barra-dur--lenta]="!!b.llamada.lentitud" [style.left.px]="b.x + b.w + 6">{{ b.llamada.lentitud ? '⏱ ' : '' }}{{ formatearDuracion(b.llamada.duracionMs) }}</span>
+                </div>
+              </div>
+            </div>
+          </div>
+          <p class="empty-inline" *ngIf="!linea">Este recorrido no tiene llamadas para dibujar.</p>
+        </div>
+
+        <div class="detalle-nodo" *ngIf="llamadaActiva as l">
+          <div class="detalle-nodo__titulo">
+            <strong>#{{ l.n }} · {{ l.servicio }}</strong>
+            <span [class]="clasePill(l.estado)">{{ iconoEstado(l.estado) }} {{ etiquetaEstado(l) }}</span>
+            <button type="button" class="cerrar" (click)="elegirLlamada(l)" aria-label="Cerrar detalle">×</button>
+          </div>
+          <div class="datos">
+            <div><span>Método</span><strong class="mono">{{ l.metodo }}</strong></div>
+            <div *ngIf="l.clase"><span>Clase</span><strong class="mono">{{ l.clase }}</strong></div>
+            <div *ngIf="l.funcionalidad !== null"><span>Funcionalidad</span><strong>{{ l.funcionalidad }}</strong></div>
+            <div><span>Inicio</span><strong class="mono">{{ horaCorta(l.inicio) }}</strong></div>
+            <div><span>Fin</span><strong class="mono">{{ horaCorta(l.fin) }}</strong></div>
+            <div><span>Duración</span><strong>{{ formatearDuracion(l.duracionMs) }}</strong></div>
+            <div *ngIf="l.previas.length"><span>Después de</span><strong>llamada(s) {{ l.previas.join(', ') }}</strong></div>
+          </div>
+          <p class="detalle-lento" *ngIf="l.lentitud">⏱ <strong>{{ textoLentitud(l) }}.</strong> Lo habitual es responder en menos de 2 s.<ng-container *ngIf="l.pasoLento"> Donde más esperó: {{ l.pasoLento.titulo }} ({{ formatearDuracion(l.pasoLento.esperaMs) }}).</ng-container></p>
+          <p class="detalle-mensaje" *ngIf="l.mensaje"><strong>Detalle:</strong> {{ l.mensaje }}</p>
+          <p class="detalle-mensaje" *ngIf="l.ruta"><strong>Ruta de la app:</strong> <span class="mono">{{ l.ruta }}</span></p>
+          <ul class="pasos" *ngIf="l.pasos && l.pasos.length" aria-label="Filas del log de esta llamada">
+            <li *ngFor="let p of l.pasos" [class]="'paso paso--' + p.nivel">
+              <span class="paso__icono" aria-hidden="true">{{ iconoPaso(p.nivel) }}</span>
+              <span class="paso__hora mono">{{ p.hora }}</span>
+              <span class="paso__tipo">{{ etiquetaPaso(p.tipo) }}</span>
+              <span class="paso__cuerpo"><strong>{{ p.titulo }}</strong><em *ngIf="p.destino" class="mono"> · {{ p.destino }}</em><ng-container *ngIf="p.texto"><br>{{ p.texto }}</ng-container><span *ngIf="p.veces > 1" class="paso__veces"> (×{{ p.veces }})</span><span class="paso__lento" *ngIf="p.lento"> ⏱ esperó {{ formatearDuracion(p.esperaMs) }}</span><button type="button" class="btn-paso-det" *ngIf="p.codigo && p.fecha" (click)="verDetallePaso(p)">Ver detalle</button></span>
+            </li>
+          </ul>
+        </div>
+      </div>
+
+      <!-- ===================== DIAGRAMA DE FLUJO ===================== -->
+      <div *ngIf="vista === 'flujo'">
+        <div class="barra-herramientas">
+          <p class="sub">Las flechas muestran qué llamada habilitó a cuál. Las llamadas simultáneas salen en paralelo desde la misma caja y las llamadas repetidas seguidas se agrupan.</p>
+          <div class="herramientas">
+            <label class="check-label"><input type="checkbox" [(ngModel)]="agruparReintentos" (ngModelChange)="cambiarAgrupacion()"> Agrupar repetidas</label>
+            <label class="check-label"><input type="checkbox" [(ngModel)]="mostrarTiempos"> Mostrar esperas</label>
+            <div class="zoom">
+              <button type="button" (click)="alejar()" title="Alejar" aria-label="Alejar">−</button>
+              <button type="button" (click)="ajustar()" title="Ajustar al ancho">Ajustar</button>
+              <button type="button" (click)="restablecer()" title="Tamaño real">100%</button>
+              <button type="button" (click)="acercar()" title="Acercar" aria-label="Acercar">+</button>
+            </div>
+          </div>
+        </div>
+        <div class="leyenda" aria-hidden="true">
+          <span><i class="punto punto--ok"></i> ✓ Exitosa</span>
+          <span><i class="punto punto--error"></i> ✕ Con error</span>
+          <span><i class="punto punto--warn"></i> ! Con aviso / sin resultados</span>
+          <span><i class="punto punto--neutro"></i> – Solo inicio (el log no muestra el resultado)</span>
+          <span><i class="punto punto--lenta"></i> ⏱ Lenta (5 s o más; lo habitual es menos de 2 s)</span>
+          <span><i class="punto punto--reintento">×2</i> Repetidas agrupadas</span>
+          <span>La barra inferior de cada caja es su duración frente a la llamada más lenta</span>
+        </div>
+
+        <div class="lienzo" #lienzo *ngIf="modelo; else sinModelo">
+          <svg [attr.width]="anchoSvg" [attr.height]="altoSvg" [attr.viewBox]="'0 0 ' + modelo.ancho + ' ' + modelo.alto" role="img" aria-label="Diagrama de flujo del recorrido del cliente">
+            <defs>
+              <marker id="flecha-cli" viewBox="0 0 10 10" refX="9" refY="5" markerUnits="userSpaceOnUse" markerWidth="11" markerHeight="11" orient="auto-start-reverse">
+                <path d="M0,0 L10,5 L0,10 z" class="flecha"></path>
+              </marker>
+              <marker id="flecha-cli-activa" viewBox="0 0 10 10" refX="9" refY="5" markerUnits="userSpaceOnUse" markerWidth="11" markerHeight="11" orient="auto-start-reverse">
+                <path d="M0,0 L10,5 L0,10 z" class="flecha flecha--activa"></path>
+              </marker>
+            </defs>
+
+            <g class="aristas">
+              <g *ngFor="let a of modelo.aristas; trackBy: trackArista">
+                <path class="arista" [class.arista--resaltada]="aristasResaltadas.has(a.id)" [class.arista--atenuada]="nodoActivo && !aristasResaltadas.has(a.id)"
+                      [attr.d]="a.d" [attr.marker-end]="aristasResaltadas.has(a.id) ? 'url(#flecha-cli-activa)' : 'url(#flecha-cli)'"></path>
+                <text *ngIf="mostrarTiempos && a.etiqueta" class="arista-etiqueta" [attr.x]="a.lx" [attr.y]="a.ly" text-anchor="middle">{{ a.etiqueta }}</text>
+              </g>
+            </g>
+
+            <g class="nodos">
+              <g *ngFor="let n of modelo.nodos; trackBy: trackNodo">
+                <!-- Eventos de inicio / fin -->
+                <g *ngIf="n.tipo !== 'llamada'" class="evento" [class.evento--inicio]="n.tipo === 'inicio'" [class.evento--fin]="n.tipo === 'fin'"
+                   [class.estado-exito]="n.estado === 'exito'" [class.estado-error]="n.estado === 'error'" [class.activo]="nodoActivo === n"
+                   role="button" tabindex="0" [attr.aria-label]="n.titulo" (click)="elegirNodo(n)" (keydown.enter)="elegirNodo(n)">
+                  <title>{{ n.titulo }}</title>
+                  <circle class="evento__anillo" [attr.cx]="n.x + n.w / 2" [attr.cy]="n.y + n.h / 2" [attr.r]="n.w / 2"></circle>
+                  <circle *ngIf="n.tipo === 'fin'" class="evento__nucleo" [attr.cx]="n.x + n.w / 2" [attr.cy]="n.y + n.h / 2" [attr.r]="n.w / 2 - 9"></circle>
+                  <text *ngIf="n.tipo === 'inicio'" class="evento__icono" [attr.x]="n.x + n.w / 2 + 2" [attr.y]="n.y + n.h / 2 + 6" text-anchor="middle">▶</text>
+                  <text class="evento__texto" [attr.x]="n.x + n.w / 2" [attr.y]="n.y + n.h + 16" text-anchor="middle">{{ n.tituloCorto }}</text>
+                </g>
+
+                <!-- Llamadas a servicios -->
+                <g *ngIf="n.tipo === 'llamada'" class="nodo" [class.estado-exito]="n.estado === 'exito'" [class.estado-error]="n.estado === 'error'"
+                   [class.estado-sin_respuesta]="n.estado === 'sin_respuesta'" [class.estado-advertencia]="n.estado === 'advertencia'" [class.estado-sin_detalle]="n.estado === 'sin_detalle'" [class.estado-en_curso]="n.estado === 'en_curso'" [class.lenta]="n.lentitud === 'lenta'" [class.muy-lenta]="n.lentitud === 'muy_lenta'" [class.activo]="nodoActivo === n"
+                   role="button" tabindex="0" [attr.aria-label]="n.titulo + ', ' + n.estado + (n.lentitud ? ', lenta' : '')" (click)="elegirNodo(n)" (keydown.enter)="elegirNodo(n)">
+                  <title>{{ n.titulo }} ({{ n.metodo }})</title>
+                  <rect class="nodo__caja" [attr.x]="n.x" [attr.y]="n.y" [attr.width]="n.w" [attr.height]="n.h" rx="12"></rect>
+                  <rect class="nodo__barra" [attr.x]="n.x" [attr.y]="n.y + 6" width="5" [attr.height]="n.h - 12" rx="2.5"></rect>
+                  <circle class="nodo__paso" [attr.cx]="n.x + 26" [attr.cy]="n.y + 24" r="11"></circle>
+                  <text class="nodo__paso-n" [attr.x]="n.x + 26" [attr.y]="n.y + 28" text-anchor="middle">{{ n.paso }}</text>
+                  <text class="nodo__titulo" [attr.x]="n.x + 46" [attr.y]="n.y + 28">{{ n.tituloCorto }}</text>
+                  <text class="nodo__linea2" [attr.x]="n.x + 16" [attr.y]="n.y + 48">{{ n.linea2 }}</text>
+                  <text class="nodo__metodo" [attr.x]="n.x + 16" [attr.y]="n.y + 62">{{ n.metodo.length > 34 ? n.metodo.slice(0, 33) + '…' : n.metodo }}</text>
+                  <rect class="nodo__dur-fondo" [attr.x]="n.x + 16" [attr.y]="n.y + n.h - 8" [attr.width]="n.w - 32" height="3" rx="1.5"></rect>
+                  <rect class="nodo__dur" [attr.x]="n.x + 16" [attr.y]="n.y + n.h - 8" [attr.width]="(n.w - 32) * n.ratioDuracion" height="3" rx="1.5"></rect>
+                  <text class="nodo__icono" [attr.x]="n.x + n.w - 16" [attr.y]="n.y + 28" text-anchor="middle">{{ iconoEstado(n.estado) }}</text>
+                  <text *ngIf="n.lentitud" class="nodo__reloj" [attr.x]="n.x + n.w - 36" [attr.y]="n.y + 28" text-anchor="middle">⏱</text>
+                  <g *ngIf="n.intentos.length > 1" class="nodo__reintentos" [class.con-fallos]="n.fallosPrevios > 0">
+                    <rect [attr.x]="n.x + n.w - 44" [attr.y]="n.y + n.h - 32" width="32" height="16" rx="8"></rect>
+                    <text [attr.x]="n.x + n.w - 28" [attr.y]="n.y + n.h - 20" text-anchor="middle">×{{ n.intentos.length }}</text>
+                  </g>
+                </g>
+              </g>
+            </g>
+          </svg>
+        </div>
+        <ng-template #sinModelo><p class="empty-inline">Este recorrido no tiene llamadas para dibujar.</p></ng-template>
+
+        <div class="detalle-nodo" *ngIf="nodoActivo">
+          <ng-container *ngIf="nodoActivo.tipo === 'llamada'; else detalleEvento">
+            <div class="detalle-nodo__titulo">
+              <strong>{{ nodoActivo.titulo }}</strong>
+              <span class="mono">{{ nodoActivo.metodo }}</span>
+              <span class="mono" *ngIf="nodoActivo.intentos[0].clase">· {{ nodoActivo.intentos[0].clase }}</span>
+              <span class="mono" *ngIf="nodoActivo.intentos[0].funcionalidad !== null">· Funcionalidad {{ nodoActivo.intentos[0].funcionalidad }}</span>
+              <button type="button" class="cerrar" (click)="elegirNodo(nodoActivo)" aria-label="Cerrar detalle">×</button>
+            </div>
+            <div class="tabla-scroll">
+              <table>
+                <thead><tr><th>Intento</th><th>Inicio</th><th>Fin</th><th>Duración</th><th>Estado</th><th>Detalle</th></tr></thead>
+                <tbody>
+                  <tr *ngFor="let l of nodoActivo.intentos; let i = index">
+                    <td>{{ i + 1 }}</td>
+                    <td class="mono">{{ horaCorta(l.inicio) }}</td>
+                    <td class="mono">{{ horaCorta(l.fin) }}</td>
+                    <td>{{ formatearDuracion(l.duracionMs) }}</td>
+                    <td><span [class]="clasePill(l.estado)">{{ iconoEstado(l.estado) }} {{ etiquetaEstado(l) }}</span> <span class="pill pill--warn" *ngIf="l.lentitud">⏱ {{ textoLentitud(l) }}</span></td>
+                    <td class="detalle-mensaje">{{ l.mensaje || '—' }}
+                      <ul class="pasos" *ngIf="l.pasos && l.pasos.length" aria-label="Filas del log de este intento">
+                        <li *ngFor="let p of l.pasos" [class]="'paso paso--' + p.nivel">
+                          <span class="paso__icono" aria-hidden="true">{{ iconoPaso(p.nivel) }}</span>
+                          <span class="paso__hora mono">{{ p.hora }}</span>
+                          <span class="paso__tipo">{{ etiquetaPaso(p.tipo) }}</span>
+                          <span class="paso__cuerpo"><strong>{{ p.titulo }}</strong><ng-container *ngIf="p.texto"><br>{{ p.texto }}</ng-container><span class="paso__lento" *ngIf="p.lento"> ⏱ esperó {{ formatearDuracion(p.esperaMs) }}</span><button type="button" class="btn-paso-det" *ngIf="p.codigo && p.fecha" (click)="verDetallePaso(p)">Ver detalle</button></span>
+                        </li>
+                      </ul>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </ng-container>
+          <ng-template #detalleEvento>
+            <div class="detalle-nodo__titulo">
+              <strong>{{ nodoActivo.titulo }}</strong>
+              <button type="button" class="cerrar" (click)="elegirNodo(nodoActivo)" aria-label="Cerrar detalle">×</button>
+            </div>
+            <p class="sub">{{ seleccionado.totalLlamadas }} llamadas, {{ seleccionado.errores }} con error. Dispositivo: {{ seleccionado.dispositivo }}. Duración total: {{ formatearDuracion(seleccionado.duracionMs) }}.</p>
+          </ng-template>
+        </div>
+      </div>
+
+      <!-- ===================== DETALLE DE LLAMADAS ===================== -->
+      <div *ngIf="vista === 'detalle'">
+        <div class="barra-herramientas">
+          <input class="buscador" type="text" placeholder="Buscar por servicio, método o mensaje…" [(ngModel)]="filtroTexto" aria-label="Buscar en las llamadas">
+          <div class="herramientas">
+            <label class="check-label"><input type="checkbox" [(ngModel)]="soloErrores"> Solo errores y avisos</label>
+            <span class="sub">{{ llamadasFiltradas.length }} de {{ seleccionado.llamadas.length }} llamadas</span>
+          </div>
+        </div>
+        <div class="tabla-scroll">
+          <table>
+            <thead><tr><th>#</th><th>Hora</th><th>Servicio</th><th>Método</th><th>Clase</th><th class="num">Func.</th><th class="num">Duración</th><th>Estado</th><th>Detalle</th></tr></thead>
+            <tbody>
+              <ng-container *ngFor="let l of llamadasFiltradas">
+                <tr [class.fila-error]="l.estado === 'error'" [class.fila-lenta]="!!l.lentitud">
+                  <td>{{ l.n }}</td>
+                  <td class="mono">{{ horaCorta(l.inicio || l.fin) }}</td>
+                  <td>
+                    <strong>{{ l.servicio }}</strong>
+                    <button type="button" class="btn-pasos" *ngIf="l.pasos && l.pasos.length" (click)="alternarPasos(l.n)" [attr.aria-expanded]="abiertas.has(l.n)">{{ abiertas.has(l.n) ? '▾' : '▸' }} {{ l.pasos.length }} fila(s) del log</button>
+                  </td>
+                  <td class="mono">{{ l.metodo }}</td>
+                  <td class="mono">{{ l.clase || '—' }}</td>
+                  <td class="num">{{ l.funcionalidad ?? '—' }}</td>
+                  <td class="num">{{ formatearDuracion(l.duracionMs) }}</td>
+                  <td><span [class]="clasePill(l.estado)">{{ iconoEstado(l.estado) }} {{ etiquetaEstado(l) }}</span> <span class="pill pill--warn" *ngIf="l.lentitud">⏱ {{ textoLentitud(l) }}</span></td>
+                  <td class="detalle-mensaje">{{ l.mensaje || '—' }}</td>
+                </tr>
+                <tr *ngIf="abiertas.has(l.n)" class="fila-pasos">
+                  <td colspan="9">
+                    <ul class="pasos">
+                      <li *ngFor="let p of l.pasos" [class]="'paso paso--' + p.nivel">
+                        <span class="paso__icono" aria-hidden="true">{{ iconoPaso(p.nivel) }}</span>
+                        <span class="paso__hora mono">{{ p.hora }}</span>
+                        <span class="paso__tipo">{{ etiquetaPaso(p.tipo) }}</span>
+                        <span class="paso__cuerpo"><strong>{{ p.titulo }}</strong><em *ngIf="p.destino" class="mono"> · {{ p.destino }}</em><ng-container *ngIf="p.texto"><br>{{ p.texto }}</ng-container><span *ngIf="p.veces > 1" class="paso__veces"> (×{{ p.veces }})</span><span class="paso__lento" *ngIf="p.lento"> ⏱ esperó {{ formatearDuracion(p.esperaMs) }}</span><button type="button" class="btn-paso-det" *ngIf="p.codigo && p.fecha" (click)="verDetallePaso(p)">Ver detalle</button></span>
+                      </li>
+                    </ul>
+                  </td>
+                </tr>
+              </ng-container>
+              <tr *ngIf="!llamadasFiltradas.length"><td colspan="9" class="empty-inline">Ninguna llamada coincide con el filtro.</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- ===================== POR SERVICIO ===================== -->
+      <div *ngIf="vista === 'servicios'">
+        <p class="sub" style="margin-bottom: 10px">Resumen de todo el periodo ({{ respuesta.resumen.recorridos }} recorrido(s)), agrupado por servicio.</p>
+        <div class="tabla-scroll">
+          <table>
+            <thead><tr><th>Servicio</th><th>Método</th><th>Llamadas</th><th class="num">Errores</th><th class="num">Avisos</th><th class="num">Lentas</th><th class="num">Tiempo promedio</th><th class="num">Máximo</th></tr></thead>
+            <tbody>
+              <tr *ngFor="let s of respuesta.resumen.servicios" [class.fila-error]="s.errores > 0 && s.errores === s.llamadas">
+                <td><strong>{{ s.servicio }}</strong></td>
+                <td class="mono">{{ s.metodo }}</td>
+                <td><span class="barra-celda"><i [style.width.%]="(s.llamadas / maxLlamadasServicio) * 70"></i>{{ s.llamadas | number }}</span></td>
+                <td class="num"><span class="pill pill--error" *ngIf="s.errores > 0">✕ {{ s.errores }}</span><span *ngIf="s.errores === 0">0</span></td>
+                <td class="num"><span class="pill pill--warn" *ngIf="(s.advertencias ?? 0) > 0">! {{ s.advertencias }}</span><span *ngIf="!(s.advertencias ?? 0)">0</span></td>
+                <td class="num"><span class="pill pill--warn" *ngIf="(s.lentas ?? 0) > 0">⏱ {{ s.lentas }}</span><span *ngIf="!(s.lentas ?? 0)">0</span></td>
+                <td class="num">{{ formatearDuracion(s.duracionPromMs) }}</td>
+                <td class="num">{{ formatearDuracion(s.duracionMaxMs) }}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+  </div>
+</ng-container>
+
+<!-- Tooltip flotante de la línea de tiempo -->
+<div class="tip-flotante" *ngIf="tip" [style.left.px]="tip.x" [style.top.px]="tip.y" role="tooltip">
+  <strong>{{ tip.barra.llamada.servicio }}</strong>
+  <div class="linea"><span>Estado</span><b>{{ iconoEstado(tip.barra.llamada.estado) }} {{ etiquetaEstado(tip.barra.llamada) }}</b></div>
+  <div class="linea"><span>Hora</span><b>{{ horaCorta(tip.barra.llamada.inicio || tip.barra.llamada.fin) }}</b></div>
+  <div class="linea"><span>Duración</span><b>{{ tip.barra.llamada.lentitud ? '⏱ ' : '' }}{{ formatearDuracion(tip.barra.llamada.duracionMs) }}</b></div>
+  <div class="linea" *ngIf="tip.barra.esperaPrevMs !== null"><span>Espera desde la anterior</span><b>{{ formatearDuracion(tip.barra.esperaPrevMs) }}</b></div>
+  <div class="linea mono" style="margin-top:2px"><span>{{ tip.barra.llamada.metodo }}</span></div>
+  <div *ngIf="tip.barra.llamada.mensaje" style="margin-top:4px; color: var(--f-err-ink)">{{ tip.barra.llamada.mensaje }}</div>
+</div>
+
+<!-- Detalle traducido de una fila del log -->
+<app-log-detalle *ngIf="detalleCodigo !== null" [codigo]="detalleCodigo" [fecha]="detalleFecha" (cerrar)="cerrarDetalle()"></app-log-detalle>

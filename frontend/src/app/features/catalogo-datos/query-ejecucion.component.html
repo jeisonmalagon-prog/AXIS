@@ -1,0 +1,41 @@
+<div class="qe">
+  <div class="qe-barra">
+    <ng-container *ngIf="puede; else sinPermiso">
+      <label class="qe-origen" *ngIf="origenes.length > 1">
+        <span>Servidor</span>
+        <select [(ngModel)]="origenSel" name="qe-origen" aria-label="Servidor donde ejecutar">
+          <option *ngFor="let o of origenes" [value]="o.id">{{ o.nombre }}</option>
+        </select>
+      </label>
+      <button type="button" class="btn btn-purple btn-sm" [disabled]="!puedeEjecutar" (click)="ejecutar()">{{ ejecutando ? 'Ejecutando…' : 'Ejecutar (solo lectura)' }}</button>
+      <span class="qe-nota" *ngIf="motivo">{{ motivo }}</span>
+      <span class="qe-nota qe-aviso" *ngIf="!motivo && hayPlantilla">Reemplaza &lt;VALOR&gt; por el dato real para poder ejecutar.</span>
+      <span class="qe-nota" *ngIf="!motivo && !hayPlantilla">Máx. 200 filas y 20 s · queda en la auditoría.</span>
+    </ng-container>
+    <ng-template #sinPermiso><span class="qe-nota">Para ejecutar necesitas permiso de edición en este módulo. Puedes copiar la consulta y correrla con tu cuenta.</span></ng-template>
+  </div>
+
+  <div class="error-state" *ngIf="error">{{ error }}</div>
+  <div class="qe-cargando" *ngIf="ejecutando"><div class="spinner"></div><span>Consultando el servidor…</span></div>
+
+  <ng-container *ngIf="resultado as r">
+    <div class="qe-resumen">
+      <strong>{{ r.filas.length }}{{ r.truncado ? '+' : '' }}</strong> fila(s) · {{ r.duracionMs }} ms · {{ r.servidor }}<ng-container *ngIf="r.baseDatos"> · {{ r.baseDatos }}</ng-container>
+      <span class="chip chip-media" *ngIf="r.truncado">Se muestran las primeras {{ r.maxFilas }}</span>
+      <span class="espacio"></span>
+      <button type="button" class="btn-mini" (click)="copiarTabla()" title="Se pega directo en Excel">{{ copiado === 'tabla' ? '¡Copiado!' : 'Copiar tabla' }}</button>
+      <button type="button" class="btn-mini" (click)="descargarCsv()">Descargar CSV</button>
+    </div>
+    <p class="vacio" *ngIf="!r.filas.length">La consulta no devolvió filas.</p>
+    <div class="qe-tabla-wrap" *ngIf="r.filas.length">
+      <table class="qe-tabla">
+        <thead><tr><th *ngFor="let c of r.columnas; let i = index" [title]="c">{{ c || 'col' + (i + 1) }}</th></tr></thead>
+        <tbody>
+          <tr *ngFor="let f of r.filas; trackBy: trackFila">
+            <td *ngFor="let v of f" [class.qe-nulo]="v === null" [title]="celda(v)">{{ celda(v) }}</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </ng-container>
+</div>

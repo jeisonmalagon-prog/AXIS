@@ -1,0 +1,9 @@
+@use '../../repositorio/azure/azure-base' as *;
+@use './inicio-comun' as c;
+@include base;
+@include c.inicio-comun;
+
+.f5-cuerpo { display: grid; grid-template-columns: minmax(0, 3fr) minmax(0, 2fr); gap: 20px; @media (max-width: 900px) { grid-template-columns: minmax(0, 1fr); } }
+.f5-top .barras { margin-top: 8px; }
+.mini-leyenda { display: flex; gap: 14px; font-size: 11.5px; color: $brand-gray; margin-top: 6px; i { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 5px; } }
+.ent i { background: var(--ix-s1); } .sal i { background: var(--ix-s2); }

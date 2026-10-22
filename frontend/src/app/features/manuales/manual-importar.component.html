@@ -1,0 +1,142 @@
+<div class="modal-overlay" (click)="fase === 'importando' ? null : cerrar.emit()" role="presentation">
+  <div class="modal-card imp" role="dialog" aria-modal="true" aria-label="Importar desde Word o PDF" (click)="$event.stopPropagation()">
+    <div class="modal-header">
+      <div>
+        <h2>Importar manuales</h2>
+        <p class="gris sub">Trae tus notas desde un documento Word o un PDF. También puedes empezar desde cero con «Nueva libreta».</p>
+      </div>
+      <button type="button" class="close-btn" aria-label="Cerrar" [disabled]="fase === 'importando'" (click)="cerrar.emit()">&#10005;</button>
+    </div>
+
+    @if (fase === 'config') {
+      <div class="zona" [class.arrastrando]="arrastrando" (dragover)="$event.preventDefault(); arrastrando = true" (dragleave)="arrastrando = false" (drop)="alSoltar($event)">
+        <div class="zona-ico" aria-hidden="true">&#8681;</div>
+        <div><strong>Arrastra aquí tus archivos</strong> Word (.docx) o PDF</div>
+        <label class="btn btn-ghost btn-sm">
+          Elegir archivos
+          <input type="file" accept=".docx,.pdf,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document" multiple hidden (change)="alElegir($event)" />
+        </label>
+      </div>
+      @if (errorGeneral) { <div class="error-state mt">{{ errorGeneral }}</div> }
+
+      <button type="button" class="enlace ayuda-btn" (click)="ayuda = !ayuda">{{ ayuda ? 'Ocultar' : 'Ver' }} cómo sacar mis notas de OneNote</button>
+      @if (ayuda) {
+        <ol class="ayuda">
+          <li>Abre OneNote de escritorio (el que viene con Microsoft 365) y entra a la sección que quieres traer.</li>
+          <li>Ve a <strong>Archivo &rarr; Exportar</strong>, elige <strong>Sección actual</strong> y luego <strong>Documento de Word (.docx)</strong>.</li>
+          <li>Pulsa <strong>Exportar</strong>, guarda el archivo y súbelo aquí. Repite con cada sección: cada archivo se convierte en una sección de Manuales y cada página de OneNote en una página.</li>
+          <li>Las imágenes (capturas de consola), tablas y comandos se conservan. La fecha de creación de cada página se guarda como «fecha original».</li>
+        </ol>
+      }
+
+      @if (archivos.length) {
+        <h3 class="paso">Archivos a importar</h3>
+        <ul class="archivos">
+          @for (a of archivos; track a.file.name + a.file.size) {
+            <li>
+              <span class="chip" [class.chip-marca]="!a.esPdf">{{ a.esPdf ? 'PDF' : 'Word' }}</span>
+              <div class="arch-datos">
+                <div class="arch-nombre">{{ a.file.name }} <span class="gris">({{ tamano(a.file.size) }})</span></div>
+                <label class="arch-sec">Nombre de la sección
+                  <input type="text" [name]="'sec' + a.file.name" [(ngModel)]="a.seccionNombre" maxlength="150" [disabled]="destino === 'seccion'" />
+                </label>
+              </div>
+              <button type="button" class="btn-mini" (click)="quitar(a)" aria-label="Quitar archivo">Quitar</button>
+            </li>
+          }
+        </ul>
+
+        <h3 class="paso">¿Dónde se guardan?</h3>
+        <div class="opciones">
+          <label class="opcion" [class.sel]="destino === 'nueva'">
+            <input type="radio" name="destino" value="nueva" [(ngModel)]="destino" />
+            <span><strong>En una libreta nueva</strong><small>Crea la libreta y una sección por cada archivo.</small></span>
+          </label>
+          @if (libretas.length) {
+            <label class="opcion" [class.sel]="destino === 'libreta'">
+              <input type="radio" name="destino" value="libreta" [(ngModel)]="destino" />
+              <span><strong>En una libreta que ya existe</strong><small>Agrega una sección nueva por cada archivo.</small></span>
+            </label>
+            @if (archivos.length === 1) {
+              <label class="opcion" [class.sel]="destino === 'seccion'">
+                <input type="radio" name="destino" value="seccion" [(ngModel)]="destino" />
+                <span><strong>Dentro de una sección que ya existe</strong><small>Agrega las páginas al final de esa sección.</small></span>
+              </label>
+            }
+          }
+        </div>
+        @if (destino === 'nueva') {
+          <label class="campo-v">Nombre de la libreta
+            <input type="text" name="nl" [(ngModel)]="nombreLibreta" maxlength="150" placeholder="Ej.: Soporte aplicaciones" />
+          </label>
+        } @else {
+          <div class="fila-selects">
+            <label class="campo-v">Libreta
+              <select name="lib" [(ngModel)]="libretaId" (ngModelChange)="seccionId = null">
+                @for (l of libretas; track l.id) { <option [ngValue]="l.id">{{ l.nombre }}</option> }
+              </select>
+            </label>
+            @if (destino === 'seccion') {
+              <label class="campo-v">Sección
+                <select name="sec" [(ngModel)]="seccionId">
+                  <option [ngValue]="null" disabled>Elige una sección…</option>
+                  @for (s of seccionesDeLibreta; track s.id) { <option [ngValue]="s.id">{{ s.nombre }}</option> }
+                </select>
+              </label>
+            }
+          </div>
+        }
+
+        @if (hayWord) {
+          <h3 class="paso">¿Cómo separar las páginas de los documentos Word?</h3>
+          <div class="opciones">
+            @for (m of modos; track m.valor) {
+              <label class="opcion" [class.sel]="modo === m.valor">
+                <input type="radio" name="modo" [value]="m.valor" [(ngModel)]="modo" />
+                <span><strong>{{ m.titulo }}</strong><small>{{ m.detalle }}</small></span>
+              </label>
+            }
+          </div>
+        }
+        <p class="gris peq nota">Los PDF se guardan completos como una página que se puede ver y descargar; su texto se indexa para la búsqueda.</p>
+      }
+
+      <div class="pie">
+        <button type="button" class="btn btn-ghost" (click)="cerrar.emit()">Cancelar</button>
+        <button type="button" class="btn btn-purple" [disabled]="!puedeImportar" (click)="importar()">Importar {{ archivos.length > 1 ? archivos.length + ' archivos' : '' }}</button>
+      </div>
+    } @else {
+      <ul class="archivos progreso" aria-live="polite">
+        @for (a of archivos; track a.file.name + a.file.size) {
+          <li [class.ok]="a.estado === 'ok'" [class.mal]="a.estado === 'error'">
+            <span class="estado" aria-hidden="true">
+              @switch (a.estado) {
+                @case ('importando') { <span class="spinner chico"></span> }
+                @case ('ok') { &#10003; }
+                @case ('error') { &#10007; }
+                @default { &middot; }
+              }
+            </span>
+            <div class="arch-datos">
+              <div class="arch-nombre">{{ a.file.name }}</div>
+              <div class="peq" [class.t-mal]="a.estado === 'error'" [class.gris]="a.estado !== 'error'">
+                @switch (a.estado) {
+                  @case ('espera') { En espera }
+                  @case ('importando') { Importando… los documentos grandes con imágenes pueden tardar un momento }
+                  @default { {{ a.mensaje }} }
+                }
+              </div>
+            </div>
+          </li>
+        }
+      </ul>
+      @if (fase === 'fin') {
+        <div class="pie">
+          @if (hayErrores) { <button type="button" class="btn btn-ghost" (click)="reintentarFallidos()">Reintentar los que fallaron</button> }
+          <button type="button" class="btn btn-ghost" (click)="cerrar.emit()">Cerrar</button>
+          @if (primeraImportada) { <button type="button" class="btn btn-purple" (click)="abrir()">Ver lo importado</button> }
+        </div>
+      }
+    }
+  </div>
+</div>

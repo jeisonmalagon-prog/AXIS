@@ -1,0 +1,35 @@
+<div class="pipelines-container">
+  <div class="empty-state text-center py-4" *ngIf="cargando">Cargando pipelines…</div>
+  <div class="error-state" *ngIf="!cargando && error"><app-ico n="alerta"></app-ico>{{ error }}</div>
+
+  <div class="tabla-builds" *ngIf="!cargando && !error">
+    <div class="fila-encabezado">
+      <span class="col-estado">Estado</span>
+      <span class="col-definicion">Pipeline</span>
+      <span class="col-rama">Rama</span>
+      <span class="col-solicitante">Solicitado por</span>
+      <span class="col-fecha">Fecha</span>
+      <span class="col-duracion">Duración</span>
+      <span class="col-acciones"></span>
+    </div>
+
+    <p class="vacio-carpeta" *ngIf="!builds.length">No hay ejecuciones de pipelines registradas.</p>
+
+    <div class="fila-build" *ngFor="let build of builds">
+      <span class="col-estado">
+        <span class="badge-estado" [ngClass]="claseInsignia(build)">{{ textoInsignia(build) }}</span>
+      </span>
+      <span class="col-definicion" [title]="build.definicion">
+        {{ build.definicion }}
+        <span class="numero-build">#{{ build.numero }}</span>
+      </span>
+      <span class="col-rama"><code>{{ build.rama || '—' }}</code></span>
+      <span class="col-solicitante">{{ build.solicitadoPor }}</span>
+      <span class="col-fecha">{{ (build.inicio || build.encolado) ? (build.inicio || build.encolado | date:'dd/MM/yyyy HH:mm') : '—' }}</span>
+      <span class="col-duracion">{{ duracion(build) || '—' }}</span>
+      <span class="col-acciones">
+        <a [href]="build.url" target="_blank" rel="noopener" class="btn-icono" title="Ver en Azure DevOps"><app-ico n="externo" class="solo"></app-ico></a>
+      </span>
+    </div>
+  </div>
+</div>

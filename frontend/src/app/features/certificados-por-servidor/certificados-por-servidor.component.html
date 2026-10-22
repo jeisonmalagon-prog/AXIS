@@ -1,0 +1,283 @@
+<header class="page-header">
+  <div>
+    <h1>Certificados por servidor</h1>
+    <p class="subtitle">Servidor → aplicación → aplicación interna → certificado(s)</p>
+  </div>
+
+  <div class="header-actions">
+    <div class="search-box">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <circle cx="11" cy="11" r="8"></circle>
+        <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+      </svg>
+      <input
+        type="text"
+        [(ngModel)]="terminoBusqueda"
+        placeholder="Buscar servidor, aplicación, componente, certificado..."
+      />
+    </div>
+    <button type="button" class="btn" (click)="expandirTodo()">Expandir todo</button>
+    <button type="button" class="btn" (click)="colapsarTodo()">Colapsar todo</button>
+  </div>
+</header>
+
+<section class="filtros">
+  <button
+    type="button"
+    class="btn"
+    [class.active]="filtro === f"
+    *ngFor="let f of opcionesFiltro"
+    (click)="filtro = f"
+  >
+    {{ f }}
+  </button>
+</section>
+
+<div class="empty" *ngIf="cargando">Cargando información…</div>
+
+<ng-container *ngIf="!cargando">
+  <div class="servidor-card" *ngFor="let n of nodosFiltrados">
+    <div class="servidor-header" (click)="toggleServidor(n)">
+      <button type="button" class="chevron-btn" [class.rotated]="n.expandido" title="Expandir/colapsar">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <polyline points="6 9 12 15 18 9"></polyline>
+        </svg>
+      </button>
+
+      <button type="button" class="servidor-id" (click)="$event.stopPropagation(); abrirDetalleServidor(n)">
+        <svg class="node-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+          <rect x="3" y="4" width="18" height="12" rx="2"></rect>
+          <line x1="8" y1="20" x2="16" y2="20"></line>
+          <line x1="12" y1="16" x2="12" y2="20"></line>
+        </svg>
+        <span class="hostname">{{ n.hostname }}</span>
+        <span class="ip-badge mono">{{ n.ip }}</span>
+        <span class="os-badge" *ngIf="n.so">{{ n.so }}</span>
+        <span class="ambiente-badge" *ngIf="n.ambiente">{{ n.ambiente }}</span>
+      </button>
+
+      <div class="servidor-resumen">
+        <span class="contador">{{ n.aplicaciones.length }} {{ n.aplicaciones.length === 1 ? 'aplicación' : 'aplicaciones' }}</span>
+        <span class="contador">{{ n.totalCertificados }} {{ n.totalCertificados === 1 ? 'certificado' : 'certificados' }}</span>
+        <span class="status-pill" *ngIf="n.peorEstado" [ngClass]="estadoClase(n.peorEstado)">{{ n.peorEstado }}</span>
+      </div>
+    </div>
+
+    <div class="servidor-body" *ngIf="n.expandido">
+      <ng-container *ngIf="n.aplicaciones.length; else sinApps">
+        <div class="aplicacion-block" *ngFor="let a of n.aplicaciones">
+          <button type="button" class="aplicacion-header" (click)="abrirDetalleAplicacion(n, a)">
+            <span class="app-icon" [class.has-image]="a.imagenUrl">
+              <img *ngIf="a.imagenUrl" [src]="a.imagenUrl" alt="" />
+              <span class="app-icon-fallback">{{ (a.aplicacionNombre || '?').charAt(0) | uppercase }}</span>
+            </span>
+            <span class="aplicacion-nombre">{{ a.aplicacionNombre }}</span>
+            <span class="componente-count-badge">
+              {{ a.componentes.length }} {{ a.componentes.length === 1 ? 'aplicación interna' : 'aplicaciones internas' }}
+            </span>
+          </button>
+
+          <div class="componentes-grid" *ngIf="a.componentes.length">
+            <div class="componente-card" *ngFor="let c of a.componentes">
+              <button type="button" class="componente-top" (click)="abrirDetalleComponente(n, a, c)">
+                <span class="tag-chip" [ngClass]="claseRol(c.rol)">{{ c.rol }}</span>
+                <span
+                  class="badge-compartido"
+                  *ngIf="c.otrasAplicaciones.length"
+                  [title]="'También en: ' + c.otrasAplicaciones.join(', ')"
+                >compartido</span>
+              </button>
+
+              <div class="certificados-mini-list">
+                <button
+                  type="button"
+                  class="cert-row"
+                  [class.dim]="!certCoincideFiltro(cert)"
+                  *ngFor="let cert of c.certificados"
+                  (click)="abrirDetalleCertificado(n, a, c, cert)"
+                >
+                  <span class="status-dot" [ngClass]="estadoClase(cert.Estado)"></span>
+                  <span class="cert-cn mono">{{ cert.NombreComun || '—' }}</span>
+                  <span class="cert-dias" [ngClass]="estadoClase(cert.Estado)">{{ cert.DiasRestantes }}d</span>
+                </button>
+                <div class="cert-row cert-row-empty" *ngIf="!c.certificados.length">Sin certificado registrado</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="sueltos-block" *ngIf="a.sueltos.length">
+            <p class="sueltos-label">Sin aplicación interna asignada:</p>
+            <div class="certificados-mini-list">
+              <button
+                type="button"
+                class="cert-row"
+                [class.dim]="!certCoincideFiltro(cert)"
+                *ngFor="let cert of a.sueltos"
+                (click)="abrirDetalleCertificado(n, a, null, cert)"
+              >
+                <span class="status-dot" [ngClass]="estadoClase(cert.Estado)"></span>
+                <span class="cert-cn mono">{{ cert.NombreComun || '—' }}</span>
+                <span class="cert-dias" [ngClass]="estadoClase(cert.Estado)">{{ cert.DiasRestantes }}d</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      </ng-container>
+      <ng-template #sinApps>
+        <p class="sin-apps">Este servidor no tiene aplicaciones registradas en el módulo Aplicaciones.</p>
+      </ng-template>
+
+      <div class="sin-clasificar-block" *ngIf="n.sinClasificar.length">
+        <p class="sueltos-label">Certificados en este servidor sin aplicación identificada:</p>
+        <div class="certificados-mini-list">
+          <button
+            type="button"
+            class="cert-row"
+            [class.dim]="!certCoincideFiltro(cert)"
+            *ngFor="let cert of n.sinClasificar"
+            (click)="abrirDetalleCertificado(n, null, null, cert)"
+          >
+            <span class="status-dot" [ngClass]="estadoClase(cert.Estado)"></span>
+            <span class="cert-cn mono">{{ cert.NombreComun || '—' }}</span>
+            <span class="cert-dias" [ngClass]="estadoClase(cert.Estado)">{{ cert.DiasRestantes }}d</span>
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="empty" *ngIf="!nodosFiltrados.length">
+    No se encontraron servidores que coincidan con tu búsqueda o filtro.
+  </div>
+</ng-container>
+
+<!-- PANEL DE DETALLE (se adapta según qué se haya clickeado) -->
+<div class="overlay" *ngIf="detalle" (click)="cerrarDetalle()">
+  <div class="modal detalle-modal" (click)="$event.stopPropagation()">
+    <div class="modal-header">
+      <div class="breadcrumb">
+        <span *ngIf="detalle.servidor" class="crumb" [class.crumb-activo]="detalle.modo === 'servidor'">{{ detalle.servidor.hostname }}</span>
+        <ng-container *ngIf="detalle.aplicacion">
+          <span class="crumb-sep">›</span>
+          <span class="crumb" [class.crumb-activo]="detalle.modo === 'aplicacion'">{{ detalle.aplicacion.aplicacionNombre }}</span>
+        </ng-container>
+        <ng-container *ngIf="detalle.componente">
+          <span class="crumb-sep">›</span>
+          <span class="crumb" [class.crumb-activo]="detalle.modo === 'componente'">{{ detalle.componente.rol }}</span>
+        </ng-container>
+        <ng-container *ngIf="detalle.certificado">
+          <span class="crumb-sep">›</span>
+          <span class="crumb crumb-activo">{{ detalle.certificado.NombreComun || 'Certificado' }}</span>
+        </ng-container>
+      </div>
+      <button class="btn-close" (click)="cerrarDetalle()" type="button">✕</button>
+    </div>
+
+    <div class="modal-body">
+
+      <!-- SERVIDOR -->
+      <ng-container *ngIf="detalle.modo === 'servidor' && detalle.servidor as s">
+        <h2>{{ s.hostname }}</h2>
+        <div class="detalle-grid">
+          <div><span class="detalle-label">IP</span><span class="mono">{{ s.ip }}</span></div>
+          <div><span class="detalle-label">Sistema operativo</span><span>{{ s.so || '—' }}</span></div>
+          <div><span class="detalle-label">Ambiente</span><span>{{ s.ambiente || '—' }}</span></div>
+          <div><span class="detalle-label">Aplicaciones</span><span>{{ s.aplicaciones.length }}</span></div>
+          <div><span class="detalle-label">Certificados</span><span>{{ s.totalCertificados }}</span></div>
+          <div *ngIf="s.peorEstado">
+            <span class="detalle-label">Peor estado</span>
+            <span class="status-pill" [ngClass]="estadoClase(s.peorEstado)">{{ s.peorEstado }}</span>
+          </div>
+        </div>
+        <p class="detalle-nota">Aplicaciones desplegadas en este servidor</p>
+        <ul class="lista-simple" *ngIf="s.aplicaciones.length; else sinAppsDetalle">
+          <li *ngFor="let a of s.aplicaciones">
+            {{ a.aplicacionNombre }} — {{ a.componentes.length }} aplicación(es) interna(s), {{ totalCertsDeAplicacion(a) }} certificado(s)
+          </li>
+        </ul>
+        <ng-template #sinAppsDetalle><p class="detalle-vacio">Sin aplicaciones registradas.</p></ng-template>
+      </ng-container>
+
+      <!-- APLICACIÓN -->
+      <ng-container *ngIf="detalle.modo === 'aplicacion' && detalle.aplicacion as a">
+        <h2>{{ a.aplicacionNombre }}</h2>
+        <p class="detalle-subtitulo">en el servidor <strong>{{ detalle.servidor?.hostname }}</strong> ({{ detalle.servidor?.ip }})</p>
+        <p class="detalle-nota">Aplicaciones internas registradas aquí</p>
+        <div class="tags-inline" *ngIf="a.componentes.length; else sinComponentesDetalle">
+          <span class="tag-chip" *ngFor="let c of a.componentes" [ngClass]="claseRol(c.rol)">{{ c.rol }} ({{ c.certificados.length }})</span>
+        </div>
+        <ng-template #sinComponentesDetalle><p class="detalle-vacio">Sin aplicaciones internas definidas todavía.</p></ng-template>
+      </ng-container>
+
+      <!-- APLICACIÓN INTERNA (COMPONENTE) -->
+      <ng-container *ngIf="detalle.modo === 'componente' && detalle.componente as c">
+        <h2><span class="tag-chip tag-chip-lg" [ngClass]="claseRol(c.rol)">{{ c.rol }}</span></h2>
+        <p class="detalle-subtitulo">
+          aplicación interna de <strong>{{ detalle.aplicacion?.aplicacionNombre }}</strong>
+          en <strong>{{ detalle.servidor?.hostname }}</strong>
+        </p>
+        <div class="tambien-en" *ngIf="c.otrasAplicaciones.length">
+          <span class="detalle-label">{{ c.otrasAplicaciones.length === 1 ? 'También lo usa' : 'También lo usan' }}</span>
+          <ul class="lista-simple">
+            <li *ngFor="let nombreApp of c.otrasAplicaciones">{{ nombreApp }}</li>
+          </ul>
+        </div>
+        <p class="detalle-nota">Certificados de esta aplicación interna ({{ c.certificados.length }})</p>
+        <div class="certificados-mini-list certificados-mini-list--modal" *ngIf="c.certificados.length; else sinCertsDetalle">
+          <button
+            type="button"
+            class="cert-row"
+            *ngFor="let cert of c.certificados"
+            (click)="abrirDetalleCertificado(detalle.servidor!, detalle.aplicacion!, c, cert)"
+          >
+            <span class="status-dot" [ngClass]="estadoClase(cert.Estado)"></span>
+            <span class="cert-cn mono">{{ cert.NombreComun || '—' }}</span>
+            <span class="cert-dias" [ngClass]="estadoClase(cert.Estado)">{{ cert.DiasRestantes }}d</span>
+          </button>
+        </div>
+        <ng-template #sinCertsDetalle><p class="detalle-vacio">Todavía no hay certificados cargados para esta aplicación interna.</p></ng-template>
+      </ng-container>
+
+      <!-- CERTIFICADO -->
+      <ng-container *ngIf="detalle.modo === 'certificado' && detalle.certificado as cert">
+        <div class="detalle-cert-header">
+          <h2>{{ cert.NombreComun || 'Sin nombre común' }}</h2>
+          <span class="status-pill" [ngClass]="estadoClase(cert.Estado)">{{ cert.Estado }}</span>
+        </div>
+        <p class="detalle-subtitulo" *ngIf="detalle.aplicacion">
+          <strong>{{ detalle.componente?.rol || 'Sin aplicación interna asignada' }}</strong>
+          de <strong>{{ detalle.aplicacion.aplicacionNombre }}</strong>
+          en <strong>{{ detalle.servidor?.hostname }}</strong>
+        </p>
+        <div class="tambien-en" *ngIf="detalle.componente?.otrasAplicaciones?.length">
+          <span class="detalle-label">Este certificado también lo usa</span>
+          <ul class="lista-simple">
+            <li *ngFor="let nombreApp of detalle.componente?.otrasAplicaciones">{{ nombreApp }}</li>
+          </ul>
+        </div>
+        <div class="detalle-grid">
+          <div><span class="detalle-label">Entidad emisora</span><span>{{ cert.EntidadEmisora || '—' }}</span></div>
+          <div><span class="detalle-label">Puerto</span><span class="mono">{{ cert.Puerto || '—' }}</span></div>
+          <div><span class="detalle-label">Número de serie</span><span class="mono">{{ cert.NumeroSerie || '—' }}</span></div>
+          <div><span class="detalle-label">Thumbprint</span><span class="mono">{{ cert.Thumbprint || '—' }}</span></div>
+          <div><span class="detalle-label">Fecha inicio</span><span class="mono">{{ cert.FechaInicio | date: 'dd/MM/yyyy' }}</span></div>
+          <div><span class="detalle-label">Fecha fin</span><span class="mono">{{ cert.FechaFin | date: 'dd/MM/yyyy' }}</span></div>
+          <div><span class="detalle-label">Días restantes</span><span>{{ cert.DiasRestantes }}</span></div>
+          <div><span class="detalle-label">Responsable</span><span>{{ cert.Responsable || '—' }}</span></div>
+        </div>
+        <ng-container *ngIf="cert.Observaciones">
+          <p class="detalle-nota">Observaciones</p>
+          <p class="detalle-observaciones">{{ cert.Observaciones }}</p>
+        </ng-container>
+      </ng-container>
+
+    </div>
+
+    <div class="modal-footer">
+      <a class="btn" *ngIf="detalle.modo === 'servidor'" routerLink="/servidores" [queryParams]="{ vista: 'servidores' }">Ver inventario de servidores</a>
+      <a class="btn" *ngIf="detalle.modo === 'aplicacion' || detalle.modo === 'componente'" routerLink="/aplicaciones">Editar en Aplicaciones</a>
+      <a class="btn btn-primary" *ngIf="detalle.modo === 'certificado'" routerLink="/certificados">Editar en Certificados</a>
+      <button class="btn" type="button" (click)="cerrarDetalle()">Cerrar</button>
+    </div>
+  </div>
+</div>

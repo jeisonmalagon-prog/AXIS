@@ -1,0 +1,273 @@
+<header class="cab">
+  <div>
+    <h1>Biometría de firmas</h1>
+    <p class="sub">Solicitudes con IdEstadoBiometria 60 e IdEstadoFirma 30 (MotorFirma) → sus casos en Firma.Detalle → casos de ORQBIOMETRIA con «{{ resultado?.resultadoOk || 'CEDULA ORIGINAL OK' }}» (se descartan los clientes cuyo último intento ya fue exitoso) → biometría de cada cédula en el servidor de biometría.</p>
+  </div>
+  <div class="cab-acciones" *ngIf="puedeEditar">
+    <button type="button" class="btn btn-ghost btn-sm" *ngIf="resultado && resultado.filas.length" (click)="exportarExcel()">Exportar Excel</button>
+  </div>
+</header>
+
+<div class="cargando" *ngIf="cargandoInicial"><div class="spinner"></div><p>Cargando…</p></div>
+<div class="error-state" *ngIf="errorGeneral">{{ errorGeneral }}</div>
+
+<ng-container *ngIf="!cargandoInicial && !errorGeneral">
+  <!-- ================= FILTRO: SOLO FECHA DE MODIFICACIÓN ================= -->
+  <section class="tarjeta filtro-fechas">
+    <div class="filtro-cab">
+      <strong>Fecha de modificación de la solicitud</strong>
+      <span class="gris">Es el único filtro: de aquí salen las solicitudes que se buscan.</span>
+    </div>
+    <div class="filtro-fila">
+      <label class="etiqueta">Desde
+        <input class="entrada" type="date" [(ngModel)]="desde" name="bio-desde" (ngModelChange)="cambioManual()" [disabled]="consultando || consultandoBio" />
+      </label>
+      <label class="etiqueta">Hasta
+        <input class="entrada" type="date" [(ngModel)]="hasta" name="bio-hasta" (ngModelChange)="cambioManual()" [disabled]="consultando || consultandoBio" />
+      </label>
+      <div class="presets" role="group" aria-label="Rangos rápidos">
+        <button type="button" class="chip-filtro" [class.activo]="presetActivo === 'hoy'" (click)="elegirPreset('hoy')" [disabled]="consultando || consultandoBio">Hoy</button>
+        <button type="button" class="chip-filtro" [class.activo]="presetActivo === 'ayer'" (click)="elegirPreset('ayer')" [disabled]="consultando || consultandoBio">Ayer</button>
+        <button type="button" class="chip-filtro" [class.activo]="presetActivo === '7'" (click)="elegirPreset('7')" [disabled]="consultando || consultandoBio">7 días</button>
+        <button type="button" class="chip-filtro" [class.activo]="presetActivo === '15'" (click)="elegirPreset('15')" [disabled]="consultando || consultandoBio">15 días</button>
+        <button type="button" class="chip-filtro" [class.activo]="presetActivo === '30'" (click)="elegirPreset('30')" [disabled]="consultando || consultandoBio">30 días</button>
+        <button type="button" class="chip-filtro" [class.activo]="presetActivo === 'mes'" (click)="elegirPreset('mes')" [disabled]="consultando || consultandoBio">Este mes</button>
+      </div>
+      <button type="button" class="btn btn-purple" *ngIf="puedeEditar" (click)="consultar()" [disabled]="consultando || consultandoBio || !rangoValido">
+        <span class="spinner chico" *ngIf="consultando"></span>{{ consultando ? 'Consultando…' : 'Consultar' }}
+      </button>
+    </div>
+    <p class="ayuda" *ngIf="!puedeEditar">Este módulo no está habilitado para tu usuario.</p>
+    <p class="ayuda" *ngIf="puedeEditar">Las conexiones ya están predefinidas: solo elige las fechas y pulsa «Consultar». Lo que consultas lo ves solo tú.</p>
+  </section>
+
+  <div class="error-state" *ngIf="errorConsulta">{{ errorConsulta }}</div>
+  <div class="aviso-info" *ngIf="enEjecucionServidor && !consultando">Hay una consulta tuya en ejecución en el servidor; vuelve a pulsar «Consultar» en unos segundos.</div>
+
+  <!-- Sin resultado todavía -->
+  <section class="tarjeta vacio-inicial" *ngIf="!resultado && !consultando">
+    <h2>Aún no has hecho ninguna consulta</h2>
+    <p>Elige el rango de fechas de modificación y pulsa «Consultar». Se buscan las solicitudes con IdEstadoBiometria 60 e IdEstadoFirma 30, sus casos de biometría, y de los casos con «CEDULA ORIGINAL OK» se consulta la biometría de cada cédula en el servidor de biometría.</p>
+  </section>
+
+  <div class="cargando chico-v" *ngIf="consultando && !resultado"><div class="spinner"></div><p>Buscando solicitudes, casos y resultados… (puede tardar unos segundos)</p></div>
+
+  <ng-container *ngIf="resultado as r">
+    <p class="resumen-consulta">
+      Solicitudes modificadas del <strong>{{ fechaCorta(r.filtro.desde) }}</strong> al <strong>{{ fechaCorta(r.filtro.hasta) }}</strong>
+      · consultado {{ r.generado | date: 'dd/MM/yyyy HH:mm' }} ({{ r.duracionMs / 1000 | number: '1.1-1' }} s)
+    </p>
+
+    <!-- Embudo -->
+    <div class="kpis kpis-5">
+      <div class="kpi">
+        <span class="kpi-et">1. Solicitudes</span>
+        <span class="kpi-v">{{ r.pasos.solicitudes }}</span>
+        <span class="kpi-s">IdEstadoBiometria 60 · IdEstadoFirma 30</span>
+      </div>
+      <div class="kpi">
+        <span class="kpi-et">2. Casos en Firma.Detalle</span>
+        <span class="kpi-v">{{ r.pasos.casosEnDetalle }}</span>
+        <span class="kpi-s">{{ r.pasos.solicitudesSinCaso }} solicitud(es) sin IdCasoBiometria</span>
+      </div>
+      <div class="kpi">
+        <span class="kpi-et">3. Con «{{ r.resultadoOk }}»</span>
+        <span class="kpi-v">{{ r.pasos.casosConResultadoOk }}</span>
+        <span class="kpi-s">Casos en ORQBIOMETRIA<ng-container *ngIf="r.pasos.descartadosPorExito"> · {{ r.pasos.descartadosPorExito }} descartado(s): su último intento ya fue exitoso</ng-container></span>
+      </div>
+      <div class="kpi">
+        <span class="kpi-et">4. Cédulas a consultar</span>
+        <span class="kpi-v">{{ r.pasos.documentos }}</span>
+        <span class="kpi-s" *ngIf="r.pasos.sinDocumentoValido">{{ r.pasos.sinDocumentoValido }} fila(s) sin cédula válida</span>
+        <span class="kpi-s" *ngIf="!r.pasos.sinDocumentoValido">Cédulas distintas</span>
+      </div>
+      <div class="kpi kpi-ok">
+        <span class="kpi-et">5. Con biometría vigente</span>
+        <span class="kpi-v t-ok">{{ resumenBio.vigente }}</span>
+        <span class="kpi-s">
+          <ng-container *ngIf="resumenBio.consultadas || resumenBio.errores">{{ resumenBio.sinVigente }} sin biometría vigente<ng-container *ngIf="resumenBio.errores"> · {{ resumenBio.errores }} con error</ng-container></ng-container>
+          <ng-container *ngIf="!resumenBio.consultadas && !resumenBio.errores">Aún sin consultar</ng-container>
+        </span>
+      </div>
+    </div>
+
+    <div class="aviso-aviso" *ngIf="r.pasos.truncado">
+      Hay {{ r.pasos.solicitudes }} solicitudes en el rango y se procesaron las {{ r.pasos.solicitudesLeidas }} más recientes. Acorta el rango de fechas para ver el resto.
+    </div>
+    <div class="aviso-info" *ngIf="r.pasos.descartadosPorExito">
+      {{ r.pasos.descartadosPorExito }} caso(s) no se tienen en cuenta porque el cliente tiene un intento más reciente en estado exitoso.
+    </div>
+    <div class="aviso-aviso" *ngIf="r.pasos.sinDocumentoValido">
+      {{ r.pasos.sinDocumentoValido }} fila(s) traen la cédula vacía o enmascarada (por ejemplo «xxxx») y no se pueden consultar en el servidor de biometría.
+    </div>
+
+    <!-- Avance de la consulta de biometría -->
+    <section class="tarjeta barra-bio" *ngIf="puedeEditar && r.pasos.documentos">
+      <div class="barra-bio-fila">
+        <ng-container *ngIf="consultandoBio">
+          <span class="spinner chico-oscuro"></span>
+          <span>Consultando la biometría en el servidor: <strong>{{ hechosBio }}</strong> de <strong>{{ totalBio }}</strong> cédulas…</span>
+          <span class="espacio"></span>
+          <button type="button" class="btn btn-ghost btn-sm" (click)="detenerBiometria()">Detener</button>
+        </ng-container>
+        <ng-container *ngIf="!consultandoBio">
+          <span *ngIf="resumenBio.pendientes && !resumenBio.consultadas && !resumenBio.errores">Falta consultar la biometría de {{ resumenBio.pendientes }} cédula(s).</span>
+          <span *ngIf="resumenBio.pendientes && (resumenBio.consultadas || resumenBio.errores)">Quedan {{ resumenBio.pendientes }} cédula(s) sin consultar.</span>
+          <span *ngIf="!resumenBio.pendientes && resumenBio.errores">{{ resumenBio.errores }} cédula(s) no se pudieron consultar.</span>
+          <span *ngIf="!resumenBio.pendientes && !resumenBio.errores">Biometría consultada para las {{ resumenBio.consultadas }} cédula(s).</span>
+          <span class="espacio"></span>
+          <button type="button" class="btn btn-purple btn-sm" *ngIf="hayPendientesBio" (click)="iniciarBiometria(true)">{{ resumenBio.consultadas ? 'Consultar las que faltan' : 'Consultar biometría' }}</button>
+          <button type="button" class="btn btn-ghost btn-sm" *ngIf="!hayPendientesBio" (click)="iniciarBiometria(false)">Volver a consultar todas</button>
+        </ng-container>
+      </div>
+      <div class="avance" *ngIf="consultandoBio && totalBio"><div class="avance-barra" [style.width.%]="(hechosBio / totalBio) * 100"></div></div>
+      <div class="error-state" *ngIf="errorBio">{{ errorBio }}</div>
+    </section>
+
+    <!-- Resultados -->
+    <section class="tarjeta">
+      <div class="vacio" *ngIf="!r.filas.length">
+        <ng-container *ngIf="!r.pasos.solicitudes">No hay solicitudes con IdEstadoBiometria 60 e IdEstadoFirma 30 modificadas en esas fechas.</ng-container>
+        <ng-container *ngIf="r.pasos.solicitudes && !r.pasos.casosEnDetalle">Hay {{ r.pasos.solicitudes }} solicitud(es), pero ninguna tiene IdCasoBiometria en Firma.Detalle.</ng-container>
+        <ng-container *ngIf="r.pasos.solicitudes && r.pasos.casosEnDetalle && !r.pasos.casosConResultadoOk">Ninguno de los {{ r.pasos.casosEnDetalle }} caso(s) tiene el resultado «{{ r.resultadoOk }}» en ORQBIOMETRIA.</ng-container>
+        <ng-container *ngIf="r.pasos.casosConResultadoOk && r.pasos.descartadosPorExito">Nada pendiente: {{ r.pasos.descartadosPorExito === 1 ? 'el único caso' : 'los ' + r.pasos.descartadosPorExito + ' casos' }} con «{{ r.resultadoOk }}» se descartaron porque el último intento del cliente ya fue exitoso. Abajo puedes ver su información.</ng-container>
+      </div>
+
+      <div class="tabla-wrap tabla-alta" *ngIf="r.filas.length">
+        <table class="tabla">
+          <thead>
+            <tr>
+              <th>Cédula</th><th>Nombre</th><th>RadNumber</th><th>Modificación</th><th>Caso</th><th>Estado del caso</th><th>Último intento</th><th>Resultado ORQ</th><th>Biometría en el servidor</th><th aria-label="Detalle"></th>
+            </tr>
+          </thead>
+          <tbody>
+            <ng-container *ngFor="let f of paginaFilas; trackBy: trackFila">
+              <ng-container *ngTemplateOutlet="filaTpl; context: { $implicit: f }"></ng-container>
+            </ng-container>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="paginador" *ngIf="totalPaginas > 1">
+        <button type="button" class="btn-mini" (click)="cambiarPagina(-1)" [disabled]="pagina <= 1">Anterior</button>
+        <span>Página {{ pagina }} de {{ totalPaginas }} · {{ r.filas.length }} filas</span>
+        <button type="button" class="btn-mini" (click)="cambiarPagina(1)" [disabled]="pagina >= totalPaginas">Siguiente</button>
+      </div>
+    </section>
+
+    <!-- Clientes que ya tienen un intento exitoso: no se procesan, pero se muestran como información -->
+    <section class="tarjeta exitosas" *ngIf="r.descartadas && r.descartadas.length">
+      <div class="exitosas-cab">
+        <div>
+          <strong>Clientes que ya tienen una biometría exitosa ({{ r.descartadas.length }}{{ r.descartadasTruncado ? '+' : '' }})</strong>
+          <span class="gris"> Su último intento ya fue exitoso, por eso no entran en la lista de arriba. Se muestran solo como información.</span>
+        </div>
+        <div class="exitosas-acc">
+          <button type="button" class="btn btn-ghost btn-sm" *ngIf="puedeEditar && verExitosas && hayExitosasSinConsultar" (click)="consultarExitosas()" [disabled]="consultandoBio">Ver su biometría en el servidor</button>
+          <button type="button" class="btn btn-ghost btn-sm" (click)="verExitosas = !verExitosas">{{ verExitosas ? '▾ Ocultar' : '▸ Mostrar' }}</button>
+        </div>
+      </div>
+      <div class="tabla-wrap tabla-alta" *ngIf="verExitosas">
+        <table class="tabla">
+          <thead>
+            <tr>
+              <th>Cédula</th><th>Nombre</th><th>RadNumber</th><th>Modificación</th><th>Caso</th><th>Estado del caso</th><th>Último intento</th><th>Resultado ORQ</th><th>Biometría en el servidor</th><th aria-label="Detalle"></th>
+            </tr>
+          </thead>
+          <tbody>
+            <ng-container *ngFor="let f of r.descartadas | slice: 0 : limiteExitosas; trackBy: trackFila">
+              <ng-container *ngTemplateOutlet="filaTpl; context: { $implicit: f }"></ng-container>
+            </ng-container>
+          </tbody>
+        </table>
+      </div>
+      <div class="paginador" *ngIf="verExitosas && r.descartadas.length > limiteExitosas">
+        <button type="button" class="btn-mini" (click)="limiteExitosas = limiteExitosas + 50">Mostrar 50 más</button>
+        <span>Mostrando {{ limiteExitosas }} de {{ r.descartadas.length }}</span>
+      </div>
+    </section>
+  </ng-container>
+</ng-container>
+
+<!-- Fila (con su detalle) reutilizada por la tabla principal y la de clientes con biometría ya exitosa -->
+<ng-template #filaTpl let-f>
+              <tr class="fila-click" [class.fila-abierta]="expandida === f.clave" (click)="alternar(f)" (keydown.enter)="alternar(f)" tabindex="0" [attr.aria-expanded]="expandida === f.clave">
+                <td class="mono">{{ f.cc || '—' }}</td>
+                <td class="td-nombre">{{ f.nombre || '—' }}</td>
+                <td class="mono">{{ f.radNumber }}</td>
+                <td>{{ fechaSql(f.fechaModificacion) }}</td>
+                <td class="mono">{{ f.idCaso }}</td>
+                <td>{{ f.estadoCaso || '—' }}</td>
+                <td class="td-ultimo"><ng-container *ngIf="f.ultimoCaso; else sinUlt"><span class="mono">{{ f.ultimoCaso }}</span> <span class="gris">{{ f.ultimoEstado || '' }}</span></ng-container><ng-template #sinUlt>—</ng-template></td>
+                <td class="td-resultado" [title]="f.descripcionResultado || ''"><span class="cortar">{{ f.descripcionResultado || '—' }}</span></td>
+                <td class="td-bio">
+                  <ng-container *ngIf="f.documentoValido; else sinDoc">
+                    <ng-container *ngIf="bioDe(f) as b; else sinConsultar">
+                      <span class="est" [ngClass]="claseNivel(b.nivel)"><span class="spinner chico-oscuro" *ngIf="b.estado === 'consultando'"></span>{{ b.titular }}</span>
+                      <span class="bio-resumen" *ngIf="b.resumen" [title]="b.resumen">{{ b.resumen }}</span>
+                    </ng-container>
+                    <ng-template #sinConsultar><span class="gris">Sin consultar</span></ng-template>
+                  </ng-container>
+                  <ng-template #sinDoc><span class="est est-nulo" [title]="esEnmascarada(f.cc) ? 'La cédula viene enmascarada' : 'No hay cédula válida'">No se puede consultar</span></ng-template>
+                </td>
+                <td class="flecha" aria-hidden="true">{{ expandida === f.clave ? '▾' : '▸' }}</td>
+              </tr>
+              <tr class="detalle" *ngIf="expandida === f.clave">
+                <td colspan="10">
+                  <div class="detalle-grid">
+                    <div>
+                      <h4>Solicitud y caso</h4>
+                      <dl class="kv">
+                        <dt>Solicitud</dt><dd class="mono">{{ f.idSolicitud || '—' }}</dd>
+                        <dt>RadNumber</dt><dd class="mono">{{ f.radNumber }}</dd>
+                        <dt>Fecha de modificación</dt><dd>{{ fechaSql(f.fechaModificacion) }}</dd>
+                        <dt>Cédula</dt><dd class="mono">{{ f.cc || '—' }}</dd>
+                        <dt>Nombre</dt><dd>{{ f.nombre || '—' }}</dd>
+                        <dt>Caso (IdCasoBiometria)</dt><dd class="mono">{{ f.idCaso }}</dd>
+                        <dt>Estado del caso</dt><dd>{{ f.estadoCaso || '—' }}</dd>
+                        <dt>Canal</dt><dd>{{ f.idCanal || '—' }}</dd>
+                        <dt>Resultado</dt><dd>{{ f.descripcionResultado || '—' }} <span class="chip chip-ok" *ngIf="f.descripcionResultado">ORQBIOMETRIA</span></dd>
+                        <dt>Código</dt><dd class="mono">{{ f.codigoResultado || '—' }}</dd>
+                        <dt>Estado del resultado</dt><dd>{{ f.estadoResultado || '—' }}</dd>
+                        <dt>Id del resultado</dt><dd class="mono">{{ f.idResultado || '—' }}</dd>
+                        <dt>Último intento del cliente</dt><dd>{{ f.ultimoCaso ? ('Caso ' + f.ultimoCaso + (f.ultimoEstado ? ' · ' + f.ultimoEstado : '')) : '—' }}</dd>
+                      </dl>
+                    </div>
+                    <div>
+                      <h4>Respuesta del servidor de biometría</h4>
+                      <p class="gris" *ngIf="!f.documentoValido">La cédula está vacía o enmascarada: no se puede consultar.</p>
+                      <ng-container *ngIf="f.documentoValido">
+                        <p class="gris" *ngIf="!bioDe(f)">Todavía no se ha consultado esta cédula.</p>
+                        <ng-container *ngIf="bioDe(f) as b">
+                          <section class="resp" [ngClass]="'resp-' + b.nivel">
+                            <div class="resp-titular">
+                              <span class="resp-icono" aria-hidden="true">{{ b.nivel === 'ok' ? '✓' : b.nivel === 'aviso' ? '!' : b.nivel === 'mal' ? '✕' : '–' }}</span>
+                              <div>
+                                <strong>{{ b.titular }}</strong>
+                                <p class="gris resp-meta" *ngIf="b.httpCodigo !== null">Código de respuesta del servicio: {{ b.httpCodigo }}</p>
+                              </div>
+                            </div>
+                            <p class="resp-error" *ngIf="b.error">{{ b.error }}</p>
+                            <p class="resp-resumen" *ngIf="!b.error && b.resumen">{{ b.resumen }}</p>
+                          </section>
+                          <div class="resp-lista" *ngIf="b.filas.length">
+                            <div class="resp-fila" *ngFor="let fr of b.filas" [class.resp-grupo]="fr.grupo" [style.paddingLeft.px]="10 + fr.nivel * 18">
+                              <span class="resp-et">{{ fr.etiqueta }}</span>
+                              <span class="resp-val" *ngIf="fr.valor || !fr.grupo">{{ fr.valor }}</span>
+                            </div>
+                          </div>
+                          <div class="resp-acciones">
+                            <button type="button" class="btn btn-ghost btn-sm" *ngIf="b.cuerpo" (click)="crudoAbierto = !crudoAbierto">{{ crudoAbierto ? '▾ Ocultar' : '▸ Ver' }} la respuesta completa</button>
+                            <button type="button" class="btn btn-ghost btn-sm" *ngIf="b.cuerpo" (click)="copiarRespuesta(b)">{{ copiado ? '✓ Copiado' : 'Copiar respuesta' }}</button>
+                            <button type="button" class="btn btn-ghost btn-sm" *ngIf="comandoBio" (click)="comandoAbierto = !comandoAbierto">{{ comandoAbierto ? '▾ Ocultar' : '▸ Ver' }} el comando ejecutado</button>
+                            <button type="button" class="btn btn-ghost btn-sm" *ngIf="puedeEditar && b.estado !== 'consultando'" (click)="reconsultar(f, $event)" [disabled]="consultandoBio">Consultar de nuevo</button>
+                          </div>
+                          <pre class="crudo" *ngIf="crudoAbierto && b.cuerpo">{{ respuestaCompleta(b) }}</pre>
+                          <pre class="crudo" *ngIf="comandoAbierto && comandoBio">{{ comandoDe(f) }}</pre>
+                        </ng-container>
+                      </ng-container>
+                    </div>
+                  </div>
+                </td>
+              </tr>
+            </ng-template>

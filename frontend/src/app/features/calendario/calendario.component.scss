@@ -1,0 +1,245 @@
+$brand-dark:    var(--ax-text, #1e293b);
+$brand-gray:    var(--ax-text-muted, #64748b);
+$surface-bg:    var(--ax-surface-2, #f8fafc);
+$border-light:  var(--ax-border, #e2e8f0);
+$state-danger:  #ef4444;
+
+* { box-sizing: border-box; }
+:host { display: block; font-family: 'Inter', sans-serif; color: $brand-dark; }
+
+.page-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 20px; gap: 12px; flex-wrap: wrap; }
+.page-header h1 { font-size: 28px; font-weight: 800; margin: 0; letter-spacing: -0.5px; }
+.page-header .subtitle { color: $brand-gray; margin-top: 6px; font-size: 14px; }
+
+.btn {
+  font-family: inherit; display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+  padding: 9px 16px; border-radius: 9px; font-size: 13px; font-weight: 600; text-decoration: none;
+  border: 1px solid $border-light; background: var(--ax-surface, white); color: $brand-gray; cursor: pointer; transition: all 0.15s ease;
+  &:hover { background: $surface-bg; color: $brand-dark; }
+  &:disabled { opacity: 0.55; cursor: default; }
+  &.btn-sm { padding: 6px 12px; font-size: 12px; }
+}
+.btn-primary { background: var(--ax-brand-primary, #673ab7); border-color: var(--ax-brand-primary, #673ab7); color: white; &:hover { opacity: 0.92; color: white; } }
+.btn-outline-purple { color: var(--ax-brand-primary, #673ab7); background: rgba(var(--ax-brand-primary-rgb, 103, 58, 183), 0.08); border-color: transparent; &:hover { background: rgba(var(--ax-brand-primary-rgb, 103, 58, 183), 0.15); } }
+.btn-danger { color: #b91c1c; background: transparent; border-color: transparent; &:hover { background: rgba(220, 38, 38, 0.1); color: #dc2626; } }
+
+.aviso-no-configurado {
+  background: #fffbeb; border: 1px solid #fde68a; border-radius: 14px; padding: 18px 22px; margin-bottom: 18px;
+  h3 { margin: 0 0 6px; font-size: 15px; color: #92400e; }
+  p { margin: 0; font-size: 13.5px; color: #92400e; line-height: 1.6; }
+  code { background: rgba(0,0,0,0.06); padding: 1px 5px; border-radius: 4px; font-size: 12.5px; }
+}
+
+.error-banner { background: #fef2f2; color: $state-danger; border: 1px solid #fecaca; border-radius: 12px; padding: 12px 16px; font-size: 13px; font-weight: 600; margin-bottom: 16px; }
+.carga-inicial, .empty { text-align: center; color: $brand-gray; padding: 40px 0; font-weight: 600; }
+
+// Correos de CalendariosEquipo que no se pudieron leer esta vez (todavía no
+// comparten su calendario, correo mal escrito, etc.) -- mismo tono amber que
+// el aviso de "no configurado", pero más compacto.
+.aviso-calendarios {
+  background: #fffbeb; border: 1px solid #fde68a; border-radius: 12px; padding: 10px 16px; margin-bottom: 16px;
+  p { margin: 0; font-size: 12.5px; color: #92400e; line-height: 1.6; &:not(:last-child) { margin-bottom: 4px; } }
+}
+
+// ---------- Leyendas (arriba de la grilla): la de calendarios reales del
+// equipo y la de sesiones internas agendadas en "AXIS" -- ambas funcionan
+// como filtro clicable ("apagado" = oculto en la grilla ahora mismo). El
+// punto de color se reutiliza también en los checkboxes de "Asignar a". ----------
+.leyenda-equipo { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-bottom: 12px; padding: 10px 14px; background: $surface-bg; border-radius: 12px; }
+.leyenda-titulo { font-size: 10.5px; font-weight: 700; color: $brand-gray; text-transform: uppercase; letter-spacing: 0.4px; margin-right: 2px; }
+.leyenda-item {
+  display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 600; color: $brand-gray;
+  font-family: inherit; background: transparent; border: 1px solid transparent; border-radius: 999px; padding: 4px 10px 4px 8px;
+  cursor: pointer; transition: all 0.15s ease;
+  &:hover { background: var(--ax-surface, white); border-color: $border-light; }
+  &.apagado { opacity: 0.4; .leyenda-punto { filter: grayscale(1); } }
+}
+.leyenda-punto { width: 9px; height: 9px; border-radius: 50%; flex-shrink: 0; display: inline-block; }
+.leyenda-privado { font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.3px; color: $brand-gray; background: rgba(15, 23, 42, 0.06); border-radius: 999px; padding: 1px 6px; margin-left: 2px; }
+.btn-agregar-correo {
+  font-family: inherit; display: inline-flex; align-items: center; font-size: 11.5px; font-weight: 700;
+  color: var(--ax-brand-primary, #673ab7); background: transparent; border: 1px dashed rgba(var(--ax-brand-primary-rgb, 103, 58, 183), 0.4);
+  border-radius: 999px; padding: 4px 10px; cursor: pointer; transition: all 0.15s ease;
+  &:hover { background: rgba(var(--ax-brand-primary-rgb, 103, 58, 183), 0.08); }
+}
+
+// ---------- Navegación de semana / mes ----------
+.cal-nav { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; flex-wrap: wrap; }
+.cal-rango { font-size: 13.5px; font-weight: 700; color: $brand-dark; text-transform: capitalize; margin-left: 6px; }
+.cal-cargando { font-size: 12px; color: $brand-gray; margin-left: auto; }
+
+.cal-vista-toggle {
+  display: inline-flex; margin-left: auto; border: 1px solid $border-light; border-radius: 9px; overflow: hidden;
+  // Cuando cal-cargando también está presente empuja este toggle a la
+  // derecha por su propio margin-left:auto -- así que acá se anula para que
+  // ambos queden pegados al borde derecho en vez de pelear por el espacio.
+  .cal-cargando ~ & { margin-left: 0; }
+  button {
+    font-family: inherit; border: none; background: var(--ax-surface, white); color: $brand-gray; cursor: pointer;
+    padding: 7px 14px; font-size: 12px; font-weight: 700; transition: all 0.15s ease;
+    &:not(:last-child) { border-right: 1px solid $border-light; }
+    &:hover { background: $surface-bg; }
+    &.activo { background: var(--ax-brand-primary, #673ab7); color: white; }
+  }
+}
+
+// ---------- Grilla semanal estilo Google Calendar ----------
+// OJO: 48px acá tiene que coincidir con ALTURA_HORA en el .ts (se usa para
+// calcular top/height de cada evento en píxeles).
+$altura-hora: 34px; // compacto -- ver comentario en calendario.component.ts (ALTURA_HORA)
+$ancho-horas: 52px;
+
+.cal-grid {
+  background: var(--ax-surface, white); border: 1px solid $border-light; border-radius: 14px; overflow: hidden;
+}
+.cal-header-row, .cal-allday-row {
+  display: grid; grid-template-columns: $ancho-horas repeat(7, 1fr);
+}
+.cal-corner, .cal-corner-label { border-bottom: 1px solid $border-light; border-right: 1px solid $border-light; }
+.cal-corner-label { font-size: 10px; color: $brand-gray; display: flex; align-items: center; justify-content: center; padding: 6px 4px; text-align: center; }
+
+.cal-day-header {
+  text-align: center; padding: 8px 4px; border-bottom: 1px solid $border-light; border-right: 1px solid $border-light;
+  &:last-child { border-right: none; }
+  &.hoy { background: rgba(var(--ax-brand-primary-rgb, 103, 58, 183), 0.06); }
+}
+.cal-day-nombre { font-size: 10.5px; font-weight: 700; color: $brand-gray; text-transform: uppercase; letter-spacing: 0.4px; }
+.cal-day-numero { font-size: 16px; font-weight: 800; color: $brand-dark; }
+.cal-day-header.hoy .cal-day-numero { color: var(--ax-brand-primary, #673ab7); }
+
+.cal-allday-cell {
+  border-bottom: 1px solid $border-light; border-right: 1px solid $border-light; padding: 4px; min-height: 28px;
+  display: flex; flex-direction: column; gap: 3px;
+  &:last-child { border-right: none; }
+}
+.cal-chip-miniatura {
+  font-size: 10.5px; font-weight: 600; background: $surface-bg; border-left: 3px solid; border-radius: 4px;
+  padding: 2px 6px; cursor: pointer; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  &:hover { background: var(--ax-border-2, #e2e8f0); }
+}
+
+.cal-body {
+  display: grid; grid-template-columns: $ancho-horas repeat(7, 1fr);
+  max-height: 540px; overflow-y: auto; position: relative;
+}
+.cal-horas { position: relative; }
+.cal-hora {
+  height: $altura-hora; font-size: 10.5px; color: $brand-gray; text-align: right; padding: 0 6px;
+  border-right: 1px solid $border-light; box-sizing: border-box;
+  &:not(:first-child) { border-top: 1px solid $border-light; }
+  // La etiqueta se sube un poco para quedar a la altura de la línea de esa
+  // hora (en vez de centrada dentro del bloque de la hora anterior).
+  display: flex; align-items: flex-start; justify-content: flex-end; transform: translateY(-6px);
+}
+
+.cal-dia-col {
+  position: relative; border-right: 1px solid $border-light;
+  &:last-child { border-right: none; }
+  &.hoy { background: rgba(var(--ax-brand-primary-rgb, 103, 58, 183), 0.03); }
+}
+.cal-hora-linea { height: $altura-hora; border-top: 1px solid $border-light; box-sizing: border-box; &:first-child { border-top: none; } }
+
+.cal-linea-ahora {
+  position: absolute; left: 0; right: 0; height: 2px; background: $state-danger; z-index: 3; pointer-events: none;
+  &::before { content: ''; position: absolute; left: -4px; top: -3px; width: 8px; height: 8px; border-radius: 50%; background: $state-danger; }
+}
+
+// "left" y "width" ya NO son fijos acá -- los pone el binding inline
+// [style.left]/[style.width] del template, calculados por evento en
+// posicionLeft()/anchoEvento() (calendario.component.ts) según con cuántos
+// otros eventos se solapa en el tiempo. Sin eso, dos sesiones a la misma
+// hora quedaban una encima de la otra, ilegibles.
+.cal-evento {
+  position: absolute; border-radius: 6px; border-left: 3px solid; padding: 2px 7px;
+  font-size: 11px; overflow: hidden; cursor: grab; z-index: 2; box-shadow: 0 1px 2px rgba(15, 23, 42, 0.08);
+  transition: box-shadow 0.15s ease, z-index 0.15s ease;
+  strong { display: block; font-size: 11.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  span { display: block; font-size: 10px; color: $brand-gray; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  // Al pasar el mouse se trae al frente (z-index) sobre sus vecinos de columna
+  // -- no cambia de ancho, pero el "title" nativo del navegador (ver
+  // [title] en el template) muestra el nombre completo de un evento angosto.
+  &:hover { box-shadow: 0 4px 10px rgba(15, 23, 42, 0.2); z-index: 5; }
+  &:active { cursor: grabbing; }
+  // 3 o más eventos a la misma hora: columnas muy angostas -- se recorta el
+  // padding y se oculta el rango de horas (span) para que al menos el
+  // título alcance a insinuarse.
+  &.cal-evento--angosto {
+    padding: 2px 4px;
+    strong { font-size: 10.5px; }
+    span { display: none; }
+  }
+}
+
+// De solo lectura (viene del calendario real de alguien, no de "AXIS") -- no
+// se puede arrastrar, así que el cursor no debe insinuar que sí. Se aplica
+// tanto en la grilla semanal (.cal-evento) como en la de mes (.cal-mes-evento).
+.cal-evento--externo, .cal-evento--externo:active { cursor: pointer; }
+
+// ---------- Vista mes ----------
+.cal-mes {
+  background: var(--ax-surface, white); border: 1px solid $border-light; border-radius: 14px; overflow: hidden;
+}
+.cal-mes-header-row { display: grid; grid-template-columns: repeat(7, 1fr); }
+.cal-mes-header-dia {
+  text-align: center; padding: 8px 4px; font-size: 10.5px; font-weight: 700; color: $brand-gray;
+  text-transform: uppercase; letter-spacing: 0.4px; border-bottom: 1px solid $border-light;
+}
+.cal-mes-semana { display: grid; grid-template-columns: repeat(7, 1fr); }
+.cal-mes-dia {
+  min-height: 96px; border-right: 1px solid $border-light; border-bottom: 1px solid $border-light;
+  padding: 6px; display: flex; flex-direction: column; gap: 3px;
+  &:nth-child(7n) { border-right: none; }
+  &.hoy { background: rgba(var(--ax-brand-primary-rgb, 103, 58, 183), 0.05); }
+  &.fuera-de-mes { background: $surface-bg; .cal-mes-dia-numero { color: var(--ax-border-2, #cbd5e1); } }
+}
+.cal-mes-dia-numero { font-size: 12.5px; font-weight: 800; color: $brand-dark; margin-bottom: 2px; }
+.cal-mes-dia.hoy .cal-mes-dia-numero { color: var(--ax-brand-primary, #673ab7); }
+.cal-mes-evento {
+  font-size: 10.5px; font-weight: 600; background: $surface-bg; border-left: 3px solid; border-radius: 4px;
+  padding: 2px 6px; cursor: grab; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  &:hover { background: var(--ax-border-2, #e2e8f0); }
+  &:active { cursor: grabbing; }
+}
+.cal-mes-mas { font-size: 10px; color: $brand-gray; font-weight: 600; padding: 0 2px; }
+
+.evento-asignados { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+.chip-usuario { border-radius: 999px; padding: 3px 10px; font-size: 11px; font-weight: 700; }
+
+.detalle-hora { font-size: 12.5px; font-weight: 700; color: var(--ax-brand-primary, #673ab7); text-transform: capitalize; margin: 0 0 8px; }
+.descripcion { font-size: 13px; color: $brand-dark; margin: 0 0 4px; }
+
+// ---------- Modal ----------
+.overlay { position: fixed; inset: 0; background: rgba(15, 23, 42, 0.55); backdrop-filter: blur(4px); display: flex; align-items: center; justify-content: center; z-index: 9999; padding: 20px; }
+.modal { background: var(--ax-surface, white); border-radius: 18px; width: 100%; max-width: 720px; max-height: 94vh; display: flex; flex-direction: column; box-shadow: 0 25px 50px rgba(0, 0, 0, 0.25); overflow: hidden; }
+.modal-header { padding: 22px 28px 14px; border-bottom: 1px solid $border-light; h2 { margin: 0; font-size: 19px; font-weight: 800; } }
+.modal-body { padding: 18px 28px; overflow-y: auto; flex: 1; }
+.modal-footer { padding: 14px 28px 22px; border-top: 1px solid $border-light; background: $surface-bg; display: flex; justify-content: flex-end; gap: 10px; }
+.modal-footer--detalle { justify-content: flex-start; flex-wrap: wrap; }
+
+.form-label { display: block; margin-bottom: 6px; margin-top: 4px; font-size: 12.5px; color: $brand-gray; font-weight: 600; }
+.form-input {
+  width: 100%; padding: 10px 14px; margin-bottom: 16px; border: 1px solid var(--ax-border-2, #cbd5e1); border-radius: 8px;
+  font-size: 13.5px; color: $brand-dark; font-family: inherit; background: var(--ax-surface, white);
+  &:focus { outline: none; border-color: var(--ax-brand-primary, #673ab7); }
+}
+textarea.form-input { resize: vertical; }
+
+.lista-usuarios { max-height: 180px; overflow-y: auto; border: 1px solid $border-light; border-radius: 10px; padding: 8px 12px; margin-bottom: 8px; }
+.checkbox-row { display: flex; align-items: center; gap: 8px; padding: 5px 0; font-size: 13px; cursor: pointer; }
+
+// ---------- Modal "Calendarios del equipo" (agregar/quitar correos) ----------
+.lista-correos { max-height: 220px; overflow-y: auto; border: 1px solid $border-light; border-radius: 10px; padding: 4px 8px; margin-bottom: 8px; }
+.fila-correo {
+  display: flex; align-items: center; gap: 8px; padding: 7px 4px; font-size: 13px;
+  &:not(:last-child) { border-bottom: 1px solid $border-light; }
+}
+.fila-correo-texto { flex: 1; color: $brand-dark; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.btn-quitar-correo {
+  font-family: inherit; border: none; background: transparent; color: $brand-gray; cursor: pointer;
+  font-size: 13px; padding: 2px 6px; border-radius: 6px; flex-shrink: 0;
+  &:hover { background: rgba(220, 38, 38, 0.1); color: #dc2626; }
+}
+
+.aviso-evento { background: var(--ax-brand-soft, #eef2ff); color: var(--ax-brand-ink, #4338ca); border-radius: 8px; padding: 8px 12px; font-size: 12.5px; margin: 0 0 14px; }
+.separador-o { text-align: center; color: $brand-gray; font-size: 12px; font-weight: 700; text-transform: uppercase; margin: 4px 0 12px; }
+.btn-ancho { width: 100%; }

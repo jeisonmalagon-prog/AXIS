@@ -1,0 +1,4 @@
+@use '../../repositorio/azure/azure-base' as *;
+@use './inicio-comun' as c;
+@include base;
+@include c.inicio-comun;

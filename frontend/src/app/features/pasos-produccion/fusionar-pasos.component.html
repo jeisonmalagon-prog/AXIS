@@ -1,0 +1,31 @@
+<div class="overlay" (click)="cerrar.emit()">
+  <div class="modal modal-ancho" (click)="$event.stopPropagation()">
+    <div class="modal-header">
+      <h2>Fusionar pasos duplicados</h2>
+      <p>Estos pasos tienen el mismo RFC y ambiente: es el mismo paso de producción registrado más de una vez. Elige cuál se conserva; los demás se unen a él y desaparecen.</p>
+    </div>
+    <div class="modal-body">
+      <div class="error-banner" *ngIf="error">{{ error }}</div>
+      <label class="opcion" *ngFor="let o of opciones" [class.elegida]="o.id === conservarId" [class.bloqueada]="!o.puedeConservar && !o.puedeAbsorber">
+        <input type="radio" name="conservar" [value]="o.id" [checked]="o.id === conservarId" (change)="conservarId = o.id" [disabled]="trabajando" />
+        <span class="opcion__cuerpo">
+          <strong>{{ o.titulo }}</strong>
+          <small>RFC {{ o.rfc || '—' }} · {{ o.entorno }} · {{ o.fechaHoraProgramada | date:'d MMM y, HH:mm' }} · {{ etiquetaEstado(o.estado) }}</small>
+          <small>Creado por {{ o.creadoPor }} · Participan: {{ o.participantes || '—' }}</small>
+        </span>
+        <span class="etq etq--completa" *ngIf="o.id === conservarId">Se conserva</span>
+        <span class="etq etq--pend" *ngIf="o.id !== conservarId">Se une al otro</span>
+      </label>
+
+      <div class="aviso-banner" *ngIf="impedimento">{{ impedimento }}</div>
+      <div class="info-banner" *ngIf="!impedimento && conservado">
+        <strong>«{{ conservado.titulo }}»</strong> queda como un solo paso con las personas de todos (quien lo creó, ejecutó o participaba), el checklist (los ítems iguales se unifican y conservan su evidencia), las evidencias, los servicios, los accesos compartidos y el historial.
+        Esta acción no se puede deshacer.
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button type="button" class="btn" (click)="cerrar.emit()" [disabled]="trabajando">Cancelar</button>
+      <button type="button" class="btn btn-primary" [disabled]="!!impedimento || trabajando" (click)="fusionar()">{{ trabajando ? 'Fusionando…' : 'Fusionar en un solo paso' }}</button>
+    </div>
+  </div>
+</div>

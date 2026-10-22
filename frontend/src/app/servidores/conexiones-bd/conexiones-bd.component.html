@@ -1,0 +1,126 @@
+<div class="conexiones-container">
+  <div class="header-section">
+    <div>
+      <a class="volver" routerLink="/servidores">← Volver al inventario</a>
+      <h1>Conexiones a Base de Datos</h1>
+      <p>Relaciona cada sub-aplicativo con el servidor de base de datos al que se conecta</p>
+    </div>
+
+    <div class="header-actions">
+      <div class="search-box">
+        <input type="text" [(ngModel)]="terminoBusqueda" placeholder="Buscar servidor, sub-aplicativo, motor o base..." />
+      </div>
+    </div>
+  </div>
+
+  <div class="empty-state text-center py-4" *ngIf="loading">Cargando conexiones…</div>
+
+  <ng-container *ngIf="!loading">
+    <div class="servidor-grupo" *ngFor="let s of gruposFiltrados">
+      <div class="servidor-grupo-header">
+        <h2>{{ s.hostname }}</h2>
+        <code>{{ s.ip }}</code>
+      </div>
+
+      <div class="aplicativos-grid">
+        <div class="aplicativo-card" *ngFor="let app of s.aplicativos">
+          <div class="aplicativo-card-header">
+            <strong>{{ app.nombre_aplicacion }}</strong>
+            <span class="badge" *ngIf="app.criticidad" [ngClass]="'criticidad-' + app.criticidad.toLowerCase()">{{ app.criticidad }}</span>
+          </div>
+
+          <div class="conexiones-lista" *ngIf="app.conexionesBd.length; else sinConexiones">
+            <div class="conexion-chip" *ngFor="let c of app.conexionesBd">
+              <div class="conexion-chip-info">
+                <span class="conexion-icono">🗄</span>
+                <div>
+                  <div class="conexion-destino">{{ c.servidor_bd_hostname }} <code>{{ c.servidor_bd_ip }}</code></div>
+                  <div class="conexion-detalle">
+                    {{ c.motor_bd }} · {{ c.nombre_base_datos }}<span *ngIf="c.esquema">.{{ c.esquema }}</span><span *ngIf="c.puerto"> :{{ c.puerto }}</span>
+                  </div>
+                  <div class="conexion-usuario" *ngIf="c.usuario_servicio">👤 {{ c.usuario_servicio }}</div>
+                </div>
+              </div>
+              <div class="conexion-chip-acciones" *ngIf="puedeEditar">
+                <button class="btn-icon edit" title="Editar conexión" (click)="abrirEditarConexion(app, c, s.hostname)">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="icon-svg"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>
+                </button>
+                <button class="btn-icon delete" title="Quitar conexión" (click)="eliminarConexion(c.id)">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="icon-svg"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
+                </button>
+              </div>
+            </div>
+          </div>
+          <ng-template #sinConexiones>
+            <p class="sin-conexiones">Sin conexiones BD registradas.</p>
+          </ng-template>
+
+          <button *ngIf="puedeEditar" class="btn-agregar-conexion" (click)="abrirAgregarConexion(app, s.hostname)">+ Conexión BD</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="empty-state text-center py-4" *ngIf="!gruposFiltrados.length">
+      <ng-container *ngIf="terminoBusqueda">No se encontraron resultados para tu búsqueda.</ng-container>
+      <ng-container *ngIf="!terminoBusqueda">Todavía no hay sub-aplicativos registrados individualmente en ningún servidor.</ng-container>
+    </div>
+  </ng-container>
+</div>
+
+<!-- MODAL: agregar / editar conexión BD -->
+<div class="modal-overlay" *ngIf="mostrarModal" (click)="cerrarModal()">
+  <div class="modal-content" (click)="$event.stopPropagation()">
+    <header class="detail-header">
+      <h2>{{ modoEdicion ? 'Editar conexión BD' : 'Nueva conexión BD' }}</h2>
+      <button class="btn-close" (click)="cerrarModal()">✕</button>
+    </header>
+
+    <div class="modal-subaplicativo" *ngIf="aplicativoActual">
+      <span class="chip-subaplicativo">🧩 {{ aplicativoActual.nombre_aplicacion }}</span>
+      <span class="modal-subaplicativo-host" *ngIf="servidorActualHostname">alojado en <strong>{{ servidorActualHostname }}</strong></span>
+    </div>
+
+    <div class="form-group">
+      <label>Servidor de Base de Datos *</label>
+      <select [(ngModel)]="conexionActual.servidor_bd_id">
+        <option [ngValue]="null">— Selecciona un servidor del inventario —</option>
+        <option *ngFor="let sv of servidoresParaSeleccionar" [ngValue]="sv.id">{{ sv.hostname }} ({{ sv.ip }})</option>
+      </select>
+      <p class="ayuda">Si el servidor que aloja la base de datos todavía no existe, regístralo primero en el Inventario de Servidores.</p>
+    </div>
+
+    <div class="form-row">
+      <div class="form-group">
+        <label>Motor de BD *</label>
+        <select [(ngModel)]="conexionActual.motor_bd">
+          <option *ngFor="let m of motoresDisponibles" [value]="m">{{ m }}</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Puerto</label>
+        <input type="number" [(ngModel)]="conexionActual.puerto" placeholder="Ej: 3306">
+      </div>
+    </div>
+
+    <div class="form-row">
+      <div class="form-group">
+        <label>Nombre de la Base de Datos *</label>
+        <input type="text" [(ngModel)]="conexionActual.nombre_base_datos" placeholder="Ej: DocumentosDB">
+      </div>
+      <div class="form-group">
+        <label>Esquema</label>
+        <input type="text" [(ngModel)]="conexionActual.esquema" placeholder="Ej: dbo">
+      </div>
+    </div>
+
+    <div class="form-group">
+      <label>Usuario de servicio</label>
+      <input type="text" [(ngModel)]="conexionActual.usuario_servicio" placeholder="Ej: svc_docmanager">
+    </div>
+
+    <div class="modal-actions">
+      <button class="btn-secondary" (click)="cerrarModal()">Cancelar</button>
+      <button class="btn-primary" (click)="guardarConexion()">Guardar</button>
+    </div>
+  </div>
+</div>

@@ -1,0 +1,263 @@
+$brand-light: var(--ax-brand-soft, #ede9fe);
+$brand-dark: var(--ax-text, #1e293b);
+$border-light: var(--ax-border, #e2e8f0);
+
+* { box-sizing: border-box; }
+
+.impacto-container {
+  max-width: 1100px;
+  margin: 0 auto;
+}
+
+.header-section {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 24px;
+  flex-wrap: wrap;
+  gap: 12px;
+
+  h1 { font-size: 24px; font-weight: 800; color: $brand-dark; margin: 4px 0 0 0; }
+  p { font-size: 14px; color: var(--ax-text-muted, #64748b); margin: 4px 0 0 0; }
+}
+
+.volver {
+  font-size: 12.5px;
+  font-weight: 700;
+  color: var(--ax-brand-primary, #673ab7);
+  text-decoration: none;
+  &:hover { text-decoration: underline; }
+}
+
+.header-actions {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  flex-wrap: wrap;
+
+  input, select {
+    padding: 10px 14px;
+    border: 1px solid $border-light;
+    border-radius: 8px;
+    font-size: 14px;
+    font-family: inherit;
+    background: var(--ax-surface, #fff);
+    &:focus { outline: none; border-color: var(--ax-brand-primary, #673ab7); }
+  }
+  input { width: 240px; max-width: 60vw; }
+  select { min-width: 280px; max-width: 80vw; }
+}
+
+// ==========================================
+// OBJETIVO DEL ANALISIS
+// ==========================================
+.objetivo {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 16px;
+  background: var(--ax-surface, #fff);
+  border: 1px solid $border-light;
+  border-left: 5px solid var(--ax-brand-primary, #673ab7);
+  border-radius: 14px;
+  padding: 18px 22px;
+  margin-bottom: 18px;
+
+  h2 { margin: 8px 0 2px 0; font-size: 22px; font-weight: 800; color: $brand-dark; }
+  code {
+    font-family: monospace;
+    font-size: 13px;
+    background: var(--ax-surface-2, #f1f5f9);
+    padding: 3px 8px;
+    border-radius: 6px;
+    color: var(--ax-text, #0f172a);
+  }
+}
+
+.criticidad-global {
+  text-align: right;
+  label {
+    display: block;
+    font-size: 11px;
+    text-transform: uppercase;
+    font-weight: 700;
+    color: #94a3b8;
+    margin-bottom: 6px;
+  }
+}
+
+// ==========================================
+// RESUMEN
+// ==========================================
+.resumen {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  gap: 14px;
+  margin-bottom: 24px;
+}
+
+.tarjeta-resumen {
+  background: var(--ax-surface, #fff);
+  border: 1px solid $border-light;
+  border-radius: 14px;
+  padding: 16px 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+
+  strong { font-size: 30px; font-weight: 800; color: $brand-dark; line-height: 1; }
+  span { font-size: 12.5px; color: var(--ax-text-muted, #64748b); font-weight: 600; }
+
+  // Solo se pinta cuando el número es distinto de cero: así el color señala
+  // dónde hay que mirar, en vez de ser decorativo.
+  &.alerta {
+    border-color: #fca5a5;
+    background: #fef2f2;
+    strong { color: #b91c1c; }
+  }
+}
+
+// ==========================================
+// BLOQUES
+// ==========================================
+.bloque {
+  background: var(--ax-surface, #fff);
+  border: 1px solid $border-light;
+  border-radius: 14px;
+  padding: 18px 22px;
+  margin-bottom: 16px;
+
+  h3 {
+    margin: 0;
+    font-size: 15px;
+    font-weight: 800;
+    color: $brand-dark;
+
+    &.peligro { color: #b91c1c; }
+  }
+}
+
+.explica {
+  margin: 4px 0 14px 0;
+  font-size: 12.5px;
+  color: var(--ax-text-muted, #64748b);
+}
+
+.lista {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.fila {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: var(--ax-surface-2, #f8fafc);
+  font-size: 13.5px;
+  color: $brand-dark;
+
+  strong { color: $brand-dark; }
+  code {
+    font-family: monospace;
+    font-size: 12px;
+    background: #e2e8f0;
+    padding: 2px 6px;
+    border-radius: 5px;
+    color: var(--ax-text, #0f172a);
+  }
+}
+
+.detalle-bd {
+  margin-top: 4px;
+  font-size: 12.5px;
+  color: var(--ax-text-muted, #64748b);
+}
+
+.text-gray { color: var(--ax-text-muted, #64748b); }
+
+.vacio {
+  margin: 0;
+  font-size: 13px;
+  color: #94a3b8;
+  font-style: italic;
+}
+
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.chip-negocio {
+  background: #fef3c7;
+  color: #92400e;
+  font-size: 12.5px;
+  font-weight: 700;
+  padding: 6px 12px;
+  border-radius: 999px;
+}
+
+// ==========================================
+// BADGES
+// ==========================================
+.badge {
+  display: inline-block;
+  padding: 3px 9px;
+  border-radius: 999px;
+  font-size: 10.5px;
+  font-weight: 700;
+  white-space: nowrap;
+  background: var(--ax-surface-2, #f1f5f9);
+  color: var(--ax-text-muted, #475569);
+
+  &.grande { font-size: 14px; padding: 7px 18px; }
+
+  &.criticidad-alta { background: #fee2e2; color: #b91c1c; }
+  &.criticidad-media { background: #fef9c3; color: #a16207; }
+  &.criticidad-baja { background: #dcfce7; color: #15803d; }
+  &.criticidad-nd { background: var(--ax-surface-2, #f1f5f9); color: var(--ax-text-muted, #64748b); }
+
+  &.activo { background: #dcfce7; color: #15803d; }
+  &.inactivo { background: #fee2e2; color: #b91c1c; }
+  &.mantenimiento { background: #fef9c3; color: #a16207; }
+
+  &.vencido { background: #fee2e2; color: #b91c1c; }
+  &.por-vencer { background: #fef9c3; color: #a16207; }
+}
+
+.badge-env { background: $brand-light; color: var(--ax-brand-primary, #673ab7); }
+.badge-plataforma { background: $brand-light; color: var(--ax-brand-ink, #6d28d9); }
+
+.empty-state {
+  color: var(--ax-text-muted, #64748b);
+  padding: 50px 0;
+  text-align: center;
+  font-weight: 500;
+  background: var(--ax-surface, #fff);
+  border: 1px solid $border-light;
+  border-radius: 16px;
+}
+
+.nota-final {
+  font-size: 13px;
+  color: var(--ax-text-muted, #64748b);
+  background: var(--ax-surface-2, #f8fafc);
+  border: 1px dashed $border-light;
+  border-radius: 12px;
+  padding: 14px 18px;
+}
+
+.py-4 { padding-top: 16px; padding-bottom: 16px; }
+.text-center { text-align: center; }
+
+@media (max-width: 700px) {
+  .header-section { flex-direction: column; }
+  .header-actions { width: 100%; input, select { width: 100%; max-width: none; } }
+  .objetivo { flex-direction: column; align-items: flex-start; }
+  .criticidad-global { text-align: left; }
+}

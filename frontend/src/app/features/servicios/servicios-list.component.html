@@ -1,0 +1,344 @@
+<header class="page-header">
+  <div>
+    <h1>Servicios</h1>
+    <p class="subtitle">Inventario de servicios del {{ etiquetaBus }} por ambiente — {{ cantidadPorTipo(tipoActivo) }} servicios {{ tipoActivo }} cargados</p>
+  </div>
+
+  <div class="header-actions">
+    <div class="search-box">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <circle cx="11" cy="11" r="8"></circle>
+        <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+      </svg>
+      <input type="text" [(ngModel)]="terminoBusqueda" placeholder="Buscar servicio, código o POD..." />
+    </div>
+
+    <div class="select-box">
+      <select [(ngModel)]="filtroPod">
+        <option value="Todos">Todos los PODs</option>
+        <option *ngFor="let pod of podsDisponibles" [value]="pod">{{ pod }}</option>
+      </select>
+    </div>
+
+    <div class="select-box">
+      <select [(ngModel)]="orden" (ngModelChange)="ordenarServicios()" title="Ordenar servicios">
+        <option *ngFor="let o of opcionesOrden" [value]="o.valor">{{ o.etiqueta }}</option>
+      </select>
+    </div>
+
+    <button type="button" class="btn btn-probar" (click)="abrirConsola()" [title]="'Elegir un servicio ' + tipoActivo + ' y consumirlo, con sus peticiones guardadas'">▶ Probar {{ tipoActivo }}</button>
+    <button type="button" class="btn" (click)="exportar()" [disabled]="!serviciosFiltrados.length" title="Descargar en CSV (Excel) lo que estás viendo, con el filtro y orden actuales">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2M7 10l5 5 5-5M12 15V3" /></svg>
+      Exportar
+    </button>
+    <button *ngIf="puedeEditar && busActivo === 'BUS10'" class="btn" type="button" (click)="abrirImportacion()" title="Cargar de una vez las URLs del BUS 10 pegándolas desde Excel">Importar BUS 10</button>
+    <button *ngIf="puedeEditar" class="btn btn-primary" type="button" (click)="abrirFormulario()">+ Nuevo servicio</button>
+  </div>
+</header>
+
+<div class="empty" *ngIf="cargando">Cargando inventario…</div>
+
+<div class="selectores" *ngIf="!cargando">
+  <!-- Bus: las URLs por ambiente son distintas; el request y los datos del servicio se comparten -->
+  <div class="tipo-tabs" role="tablist" aria-label="Bus de integración">
+    <button
+      *ngFor="let b of buses"
+      type="button"
+      role="tab"
+      class="tipo-tab"
+      [class.tipo-tab--activo]="busActivo === b.id"
+      [attr.aria-selected]="busActivo === b.id"
+      (click)="seleccionarBus(b.id)"
+    >
+      {{ b.etiqueta }}
+      <span class="tipo-tab-cuenta">{{ cantidadPorBus(b.id) }}</span>
+    </button>
+  </div>
+
+  <!-- División por tipo de servicio: SOAP / REST -->
+  <div class="tipo-tabs" role="tablist" aria-label="Tipo de servicio">
+    <button
+      *ngFor="let t of tipos"
+      type="button"
+      role="tab"
+      class="tipo-tab"
+      [class.tipo-tab--activo]="tipoActivo === t"
+      [attr.aria-selected]="tipoActivo === t"
+      (click)="seleccionarTipo(t)"
+    >
+      {{ t }}
+      <span class="tipo-tab-cuenta">{{ cantidadPorTipo(t) }}</span>
+    </button>
+  </div>
+</div>
+
+<div class="table-card" *ngIf="!cargando">
+  <table *ngIf="serviciosFiltrados.length; else vacio">
+    <thead>
+      <tr>
+        <th>Código</th>
+        <th>Servicio</th>
+        <th>POD</th>
+        <th>Ambientes</th>
+        <th>Peticiones</th>
+        <th></th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr *ngFor="let s of serviciosFiltrados" (click)="abrirDetalle(s)" class="fila-clickeable">
+        <td class="mono">{{ s.Codigo }}</td>
+        <td class="font-bold">{{ s.NombreServicio }}</td>
+        <td>{{ s.Pod || '—' }}</td>
+        <td>
+          <div class="ambientes-tags">
+            <ng-container *ngIf="urlsDe(s) as u">
+              <span class="tag-chip tag-dev" *ngIf="u.dev">DEV</span>
+              <span class="tag-chip tag-qa" *ngIf="u.qa">QA</span>
+              <span class="tag-chip tag-prd" *ngIf="u.prd">PRD</span>
+              <span class="sin-url" *ngIf="!u.dev && !u.qa && !u.prd">—</span>
+            </ng-container>
+          </div>
+        </td>
+        <td class="col-request">
+          <button type="button" class="chip-request" *ngIf="numPeticiones(s); else sinPeticiones" (click)="abrirPrueba(s, $event)"
+            [title]="'Peticiones guardadas (una por operación). Clic para abrirlas en «Probar»'">
+            {{ numPeticiones(s) }} {{ numPeticiones(s) === 1 ? 'petición' : 'peticiones' }}
+          </button>
+          <ng-template #sinPeticiones><span class="sin-url" title="Se guardan desde «Probar»: carga el WSDL o proyecto SoapUI y guarda las operaciones">—</span></ng-template>
+        </td>
+        <td class="col-probar">
+          <button type="button" class="chip-probar" title="Probar este servicio" (click)="abrirPrueba(s, $event)">▶ Probar</button>
+        </td>
+      </tr>
+    </tbody>
+  </table>
+
+  <ng-template #vacio>
+    <div class="empty">
+      <ng-container *ngIf="cantidadPorTipo(tipoActivo) === 0; else sinCoincidencias">
+        Todavía no hay servicios {{ tipoActivo }} registrados en el {{ etiquetaBus }}<ng-container *ngIf="puedeEditar">. Usa «+ Nuevo servicio»<ng-container *ngIf="busActivo === 'BUS10'"> o «Importar BUS 10»</ng-container> para agregarlos</ng-container>.
+      </ng-container>
+      <ng-template #sinCoincidencias>
+        No se encontraron servicios {{ tipoActivo }} del {{ etiquetaBus }} que coincidan con tu búsqueda o filtro.
+      </ng-template>
+    </div>
+  </ng-template>
+</div>
+
+<!-- PANEL DE DETALLE -->
+<div class="overlay" *ngIf="detalle" (click)="cerrarDetalle()">
+  <div class="modal detalle-modal" (click)="$event.stopPropagation()">
+    <div class="modal-header">
+      <div class="modal-header-info">
+        <span class="servicio-avatar">{{ (detalle.NombreServicio || '?').charAt(0) | uppercase }}</span>
+        <div>
+          <h2>{{ detalle.NombreServicio }}</h2>
+          <p class="detalle-subtitulo">
+            <span class="mono">{{ detalle.Codigo }}</span>
+            <span class="separador">·</span>
+            <span class="tipo-badge" [class.tipo-badge--rest]="detalle.Tipo === 'REST'">{{ detalle.Tipo === 'REST' ? 'REST' : 'SOAP' }}</span>
+            <span class="separador">·</span>
+            <span class="bus-badge">{{ etiquetaBus }}</span>
+            <span class="separador">·</span>
+            POD <strong>{{ detalle.Pod || 'sin asignar' }}</strong>
+          </p>
+        </div>
+      </div>
+      <button class="btn-close" (click)="cerrarDetalle()" type="button">✕</button>
+    </div>
+
+    <div class="modal-body">
+      <p class="detalle-nota">URLs por ambiente en el {{ etiquetaBus }} — clic para copiar</p>
+      <div class="url-lista" *ngIf="ambientesDelDetalle.length; else sinUrls">
+        <div
+          class="url-fila"
+          *ngFor="let amb of ambientesDelDetalle"
+          [class.url-fila--copiada]="urlCopiada === amb.url"
+          role="button"
+          tabindex="0"
+          [attr.aria-label]="'Copiar URL de ' + amb.etiqueta"
+          (click)="copiarUrl(amb.url, $event)"
+          (keydown.enter)="copiarUrl(amb.url, $event)"
+          (keydown.space)="copiarUrl(amb.url, $event)"
+        >
+          <span class="tag-chip" [ngClass]="amb.claseTag">{{ amb.etiqueta }}</span>
+          <span class="url-texto mono">{{ amb.url }}</span>
+          <span class="url-accion">
+            <ng-container *ngIf="urlCopiada === amb.url; else copiarIcono">✓ Copiado</ng-container>
+            <ng-template #copiarIcono>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <rect x="9" y="9" width="13" height="13" rx="2"></rect>
+                <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+              </svg>
+            </ng-template>
+          </span>
+          <button type="button" class="url-abrir" title="Abrir en una pestaña nueva" (click)="abrirUrl(amb.url, $event)">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path>
+              <polyline points="15 3 21 3 21 9"></polyline>
+              <line x1="10" y1="14" x2="21" y2="3"></line>
+            </svg>
+          </button>
+        </div>
+      </div>
+      <ng-template #sinUrls>
+        <p class="detalle-vacio">Este servicio no tiene URLs registradas en el {{ etiquetaBus }}.</p>
+      </ng-template>
+      <p class="detalle-vacio" *ngIf="otroBusDelDetalle as otro">
+        También tiene URLs en el {{ otro.etiqueta }}.
+        <button type="button" class="enlace-bus" (click)="verEnOtroBus(otro.id)">Ver {{ otro.etiqueta }}</button>
+      </p>
+
+      <div class="request-bloque">
+        <div class="request-encabezado">
+          <p class="detalle-nota">Peticiones guardadas <span class="chip-request-tipo" *ngIf="peticiones.length">{{ peticiones.length }}</span> (una por operación)</p>
+          <div class="export-postman" *ngIf="puedeExportarPostman">
+            <select class="form-input form-input--chico" [(ngModel)]="ambienteExport" *ngIf="ambientesDelDetalle.length" aria-label="URL de la colección" title="URL que llevarán las peticiones que no traen una propia">
+              <option *ngFor="let a of ambientesDelDetalle" [value]="a.clave">{{ a.etiqueta }}</option>
+              <option value="">Sin URL ({{ '{{url}}' }})</option>
+            </select>
+            <button type="button" class="btn btn-sm btn-primary" (click)="exportarPostman()" title="Descargar las peticiones como colección de Postman">⬇ Colección Postman</button>
+          </div>
+        </div>
+        <p class="archivo-error" *ngIf="!peticionesDisponibles">{{ peticionesMensaje }}</p>
+        <p class="archivo-error" *ngIf="peticionesDisponibles && peticionesMensaje">{{ peticionesMensaje }}</p>
+        <p class="detalle-vacio" *ngIf="cargandoPeticiones">Cargando peticiones…</p>
+        <ul class="peticiones-lista" *ngIf="peticiones.length">
+          <li *ngFor="let p of peticiones">
+            <span class="pet-verbo">{{ p.Metodo }}</span>
+            <span class="pet-nombre" [title]="p.Nombre">{{ p.Nombre }}</span>
+            <span class="archivo-meta">{{ tipoCuerpo(p.Cuerpo) }}<ng-container *ngIf="p.Url"> · con URL propia</ng-container></span>
+            <button type="button" class="btn btn-sm" (click)="copiarPeticion(p, $event)">{{ peticionCopiada === p.Id ? '✓ Copiado' : 'Copiar cuerpo' }}</button>
+            <button type="button" class="btn btn-sm btn-danger" (click)="eliminarPeticion(p, $event)" title="Eliminar tu petición guardada">Eliminar</button>
+          </li>
+        </ul>
+        <div class="peticion-legado" *ngIf="!peticiones.length && detalle.RequestEjemplo">
+          <p class="detalle-vacio">Request guardado antes (sin nombre de operación). Ábrelo en «Probar» y usa «Guardar» para pasarlo a peticiones.</p>
+          <pre class="request-codigo">{{ detalle.RequestEjemplo }}</pre>
+        </div>
+        <p class="detalle-vacio" *ngIf="!cargandoPeticiones && peticionesDisponibles && !peticiones.length && !detalle.RequestEjemplo">
+          Todavía no tienes peticiones guardadas en este servicio (las peticiones guardadas son personales: cada usuario ve solo las suyas). Se guardan desde «▶ Probar este servicio»: carga el WSDL o el proyecto de SoapUI, elige las operaciones que quieras conservar y guárdalas.
+        </p>
+      </div>
+
+      <div class="archivos-bloque">
+        <div class="request-encabezado">
+          <p class="detalle-nota">Documentos adjuntos (opcional) — {{ detalle.Tipo === 'REST' ? 'colección u OpenAPI original' : 'proyecto SoapUI o WSDL original' }}</p>
+          <label class="btn btn-sm archivo-subir" *ngIf="puedeEditar && archivosDisponibles" [class.deshabilitado]="subiendoArchivo">
+            {{ subiendoArchivo ? 'Subiendo…' : '+ Subir archivo' }}
+            <input type="file" [accept]="extensionesArchivo" (change)="elegirArchivo($event)" [disabled]="subiendoArchivo" hidden />
+          </label>
+        </div>
+        <p class="detalle-vacio archivo-ayuda" *ngIf="archivosDisponibles">{{ ayudaArchivo }}</p>
+        <p class="archivo-error" *ngIf="errorArchivo">{{ errorArchivo }}</p>
+        <p class="archivo-error" *ngIf="!archivosDisponibles">{{ archivosMensaje }}</p>
+        <p class="detalle-vacio" *ngIf="cargandoArchivos">Cargando archivos…</p>
+        <ul class="archivos-lista" *ngIf="archivos.length">
+          <li *ngFor="let a of archivos">
+            <span class="archivo-clase">{{ a.ClaseEtiqueta }}</span>
+            <span class="archivo-nombre" [title]="a.NombreOriginal">{{ a.NombreOriginal }}</span>
+            <span class="archivo-meta">{{ formatoTamano(a.TamanoBytes) }} · {{ a.SubidoPorNombre || '—' }} · {{ a.FechaSubida | date: 'dd/MM/yyyy' }}</span>
+            <button type="button" class="btn btn-sm btn-primary" (click)="descargarArchivo(a)" [disabled]="descargandoArchivo !== null">{{ descargandoArchivo === a.Id ? 'Descargando…' : 'Descargar' }}</button>
+            <button type="button" class="btn btn-sm btn-danger" *ngIf="puedeEditar" (click)="eliminarArchivo(a)">Eliminar</button>
+          </li>
+        </ul>
+        <p class="detalle-vacio" *ngIf="!cargandoArchivos && archivosDisponibles && !archivos.length && !errorArchivo">Sin documentos adjuntos. No son necesarios para consumir el servicio.</p>
+      </div>
+    </div>
+
+    <div class="modal-footer">
+      <button *ngIf="puedeEditar" class="btn btn-danger" type="button" (click)="eliminar(detalle)">Eliminar</button>
+      <button *ngIf="puedeProbarDetalle" class="btn btn-probar" type="button" (click)="abrirPrueba()">▶ Probar este servicio</button>
+      <button *ngIf="puedeEditar" class="btn btn-primary" type="button" (click)="editarDesdeDetalle()">Editar</button>
+      <button class="btn" type="button" (click)="cerrarDetalle()">Cerrar</button>
+    </div>
+  </div>
+</div>
+
+<!-- FORMULARIO DE ALTA / EDICIÓN -->
+<div class="overlay" *ngIf="mostrarForm" (click)="cerrarFormulario()">
+  <div class="modal servicio-form-modal" (click)="$event.stopPropagation()">
+    <div class="modal-header">
+      <h2>{{ editando ? 'Editar servicio' : 'Nuevo servicio' }}</h2>
+      <button class="btn-close" type="button" (click)="cerrarFormulario()">✕</button>
+    </div>
+
+    <div class="modal-body">
+      <label class="form-label">Tipo de servicio</label>
+      <select class="form-input" [(ngModel)]="form.Tipo">
+        <option value="SOAP">SOAP</option>
+        <option value="REST">REST</option>
+      </select>
+
+      <label class="form-label">Código</label>
+      <input class="form-input mono" [(ngModel)]="form.Codigo" placeholder="Ej. C165" />
+
+      <label class="form-label">Nombre del servicio *</label>
+      <input class="form-input" [(ngModel)]="form.NombreServicio" placeholder="Ej. NuevoServicioMng" />
+
+      <label class="form-label">POD</label>
+      <input class="form-input" [(ngModel)]="form.Pod" placeholder="Ej. producto" list="pods-sugeridos" />
+      <datalist id="pods-sugeridos">
+        <option *ngFor="let pod of podsDisponibles" [value]="pod"></option>
+      </datalist>
+
+      <div class="form-grupo-urls" *ngFor="let g of gruposUrlsForm; trackBy: trackGrupo">
+        <p class="form-grupo-titulo">{{ g.titulo }}</p>
+        <ng-container *ngFor="let c of g.campos">
+          <label class="form-label">{{ c.etiqueta }}</label>
+          <input class="form-input mono" [(ngModel)]="form[c.campo]" placeholder="https://..." />
+        </ng-container>
+      </div>
+
+      <p class="form-nota" *ngIf="editando">Las peticiones de este servicio (una por operación) se guardan desde «▶ Probar», y se ven en el detalle del servicio.</p>
+    </div>
+
+    <div class="modal-footer">
+      <button class="btn" type="button" (click)="cerrarFormulario()">Cancelar</button>
+      <button class="btn btn-primary" type="button" [disabled]="guardando" (click)="guardar()">
+        {{ guardando ? 'Guardando…' : 'Guardar' }}
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- IMPORTAR URLs DEL BUS 10 -->
+<div class="overlay" *ngIf="mostrarImport" (click)="cerrarImportacion()">
+  <div class="modal servicio-form-modal" (click)="$event.stopPropagation()">
+    <div class="modal-header">
+      <h2>Importar URLs del BUS 10 ({{ tipoActivo }})</h2>
+      <button class="btn-close" type="button" (click)="cerrarImportacion()">✕</button>
+    </div>
+
+    <div class="modal-body">
+      <p class="detalle-nota">
+        Pega desde Excel una fila por servicio con las columnas <strong>Código, Servicio, URL DEV, URL QA, URL PRD</strong> (de las URLs del BUS 10).
+        Si el servicio ya existe (mismo código) solo se completan sus URLs del BUS 10 y se conserva su request; si no existe, se crea.
+      </p>
+      <textarea
+        class="form-input form-textarea mono"
+        rows="10"
+        spellcheck="false"
+        [(ngModel)]="textoImport"
+        placeholder="C001&#9;NombreServicioMng&#9;https://dev...&#9;https://qa...&#9;https://prd..."
+      ></textarea>
+      <p class="import-resumen" *ngIf="textoImport.trim()">{{ filasImport.length }} fila(s) con URL listas para importar.</p>
+
+      <div class="import-error" *ngIf="errorImport">{{ errorImport }}</div>
+      <div class="import-ok" *ngIf="resultadoImport as r">
+        Importación terminada: {{ r.actualizados }} actualizado(s), {{ r.creados }} creado(s), {{ r.sinCambios }} sin cambios, {{ r.omitidos }} omitido(s).
+        <ul *ngIf="r.errores.length"><li *ngFor="let e of r.errores">{{ e }}</li></ul>
+      </div>
+    </div>
+
+    <div class="modal-footer">
+      <button class="btn" type="button" (click)="cerrarImportacion()">{{ resultadoImport ? 'Cerrar' : 'Cancelar' }}</button>
+      <button class="btn btn-primary" type="button" [disabled]="importando || !filasImport.length" (click)="importar()">
+        {{ importando ? 'Importando…' : 'Importar' }}
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- CONSOLA PROBAR SERVICIO -->
+<app-probar-servicio *ngIf="consolaAbierta" [servicios]="servicios" [servicioInicial]="consolaServicio" [tipoInicial]="tipoActivo" (cerrar)="cerrarConsola()"></app-probar-servicio>

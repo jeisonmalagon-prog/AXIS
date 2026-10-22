@@ -1,0 +1,35 @@
+<div class="wiki-container">
+  <div class="empty-state text-center py-4" *ngIf="cargandoArbol">Cargando wiki…</div>
+  <div class="error-state" *ngIf="!cargandoArbol && errorArbol"><app-ico n="alerta"></app-ico>{{ errorArbol }}</div>
+
+  <div class="wiki-layout" *ngIf="!cargandoArbol && !errorArbol">
+    <nav class="wiki-arbol">
+      <p class="wiki-arbol-titulo">{{ nombreWiki }}</p>
+      <p class="vacio-carpeta" *ngIf="!paginas.length">Este wiki no tiene páginas todavía.</p>
+      <a
+        *ngFor="let pagina of paginas"
+        class="wiki-item"
+        [class.activo]="pathActivo === pagina.path"
+        [style.paddingLeft.px]="16 + pagina.nivel * 16"
+        (click)="abrirPagina(pagina.path)"
+      >{{ pagina.nombre }}</a>
+    </nav>
+
+    <section class="wiki-contenido">
+      <div class="empty-state text-center py-4" *ngIf="cargandoContenido">Cargando página…</div>
+      <div class="error-state" *ngIf="!cargandoContenido && errorContenido"><app-ico n="alerta"></app-ico>{{ errorContenido }}</div>
+
+      <ng-container *ngIf="!cargandoContenido && !errorContenido && contenido">
+        <header class="wiki-contenido-header">
+          <h2>{{ contenido.titulo }}</h2>
+          <a [href]="contenido.url" target="_blank" rel="noopener" class="ver-en-azure">Ver en Azure DevOps<app-ico n="externo" class="fin"></app-ico></a>
+        </header>
+        <div class="wiki-markdown" [innerHTML]="contenidoHtml"></div>
+      </ng-container>
+
+      <p class="vacio-carpeta" *ngIf="!cargandoContenido && !errorContenido && !contenido">
+        Selecciona una página del panel izquierdo.
+      </p>
+    </section>
+  </div>
+</div>

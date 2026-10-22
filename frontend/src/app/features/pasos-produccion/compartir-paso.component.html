@@ -1,0 +1,54 @@
+<div class="overlay" (click)="cerrar.emit()">
+  <div class="modal modal-chico" (click)="$event.stopPropagation()">
+    <div class="modal-header">
+      <h2>Compartir paso</h2>
+      <p>{{ titulo }}</p>
+    </div>
+    <div class="modal-body">
+      <div class="error-banner" *ngIf="error">{{ error }}</div>
+      <div class="info-banner" *ngIf="info">{{ info }}</div>
+      <div class="carga-inicial" *ngIf="cargando">Cargando…</div>
+
+      <ng-container *ngIf="datos">
+        <section class="bloque">
+          <h3>Participan en este paso</h3>
+          <div class="chips"><span class="chip" *ngFor="let p of datos.participantes">{{ p.nombre }}</span></div>
+          <p class="gris-bloque" style="margin-top: 8px">Es un solo paso: aparece en la bitácora de cada participante sin copiarse.</p>
+        </section>
+
+        <section class="bloque" *ngIf="datos.accesos.length">
+          <h3>Compartido con</h3>
+          <div class="fila-acceso" *ngFor="let a of datos.accesos">
+            <div class="quien"><strong>{{ a.usuario }}</strong><small>{{ a.estado === 'PENDIENTE' ? 'Esperando que acepte' : 'Tiene acceso' }}</small></div>
+            <select [ngModel]="a.permiso" [name]="'cp-' + a.id" (ngModelChange)="cambiarPermiso(a, $event)" *ngIf="datos.puedeCompartir">
+              <option value="LECTURA">Solo lectura</option>
+              <option value="EDICION">Puede editar</option>
+            </select>
+            <span class="etq" *ngIf="!datos.puedeCompartir">{{ etiquetaPermiso(a.permiso) }}</span>
+            <button type="button" class="btn btn-sm btn-peligro" *ngIf="datos.puedeCompartir" (click)="quitar(a)">Quitar</button>
+          </div>
+        </section>
+
+        <section class="bloque" *ngIf="datos.puedeCompartir">
+          <h3>Compartir con</h3>
+          <app-selector-personas [personas]="candidatos" [equipos]="equipos" [(seleccion)]="ids" placeholder="Buscar persona…"></app-selector-personas>
+          <div class="fila-accion">
+            <select class="grow" [(ngModel)]="equipoId" name="cp-equipo">
+              <option [ngValue]="null">…o con todo un equipo (opcional)</option>
+              <option *ngFor="let e of equipos" [ngValue]="e.id">{{ e.nombre }} ({{ e.miembros.length }})</option>
+            </select>
+            <select [(ngModel)]="permiso" name="cp-permiso">
+              <option value="LECTURA">Solo lectura</option>
+              <option value="EDICION">Puede editar</option>
+            </select>
+          </div>
+        </section>
+        <p class="gris" *ngIf="!datos.puedeCompartir">Solo quienes participan en el paso (o un administrador) pueden compartirlo.</p>
+      </ng-container>
+    </div>
+    <div class="modal-footer">
+      <button type="button" class="btn" (click)="cerrar.emit()">Cerrar</button>
+      <button type="button" class="btn btn-primary" *ngIf="datos?.puedeCompartir" [disabled]="!puedeEnviar || trabajando" (click)="enviar()">{{ trabajando ? 'Enviando…' : 'Compartir' }}</button>
+    </div>
+  </div>
+</div>

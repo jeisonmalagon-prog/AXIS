@@ -1,0 +1,93 @@
+<header class="page-header">
+  <div>
+    <h1>Bitácora de Apuntamientos</h1>
+    <p class="subtitle">
+      Qué aplicación (y sus nodos) apunta a qué servicio — {{ apuntamientos.length }} apuntamientos en {{ gruposAplicacion.length }} aplicaciones
+    </p>
+  </div>
+
+  <div class="header-actions">
+    <div class="search-box">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <circle cx="11" cy="11" r="8"></circle>
+        <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+      </svg>
+      <input type="text" [(ngModel)]="terminoBusqueda" placeholder="Buscar aplicación o nodo..." />
+    </div>
+    <button *ngIf="puedeEditar" type="button" class="btn btn-primary" (click)="abrirAgregarAplicacion()">+ Agregar aplicación</button>
+  </div>
+</header>
+
+<div class="empty" *ngIf="cargando">Cargando bitácora…</div>
+
+<ng-container *ngIf="!cargando">
+  <div class="grupos-grid" *ngIf="gruposFiltrados.length; else sinRegistros">
+    <div class="grupo-card" *ngFor="let g of gruposFiltrados" (click)="abrirAplicacion(g)">
+      <div class="grupo-card-header">
+        <h3>{{ g.aplicacionNombre }}</h3>
+        <span class="grupo-total">{{ g.total }} {{ g.total === 1 ? 'apuntamiento' : 'apuntamientos' }}</span>
+      </div>
+
+      <p class="grupo-fecha" *ngIf="g.ultimaActualizacion">Última actualización: {{ formatearFecha(g.ultimaActualizacion) }}</p>
+
+      <div class="grupo-card-nodos" *ngIf="g.nodos.length">
+        <span class="nodos-label">Nodos</span>
+        <div class="nodos-lista">
+          <div class="nodo-item" *ngFor="let n of g.nodos">
+            <div class="nodo-item-header">
+              <span class="nodo-nombre">{{ n.etiqueta }}</span>
+              <span class="nodo-total">{{ n.cantidad }}</span>
+            </div>
+            <div class="nodo-item-stats">
+              <span class="tag-chip tag-ace" *ngIf="n.countAce">{{ n.countAce }} ACE</span>
+              <span class="tag-chip tag-bus" *ngIf="n.countBus">{{ n.countBus }} Bus de Integración 10</span>
+              <span class="tag-chip tag-sin" *ngIf="n.countSin">{{ n.countSin }} sin apuntamiento</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="grupo-card-footer">
+        <span class="ver-mas">Ver apuntamientos →</span>
+      </div>
+    </div>
+  </div>
+
+  <ng-template #sinRegistros>
+    <div class="empty" *ngIf="terminoBusqueda">No se encontraron aplicaciones que coincidan con tu búsqueda.</div>
+    <div class="empty" *ngIf="!terminoBusqueda">
+      Todavía no hay ninguna aplicación registrada en la Bitácora.
+      <ng-container *ngIf="puedeEditar"> Usa "+ Agregar aplicación" para empezar.</ng-container>
+    </div>
+  </ng-template>
+</ng-container>
+
+<!-- MODAL: "+ Agregar aplicación" — elegir explícitamente cuál aplicación
+     empezar a registrar (no se cierra con clic afuera, solo con la X o
+     "Cancelar", igual que los demás formularios de este módulo). -->
+<div class="overlay" *ngIf="mostrarAgregar">
+  <div class="modal form-modal-chico">
+    <div class="modal-header">
+      <h2>Agregar aplicación</h2>
+      <button class="btn-close" type="button" (click)="cerrarAgregarAplicacion()">✕</button>
+    </div>
+
+    <div class="modal-body">
+      <p class="ayuda ayuda--destacada" style="margin-top: 0;">
+        Elige la aplicación que quieres empezar a registrar en la Bitácora. Vas a entrar a su detalle para crear el primer apuntamiento.
+      </p>
+
+      <label class="form-label">Aplicación</label>
+      <select class="form-input" [(ngModel)]="aplicacionSeleccionadaParaAgregar">
+        <option [ngValue]="null">Selecciona una aplicación...</option>
+        <option *ngFor="let app of aplicacionesDisponiblesParaAgregar" [ngValue]="app.id || app.Id">{{ app.nombre || app.Nombre }}</option>
+      </select>
+      <p class="ayuda" *ngIf="!aplicacionesDisponiblesParaAgregar.length">Todas las aplicaciones registradas ya tienen una tarjeta en la Bitácora.</p>
+    </div>
+
+    <div class="modal-footer">
+      <button class="btn" type="button" (click)="cerrarAgregarAplicacion()">Cancelar</button>
+      <button class="btn btn-primary" type="button" [disabled]="!aplicacionSeleccionadaParaAgregar" (click)="confirmarAgregarAplicacion()">Continuar</button>
+    </div>
+  </div>
+</div>

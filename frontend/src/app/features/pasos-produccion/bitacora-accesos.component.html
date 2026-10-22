@@ -1,0 +1,151 @@
+<div class="overlay" (click)="cerrar.emit()">
+  <div class="modal modal-ancho" (click)="$event.stopPropagation()">
+    <div class="modal-header">
+      <h2>Accesos a la bitácora</h2>
+      <p>Cada persona tiene su bitácora (pasos de aplicaciones y del BUS). Nadie ve la tuya si no se lo compartes o apruebas; tú decides si ve todo o solo un paso.</p>
+    </div>
+    <div class="modal-body">
+      <div class="error-banner" *ngIf="error">{{ error }}</div>
+      <div class="info-banner" *ngIf="info">{{ info }}</div>
+      <div class="carga-inicial" *ngIf="cargando">Cargando…</div>
+
+      <ng-container *ngIf="datos">
+        <!-- 1. Me ofrecen -->
+        <section class="bloque" *ngIf="datos.porAceptar.length">
+          <h3>Por aceptar <span class="contador">{{ datos.porAceptar.length }}</span></h3>
+          <div class="fila-acceso destacada" *ngFor="let a of datos.porAceptar; trackBy: trackAcceso">
+            <div class="quien">
+              <strong>{{ a.propietario }} quiere compartir contigo {{ alcance(a) }}</strong>
+              <small>{{ etiquetaPermiso(a.permiso) }}</small>
+            </div>
+            <button type="button" class="btn btn-sm btn-ok" [disabled]="!!trabajando" (click)="aceptar(a, true)">Aceptar</button>
+            <button type="button" class="btn btn-sm btn-peligro" [disabled]="!!trabajando" (click)="aceptar(a, false)">Rechazar</button>
+          </div>
+        </section>
+
+        <!-- 2. Piden ver lo mío -->
+        <section class="bloque" *ngIf="datos.solicitudesPorResponder.length">
+          <h3>Solicitudes a tu bitácora <span class="contador">{{ datos.solicitudesPorResponder.length }}</span></h3>
+          <div class="fila-acceso destacada" *ngFor="let a of datos.solicitudesPorResponder; trackBy: trackAcceso">
+            <div class="quien">
+              <strong>{{ a.usuario }} pide ver {{ alcance(a) }}</strong>
+              <small>Elige qué podrá hacer si apruebas.</small>
+            </div>
+            <select [(ngModel)]="permisos[a.id]" [name]="'perm-sol-' + a.id" [disabled]="!!trabajando">
+              <option value="LECTURA">Solo lectura</option>
+              <option value="EDICION">Puede editar</option>
+            </select>
+            <button type="button" class="btn btn-sm btn-ok" [disabled]="!!trabajando" (click)="aprobar(a, true)">Aprobar</button>
+            <button type="button" class="btn btn-sm btn-peligro" [disabled]="!!trabajando" (click)="aprobar(a, false)">Rechazar</button>
+          </div>
+        </section>
+
+        <!-- 3. Compartir -->
+        <section class="bloque">
+          <h3>Compartir mi bitácora completa</h3>
+          <p class="gris-bloque">Elige personas o un equipo entero. Cada una recibe un aviso y debe aceptar. Para compartir un solo paso, usa el botón «Compartir» dentro del paso.</p>
+          <app-selector-personas [personas]="personas" [equipos]="equipos" [(seleccion)]="compartirIds" placeholder="Buscar persona para compartir…"></app-selector-personas>
+          <div class="fila-accion">
+            <select class="grow" [(ngModel)]="compartirEquipo" name="comp-equipo">
+              <option [ngValue]="null">…o compartir con todo un equipo (opcional)</option>
+              <option *ngFor="let e of equipos" [ngValue]="e.id">{{ e.nombre }} ({{ e.miembros.length }})</option>
+            </select>
+            <select [(ngModel)]="compartirPermiso" name="comp-permiso">
+              <option value="LECTURA">Solo lectura</option>
+              <option value="EDICION">Puede editar</option>
+            </select>
+            <button type="button" class="btn btn-primary" [disabled]="!puedeCompartir || !!trabajando" (click)="compartirCompleta()">{{ trabajando === 'compartir' ? 'Enviando…' : 'Compartir' }}</button>
+          </div>
+        </section>
+
+        <!-- 4. Quién ve lo mío -->
+        <section class="bloque">
+          <h3>Quién ve lo mío</h3>
+          <div class="gris" *ngIf="!datos.conAcceso.length && !datos.enviadosPendientes.length">Nadie más ve tu bitácora todavía (salvo quienes participan en tus pasos y los administradores).</div>
+          <div class="fila-acceso" *ngFor="let a of datos.conAcceso; trackBy: trackAcceso">
+            <div class="quien">
+              <strong>{{ a.usuario }}</strong>
+              <small>{{ alcance(a) }} · {{ nombreOrigen(a) }}</small>
+            </div>
+            <span class="etq" [class.etq--paso]="a.alcance === 'PASO'" [class.etq--completa]="a.alcance === 'COMPLETA'">{{ a.alcance === 'PASO' ? 'Paso' : 'Completa' }}</span>
+            <select [ngModel]="a.permiso" [name]="'perm-' + a.id" (ngModelChange)="cambiarPermiso(a, $event)" [disabled]="!!trabajando">
+              <option value="LECTURA">Solo lectura</option>
+              <option value="EDICION">Puede editar</option>
+            </select>
+            <button type="button" class="btn btn-sm btn-peligro" [disabled]="!!trabajando" (click)="quitar(a)">Quitar</button>
+          </div>
+          <div class="fila-acceso" *ngFor="let a of datos.enviadosPendientes; trackBy: trackAcceso">
+            <div class="quien">
+              <strong>{{ a.usuario }}</strong>
+              <small>{{ alcance(a) }} · esperando que acepte</small>
+            </div>
+            <span class="etq etq--pend">Pendiente</span>
+            <button type="button" class="btn btn-sm" [disabled]="!!trabajando" (click)="quitar(a, 'Cancelaste el ofrecimiento.')">Cancelar</button>
+          </div>
+        </section>
+
+        <!-- 5. Pedir acceso -->
+        <section class="bloque">
+          <h3>Pedir acceso a otra bitácora</h3>
+          <p class="gris-bloque">Pide a una o varias personas —o a todo un equipo— que te dejen ver su bitácora. Cada persona decide si aprueba y con qué permiso.</p>
+          <app-selector-personas [personas]="personas" [equipos]="equipos" [(seleccion)]="pedirIds" placeholder="Buscar persona a quien pedirle acceso…"></app-selector-personas>
+          <div class="fila-accion">
+            <select class="grow" [(ngModel)]="pedirEquipo" name="pedir-equipo">
+              <option [ngValue]="null">…o pedir a todo un equipo (opcional)</option>
+              <option *ngFor="let e of equipos" [ngValue]="e.id">{{ e.nombre }} ({{ e.miembros.length }})</option>
+            </select>
+            <button type="button" class="btn btn-primary" [disabled]="!puedePedir || !!trabajando" (click)="solicitar()">{{ trabajando === 'pedir' ? 'Enviando…' : 'Solicitar acceso' }}</button>
+          </div>
+          <div *ngIf="datos.misSolicitudes.length" style="margin-top: 12px">
+            <div class="gris-bloque" style="margin-bottom: 6px"><strong>Mis solicitudes</strong></div>
+            <div class="fila-acceso" *ngFor="let a of datos.misSolicitudes; trackBy: trackAcceso">
+              <div class="quien"><strong>{{ a.propietario }}</strong><small>{{ alcance(a) }}</small></div>
+              <span class="etq etq--pend" *ngIf="a.estado === 'PENDIENTE'">Pendiente</span>
+              <span class="rechazada" *ngIf="a.estado === 'RECHAZADA'">Rechazada</span>
+              <button type="button" class="btn btn-sm" *ngIf="a.estado === 'PENDIENTE'" [disabled]="!!trabajando" (click)="quitar(a, 'Cancelaste la solicitud.')">Cancelar</button>
+            </div>
+          </div>
+        </section>
+
+        <!-- 6. Lo que puedo ver -->
+        <section class="bloque" *ngIf="datos.recibidos.length">
+          <h3>Bitácoras que puedo ver</h3>
+          <div class="fila-acceso" *ngFor="let a of datos.recibidos; trackBy: trackAcceso">
+            <div class="quien"><strong>{{ a.propietario }}</strong><small>{{ alcance(a) }}</small></div>
+            <span class="etq">{{ etiquetaPermiso(a.permiso) }}</span>
+            <button type="button" class="btn btn-sm" [disabled]="!!trabajando" (click)="quitar(a, 'Dejaste de ver ese contenido.')">Dejar de ver</button>
+          </div>
+        </section>
+
+        <!-- 7. Administrador -->
+        <section class="bloque bloque-admin" *ngIf="datos.esAdmin">
+          <h3>Administración <span class="etq-admin">ADMIN_POD</span></h3>
+          <p class="gris-bloque">Como administrador ves todas las bitácoras (sin editar pasos ajenos) y decides quién ve cuál. El acceso que otorgas aquí es inmediato.</p>
+          <div class="fila-accion">
+            <select class="grow" [(ngModel)]="adminPropietario" name="adm-prop">
+              <option [ngValue]="null">Bitácora de…</option>
+              <option *ngFor="let p of personasTodas" [ngValue]="p.id">{{ nombrePersona(p) }}</option>
+            </select>
+            <select [(ngModel)]="adminPermiso" name="adm-permiso">
+              <option value="LECTURA">Solo lectura</option>
+              <option value="EDICION">Puede editar</option>
+            </select>
+          </div>
+          <div style="margin-top: 8px"><app-selector-personas [personas]="personasTodas" [(seleccion)]="adminIds" placeholder="Buscar quién podrá verla…"></app-selector-personas></div>
+          <div class="fila-accion"><button type="button" class="btn btn-primary" [disabled]="!adminPropietario || !adminIds.length || !!trabajando" (click)="darAcceso()">Dar acceso</button></div>
+
+          <div style="margin-top: 14px" *ngIf="datos.todos.length">
+            <div class="gris-bloque" style="margin-bottom: 6px"><strong>Todos los accesos ({{ datos.todos.length }})</strong></div>
+            <div class="fila-acceso" *ngFor="let a of datos.todos; trackBy: trackAcceso">
+              <div class="quien"><strong>{{ a.usuario }} ← {{ a.propietario }}</strong><small>{{ alcance(a) }} · {{ nombreOrigen(a) }}</small></div>
+              <span class="etq etq--pend" *ngIf="a.estado === 'PENDIENTE'">Pendiente</span>
+              <span class="etq">{{ etiquetaPermiso(a.permiso) }}</span>
+              <button type="button" class="btn btn-sm btn-peligro" [disabled]="!!trabajando" (click)="quitar(a)">Quitar</button>
+            </div>
+          </div>
+        </section>
+      </ng-container>
+    </div>
+    <div class="modal-footer"><button type="button" class="btn" (click)="cerrar.emit()">Cerrar</button></div>
+  </div>
+</div>

@@ -1,0 +1,13 @@
+<div class="bar-list" *ngIf="itemsCalculados.length; else sinDatosTpl">
+  <div class="bar-list-fila" *ngFor="let item of itemsCalculados" [style.grid-template-columns]="'120px 1fr ' + anchoValor">
+    <span class="bar-list-nombre" [title]="item.nombre">{{ item.nombre }}</span>
+    <span class="bar-list-pista">
+      <span class="bar-list-barra" [style.width.%]="item.porcentajeAncho" [style.background]="colorVar"></span>
+    </span>
+    <span class="bar-list-valor">{{ item.texto ?? item.total }}</span>
+  </div>
+</div>
+
+<ng-template #sinDatosTpl>
+  <div class="bar-list-vacio">Sin registros críticos en este periodo.</div>
+</ng-template>

@@ -1,0 +1,157 @@
+<div class="barra">
+  <div class="selector-dias" role="group" aria-label="Periodo">
+    <button type="button" *ngFor="let d of opcionesDias" [class.activo]="dias === d" (click)="cambiarDias(d)">{{ d }} días</button>
+  </div>
+  <span class="gris" *ngIf="datos">{{ datos.organizacion }} / {{ datos.proyecto }} · rama <code class="sha">{{ datos.rama }}</code></span>
+  <span class="espacio"></span>
+  <button type="button" class="btn btn-ghost btn-sm" (click)="actualizar()" [disabled]="cargando"><app-ico n="refrescar"></app-ico>Actualizar</button>
+</div>
+
+<div class="cargando" *ngIf="cargando && !datos"><div class="spinner"></div>Leyendo datos de Azure DevOps…</div>
+<app-azure-fallo [fallo]="fallo"></app-azure-fallo>
+
+<div class="contenido" *ngIf="datos">
+  <!-- Repositorio -->
+  <div class="kpis kpis-6">
+    <div class="kpi"><span class="kpi-et">Tamaño</span><span class="kpi-v">{{ datos.info?.datos ? fmtBytes(datos.info.datos.tamanoBytes) : '—' }}</span><span class="kpi-s">{{ datos.repo }}</span></div>
+    <div class="kpi kpi-click" (click)="irA.emit('ramas')"><span class="kpi-et">Ramas</span><span class="kpi-v">{{ datos.ramas?.datos ?? '—' }}</span><span class="kpi-s">Ver ramas y tags</span></div>
+    <div class="kpi kpi-click" (click)="irA.emit('ramas')"><span class="kpi-et">Tags</span><span class="kpi-v">{{ datos.tags?.datos ?? '—' }}</span><span class="kpi-s">Versiones etiquetadas</span></div>
+    <div class="kpi kpi-click" (click)="irA.emit('equipo')"><span class="kpi-et">Equipos</span><span class="kpi-v">{{ datos.equipos?.datos ?? '—' }}</span><span class="kpi-s">Del proyecto</span></div>
+    <div class="kpi"><span class="kpi-et">Commits ({{ dias }} d)</span><span class="kpi-v">{{ datos.commits?.datos ? fmtNum(datos.commits.datos.estadisticas.total) : '—' }}</span><span class="kpi-s" *ngIf="datos.commits?.datos">{{ fmtDec(datos.commits.datos.estadisticas.promedioPorDia) }} por día</span></div>
+    <div class="kpi kpi-click" (click)="irA.emit('pull-requests')"><span class="kpi-et">PRs activos</span><span class="kpi-v">{{ datos.prs?.datos ? datos.prs.datos.estadisticas.porEstado.active : '—' }}</span><span class="kpi-s" *ngIf="datos.prs?.datos">{{ datos.prs.datos.estadisticas.activosAntiguos }} con más de 7 días</span></div>
+  </div>
+
+  <!-- Código -->
+  <div class="grilla g-2-1">
+    <section class="tarjeta">
+      <div class="tarjeta-cab"><h2>Actividad de commits</h2><span class="tarjeta-sub">Por día, rama {{ datos.rama }}</span></div>
+      <app-azure-fallo [fallo]="datos.commits?.error ? datos.commits : null"></app-azure-fallo>
+      <ng-container *ngIf="datos.commits?.datos as cm">
+        <app-line-chart [etiquetas]="commitsEtq" [series]="commitsSeries"></app-line-chart>
+        <p class="gris pie" *ngIf="cm.estadisticas.horaPico !== null">
+          Día más activo: <strong>{{ cm.estadisticas.diaSemanaPico }}</strong> · hora pico <strong>{{ horaTexto(cm.estadisticas.horaPico) }}</strong> · {{ cm.estadisticas.diasActivos }} días con actividad
+        </p>
+      </ng-container>
+    </section>
+    <section class="tarjeta">
+      <div class="tarjeta-cab"><h2>Quién aporta</h2><span class="tarjeta-sub">Commits por autor</span></div>
+      <app-bar-list *ngIf="autores.length" [items]="autores"></app-bar-list>
+      <p class="vacio" *ngIf="!autores.length">Sin commits en el periodo.</p>
+    </section>
+  </div>
+
+  <div class="grilla g-1-1" *ngIf="datos.commits?.datos as cm">
+    <section class="tarjeta">
+      <div class="tarjeta-cab"><h2>Cuándo se trabaja</h2><span class="tarjeta-sub">Día de la semana × hora (hora Colombia)</span></div>
+      <app-heatmap [filas]="heatFilas" [columnas]="colAutores" [valores]="heatVals" unidad="commits"></app-heatmap>
+    </section>
+    <section class="tarjeta">
+      <div class="tarjeta-cab"><h2>Últimos commits</h2><button type="button" class="btn-mini" (click)="irA.emit('commits')">Ver todos</button></div>
+      <ul class="lista">
+        <li class="item-lista" *ngFor="let c of cm.recientes">
+          <div class="il-cab"><code class="sha">{{ c.idCorto }}</code><strong class="cortar">{{ c.comentario || '(sin mensaje)' }}</strong></div>
+          <div class="il-sub"><span>{{ c.autor }}</span><span>{{ fmtRelativo(c.fecha) }}</span><span class="chip" *ngIf="c.esMerge">merge</span></div>
+        </li>
+      </ul>
+    </section>
+  </div>
+
+  <!-- Pull requests -->
+  <div class="grilla g-2-1">
+    <section class="tarjeta">
+      <div class="tarjeta-cab"><h2>Pull requests</h2><span class="tarjeta-sub">Creados vs completados por semana</span></div>
+      <app-azure-fallo [fallo]="datos.prs?.error ? datos.prs : null"></app-azure-fallo>
+      <ng-container *ngIf="datos.prs?.datos as pr">
+        <div class="kpis kpis-4-mini">
+          <div class="kpi"><span class="kpi-et">Ciclo mediano</span><span class="kpi-v">{{ pr.estadisticas.cicloHoras.p50 !== null ? pr.estadisticas.cicloHoras.p50 + ' h' : '—' }}</span><span class="kpi-s">p90: {{ pr.estadisticas.cicloHoras.p90 !== null ? pr.estadisticas.cicloHoras.p90 + ' h' : '—' }}</span></div>
+          <div class="kpi"><span class="kpi-et">Completados</span><span class="kpi-v">{{ fmtPct(pr.estadisticas.tasaCompletados) }}</span><span class="kpi-s">vs abandonados</span></div>
+          <div class="kpi"><span class="kpi-et">Sin revisor</span><span class="kpi-v" [class.t-aviso]="pr.estadisticas.activosSinRevisor > 0">{{ pr.estadisticas.activosSinRevisor }}</span><span class="kpi-s">PRs activos</span></div>
+          <div class="kpi"><span class="kpi-et">Con conflictos</span><span class="kpi-v" [class.t-mal]="pr.estadisticas.conConflictos > 0">{{ pr.estadisticas.conConflictos }}</span><span class="kpi-s">PRs activos</span></div>
+        </div>
+        <app-stacked-bar-chart [etiquetas]="prsEtq" [series]="prsSeries" [alto]="170" unidad="PRs"></app-stacked-bar-chart>
+      </ng-container>
+    </section>
+    <section class="tarjeta">
+      <div class="tarjeta-cab"><h2>PRs activos</h2><button type="button" class="btn-mini" (click)="irA.emit('pull-requests')">Ver todos</button></div>
+      <ul class="lista" *ngIf="datos.prs?.datos as pr">
+        <li class="item-lista" *ngFor="let p of pr.activos">
+          <div class="il-cab"><span class="chip">#{{ p.id }}</span><strong class="cortar">{{ p.titulo }}</strong><span class="chip chip-marca" *ngIf="p.esBorrador">borrador</span></div>
+          <div class="il-sub"><span>{{ p.autor }}</span><span>{{ p.ramaOrigen }}<app-ico n="derecha" class="sep"></app-ico>{{ p.ramaDestino }}</span><span>{{ p.resumenRevision.aprobados }}/{{ p.resumenRevision.total }} aprobaciones</span></div>
+        </li>
+        <li class="vacio" *ngIf="!pr.activos.length">No hay PRs abiertos.</li>
+      </ul>
+    </section>
+  </div>
+
+  <!-- Pipelines -->
+  <section class="tarjeta">
+    <div class="tarjeta-cab"><h2>Pipelines</h2><span class="tarjeta-sub">Builds del proyecto (todos los repositorios)</span></div>
+    <app-azure-fallo [fallo]="datos.builds?.error ? datos.builds : null"></app-azure-fallo>
+    <ng-container *ngIf="datos.builds?.datos as bd">
+      <div class="kpis kpis-5">
+        <div class="kpi"><span class="kpi-et">Ejecuciones</span><span class="kpi-v">{{ fmtNum(bd.estadisticas.total) }}</span></div>
+        <div class="kpi"><span class="kpi-et">Tasa de éxito</span><span class="kpi-v" [ngClass]="'t-' + claseTasa(bd.estadisticas.tasaExito)">{{ fmtPct(bd.estadisticas.tasaExito) }}</span></div>
+        <div class="kpi"><span class="kpi-et">Duración mediana</span><span class="kpi-v">{{ fmtDuracion(bd.estadisticas.duracionMs.p50) }}</span><span class="kpi-s">p95: {{ fmtDuracion(bd.estadisticas.duracionMs.p95) }}</span></div>
+        <div class="kpi"><span class="kpi-et">Espera en cola</span><span class="kpi-v">{{ fmtDuracion(bd.estadisticas.esperaMs.p50) }}</span><span class="kpi-s">mediana</span></div>
+        <div class="kpi kpi-click" (click)="irA.emit('pipelines')"><span class="kpi-et">Fallidos</span><span class="kpi-v" [class.t-mal]="bd.estadisticas.grupos.fallido > 0">{{ bd.estadisticas.grupos.fallido }}</span><span class="kpi-s">Ver ejecuciones</span></div>
+      </div>
+      <div class="grilla g-2-1">
+        <app-stacked-bar-chart [etiquetas]="buildsEtq" [series]="buildsSeries" [alto]="180" unidad="ejecuciones"></app-stacked-bar-chart>
+        <div class="tabla-wrap">
+          <table class="tabla">
+            <thead><tr><th>Pipeline</th><th class="num">Éxito</th><th>Último</th></tr></thead>
+            <tbody>
+              <tr *ngFor="let df of bd.estadisticas.porDefinicion.slice(0, 7)">
+                <td class="td-nombre">{{ df.nombre }} <span class="chip chip-media" *ngIf="df.inestable" title="Alterna entre éxito y fallo">inestable</span></td>
+                <td class="num"><span [ngClass]="'t-' + claseTasa(df.tasaExito)">{{ fmtPct(df.tasaExito) }}</span></td>
+                <td><span class="est" [ngClass]="'est-' + claseGrupo(df.ultimo?.grupo)">{{ textoGrupo(df.ultimo?.grupo) }}</span></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </ng-container>
+  </section>
+
+  <!-- Releases y Boards -->
+  <div class="grilla g-1-1">
+    <section class="tarjeta">
+      <div class="tarjeta-cab"><h2>Releases</h2><button type="button" class="btn-mini" (click)="irA.emit('releases')">Ver releases</button></div>
+      <app-azure-fallo [fallo]="datos.releases?.error ? datos.releases : null"></app-azure-fallo>
+      <ng-container *ngIf="datos.releases?.datos as rl">
+        <p class="gris pie"><strong>{{ rl.estadisticas.total }}</strong> releases recientes.</p>
+        <div class="tabla-wrap">
+          <table class="tabla">
+            <thead><tr><th>Ambiente</th><th class="num">Exitosos</th><th class="num">Fallidos</th><th class="num">Éxito</th></tr></thead>
+            <tbody>
+              <tr *ngFor="let a of rl.estadisticas.porAmbiente"><td>{{ a.nombre }}</td><td class="num">{{ a.exitosos }}</td><td class="num">{{ a.fallidos }}</td><td class="num">{{ fmtPct(a.tasaExito) }}</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <ul class="lista" style="margin-top: 12px">
+          <li class="item-lista" *ngFor="let r of rl.recientes">
+            <div class="il-cab"><strong>{{ r.nombre }}</strong><span class="chip">{{ r.definicion }}</span></div>
+            <div class="il-sub"><span>{{ r.autor }}</span><span>{{ fmtRelativo(r.creado) }}</span></div>
+          </li>
+        </ul>
+      </ng-container>
+    </section>
+    <section class="tarjeta">
+      <div class="tarjeta-cab"><h2>Boards</h2><button type="button" class="btn-mini" (click)="irA.emit('boards')">Ver work items</button></div>
+      <app-azure-fallo [fallo]="datos.workItems?.error ? datos.workItems : null"></app-azure-fallo>
+      <ng-container *ngIf="datos.workItems?.datos as wi">
+        <div class="kpis kpis-4-mini">
+          <div class="kpi"><span class="kpi-et">Abiertos</span><span class="kpi-v">{{ wi.estadisticas.abiertos }}</span><span class="kpi-s">de {{ wi.estadisticas.total }}</span></div>
+          <div class="kpi"><span class="kpi-et">Sin asignar</span><span class="kpi-v" [class.t-aviso]="wi.estadisticas.sinAsignar > 0">{{ wi.estadisticas.sinAsignar }}</span></div>
+          <div class="kpi"><span class="kpi-et">Lead time</span><span class="kpi-v">{{ wi.estadisticas.leadTimeDias.p50 !== null ? wi.estadisticas.leadTimeDias.p50 + ' d' : '—' }}</span><span class="kpi-s">mediana</span></div>
+          <div class="kpi"><span class="kpi-et">Antiguos</span><span class="kpi-v" [class.t-aviso]="wi.estadisticas.antiguosMas30Dias > 0">{{ wi.estadisticas.antiguosMas30Dias }}</span><span class="kpi-s">&gt; 30 días</span></div>
+        </div>
+        <div class="grilla g-1-1">
+          <app-donut-chart [segmentos]="wiEstados" centroEtiqueta="Items"></app-donut-chart>
+          <app-bar-list [items]="wiTipos"></app-bar-list>
+        </div>
+        <app-line-chart [etiquetas]="wiEtq" [series]="wiSeries"></app-line-chart>
+      </ng-container>
+    </section>
+  </div>
+</div>

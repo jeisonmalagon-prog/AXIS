@@ -1,0 +1,196 @@
+<header class="cab">
+  <div>
+    <h1>Catálogo de datos</h1>
+    <p class="sub">Busca tablas y columnas en todas tus bases, consulta su diccionario y recorre sus relaciones. Solo lee los catálogos del sistema de cada servidor, con tus propias credenciales: tu catálogo y tu mapa estelar son solo tuyos.</p>
+  </div>
+  <div class="cab-acciones" *ngIf="resumen">
+    <span class="estado-cat" *ngIf="hayOrigenes" [title]="ultimaActualizacion() ? 'Última lectura: ' + ultimaActualizacion() : ''">
+      {{ resumen.totales.bases }} base(s) · {{ resumen.totales.tablas | number }} tabla(s) · {{ resumen.totales.vistas | number }} vista(s)
+    </span>
+    <button type="button" class="btn btn-ghost btn-sm" *ngIf="puedeEditar && hayOrigenes" [disabled]="actualizando || resumen.cargando" (click)="actualizar()" title="Vuelve a leer los servidores (puede tardar unos minutos)">
+      {{ resumen.cargando ? 'Leyendo…' : 'Actualizar' }}
+    </button>
+    <button type="button" class="btn btn-ghost btn-sm" *ngIf="resumen.tablaOrigenes && hayOrigenes" (click)="mostrarCredenciales = true"
+            title="Tu usuario y tu clave de cada motor: con ellos se arma tu catálogo y tu mapa estelar (nadie más los usa)">
+      Mis credenciales<span class="cred-pto" [class.ok]="!motoresSinCredenciales" aria-hidden="true"></span>
+    </button>
+    <button type="button" class="btn btn-purple btn-sm" *ngIf="hayOrigenes" (click)="abrirQueries()" title="Repositorio de queries, constructor guiado y asistente de IA">Queries</button>
+    <button type="button" class="btn btn-ghost btn-sm" *ngIf="puedeEditar" (click)="mostrarOrigenes = true" title="Tus servidores y bases: cada persona registra los suyos y solo ve los que ella agregó">Mis orígenes</button>
+  </div>
+</header>
+
+<div class="cargando" *ngIf="cargandoInicial"><div class="spinner"></div><p>Cargando…</p></div>
+<div class="error-state" *ngIf="errorGeneral">{{ errorGeneral }}</div>
+<div class="aviso-info" *ngIf="mensaje && !errorGeneral">{{ mensaje }}</div>
+
+<!-- Sin tabla de orígenes -->
+<div class="aviso-aviso" *ngIf="resumen && !resumen.tablaOrigenes">
+  <strong>El módulo todavía no está listo en la base de datos.</strong> Falta crear la tabla de orígenes: pídele a quien tenga permisos de DDL que ejecute <span class="mono">crear_tabla_catalogo_origenes.sql</span>.
+</div>
+
+<!-- Detalle de una tabla -->
+<app-catalogo-tabla *ngIf="tablaSel" [tablaRef]="tablaSel" [pestanaInicial]="pestanaTabla" (abrir)="abrirTabla($event)" (cerrar)="cerrarTabla()"
+  (verQueries)="abrirQueries('repositorio', [], $event)" (armarQuery)="abrirQueries('constructor', [$event])" (abrirQuery)="abrirQueries('repositorio', [], null, '', $event)"></app-catalogo-tabla>
+
+<ng-container *ngIf="!tablaSel && resumen && resumen.tablaOrigenes">
+
+  <!-- Sin orígenes -->
+  <section class="tarjeta vacio-inicial" *ngIf="!hayOrigenes">
+    <h2>Aún no has registrado servidores</h2>
+    <p *ngIf="puedeEditar">Agrega tus servidores SQL Server o MariaDB. Los servidores son tuyos: nadie más los ve ni los usa. Entras con tu propio usuario y clave de solo lectura, y AXIS lee con ellos las tablas, columnas y llaves foráneas para armar tu catálogo.</p>
+    <p *ngIf="!puedeEditar">Para registrar tus servidores necesitas permiso de edición en este módulo; pídeselo al administrador de AXIS.</p>
+    <button type="button" class="btn btn-purple" *ngIf="puedeEditar" (click)="mostrarOrigenes = true">+ Agregar servidor</button>
+  </section>
+
+  <ng-container *ngIf="hayOrigenes">
+    <!-- Sin credenciales propias -->
+    <div class="aviso-aviso sin-cred" *ngIf="motoresSinCredenciales">
+      <div>
+        <strong>Falta tu usuario y clave de {{ motoresSinCredenciales }}.</strong>
+        Tu catálogo y tu mapa estelar se arman con tus propias credenciales (no con las de otra persona) y solo tú los ves.
+      </div>
+      <button type="button" class="btn btn-purple btn-sm" (click)="mostrarCredenciales = true">Agregar mis credenciales</button>
+    </div>
+
+    <!-- Lectura en curso / errores -->
+    <div class="aviso-info lectura" *ngIf="enLectura.length">
+      <div class="spinner mini"></div>
+      <div>
+        <strong>Leyendo servidores…</strong>
+        <span *ngFor="let o of enLectura"> {{ o.nombre }}<ng-container *ngIf="o.progreso">: {{ o.progreso }}</ng-container>.</span>
+        <span class="gris"> El catálogo se completa solo; ya puedes usar lo que se haya leído.</span>
+      </div>
+    </div>
+    <div class="aviso-aviso" *ngFor="let o of conError">
+      <strong>{{ o.nombre }}:</strong> {{ o.error || 'no se pudo leer.' }}
+      <span *ngIf="o.estado === 'ok'"> Se muestran los datos de la última lectura correcta.</span>
+    </div>
+    <div class="aviso-aviso" *ngIf="advertencias.length">
+      <strong>Avisos de la lectura:</strong>
+      <div *ngFor="let a of advertencias" class="adv">{{ a.origen }}: {{ a.texto }}</div>
+    </div>
+
+    <div class="pestanas" role="tablist">
+      <button type="button" role="tab" [class.activa]="vista === 'buscar'" [attr.aria-selected]="vista === 'buscar'" (click)="cambiarVista('buscar')">Buscar</button>
+      <button type="button" role="tab" [class.activa]="vista === 'mapa'" [attr.aria-selected]="vista === 'mapa'" (click)="cambiarVista('mapa')">Mapa estelar</button>
+    </div>
+
+    <!-- ===== Buscar (Spotlight) ===== -->
+    <section *ngIf="vista === 'buscar'">
+      <div class="spot">
+        <div class="spot-caja" [class.activa]="q">
+          <span class="spot-lupa" aria-hidden="true">⌕</span>
+          <input #entradaBusqueda type="search" class="spot-entrada" [ngModel]="q" (ngModelChange)="escribir($event)" (keydown)="teclaBusqueda($event)"
+                 placeholder="Busca una tabla o una columna: cliente, id_cliente, pedido…" aria-label="Buscar en el catálogo" autocomplete="off" spellcheck="false" />
+          <kbd class="spot-tecla" *ngIf="!q" title="Atajo de teclado">/</kbd>
+          <div class="spinner mini" *ngIf="buscando"></div>
+        </div>
+        <div class="spot-filtros">
+          <div class="selector-dias" role="group" aria-label="Qué buscar">
+            <button type="button" [class.activo]="tipo === 'todo'" (click)="tipo = 'todo'; cambiarFiltros()">Todo</button>
+            <button type="button" [class.activo]="tipo === 'tabla'" (click)="tipo = 'tabla'; cambiarFiltros()">Tablas</button>
+            <button type="button" [class.activo]="tipo === 'columna'" (click)="tipo = 'columna'; cambiarFiltros()">Columnas</button>
+          </div>
+          <label class="campo" *ngIf="resumen && resumen.origenes.length > 1">Servidor
+            <select [(ngModel)]="origenFiltro" (ngModelChange)="cambiarFiltros()" aria-label="Filtrar por servidor">
+              <option value="">Todos</option>
+              <option *ngFor="let o of resumen.origenes" [value]="o.id">{{ o.nombre }}</option>
+            </select>
+          </label>
+          <label class="campo">Base
+            <select [(ngModel)]="bdFiltro" (ngModelChange)="cambiarFiltros()" aria-label="Filtrar por base de datos">
+              <option value="">Todas</option>
+              <option *ngFor="let b of basesFiltro" [value]="b">{{ b }}</option>
+            </select>
+          </label>
+          <span class="spot-ayuda gris">↑ ↓ para moverte · Enter para abrir</span>
+        </div>
+      </div>
+
+      <div class="error-state" *ngIf="errorBusqueda">{{ errorBusqueda }}</div>
+
+      <!-- Sin búsqueda: resumen por servidor -->
+      <div class="inicio" *ngIf="!q.trim()">
+        <div class="tarjeta origen-card" *ngFor="let o of resumen?.origenes">
+          <div class="tarjeta-cab">
+            <h3>{{ o.nombre }}</h3>
+            <span class="tarjeta-sub">{{ etiquetaMotor(o.motor) }} · <span class="mono">{{ o.host }}:{{ o.puerto }}</span></span>
+          </div>
+          <p class="gris peq" *ngIf="o.cargando && !o.bases.length">Leyendo este servidor…</p>
+          <p class="gris peq" *ngIf="!o.cargando && !o.bases.length && o.estado === 'sin-credenciales'">Sin leer: faltan tus credenciales de {{ etiquetaMotor(o.motor) }}.</p>
+          <p class="gris peq" *ngIf="!o.cargando && !o.bases.length && o.estado !== 'sin-credenciales'">Sin bases leídas todavía.</p>
+          <div class="bases">
+            <button type="button" class="base-chip" *ngFor="let b of o.bases" (click)="verBaseEnMapa(o.id, b.nombre)" [title]="'Ver ' + b.nombre + ' en el mapa'" [disabled]="!(b.tablas + b.vistas)">
+              <span class="mono">{{ b.nombre }}</span>
+              <small>{{ b.tablas + b.vistas | number }}</small>
+            </button>
+          </div>
+        </div>
+        <p class="gris peq pista">Escribe al menos 2 letras. Puedes buscar por nombre de tabla, de columna o por palabras de la descripción. Pulsa <kbd>/</kbd> en cualquier momento para volver al buscador.</p>
+      </div>
+
+      <!-- Resultados -->
+      <div *ngIf="q.trim() && !buscando && resultado" class="resultados">
+        <p class="vacio" *ngIf="!items.length && q.trim().length >= 2">No hay coincidencias para «{{ q.trim() }}». Prueba con menos letras o quita los filtros.</p>
+        <p class="vacio" *ngIf="q.trim().length < 2">Escribe al menos 2 letras.</p>
+
+        <ng-container *ngIf="resultado.tablas.length">
+          <h3 class="grupo-tit">Tablas y vistas <span class="gris">({{ resultado.totalTablas }}{{ resultado.totalTablas > resultado.tablas.length ? ', se muestran ' + resultado.tablas.length : '' }})</span></h3>
+          <ul class="res-lista" role="listbox" aria-label="Tablas encontradas">
+            <li *ngFor="let t of resultado.tablas; let i = index" class="res-item" [class.sel]="seleccion === indiceItem('tabla', i)" role="option" [attr.aria-selected]="seleccion === indiceItem('tabla', i)"
+                (mouseenter)="seleccion = indiceItem('tabla', i)">
+              <button type="button" class="res-principal" (click)="abrirTabla(t.ref)">
+                <span class="res-ico" [class.vista]="t.tipo === 'VISTA'" aria-hidden="true">{{ t.tipo === 'VISTA' ? 'V' : 'T' }}</span>
+                <span class="res-textos">
+                  <span class="res-nombre mono">{{ t.nombre }}</span>
+                  <span class="res-ruta">{{ t.origen }} › {{ etiquetaTabla(t) }} · {{ t.nColumnas }} columna(s)<ng-container *ngIf="t.filas !== null"> · ~{{ t.filas | number }} fila(s)</ng-container></span>
+                  <span class="res-desc" *ngIf="t.descripcion">{{ t.descripcion }}</span>
+                </span>
+              </button>
+              <button type="button" class="btn-mini" (click)="abrirTabla(t.ref, 'diagrama')" title="Abrir directamente el diagrama ER">Diagrama</button>
+            </li>
+          </ul>
+        </ng-container>
+
+        <ng-container *ngIf="resultado.columnas.length">
+          <h3 class="grupo-tit">Columnas <span class="gris">({{ resultado.totalColumnas }}{{ resultado.totalColumnas > resultado.columnas.length ? ', se muestran ' + resultado.columnas.length : '' }})</span></h3>
+          <ul class="res-lista" role="listbox" aria-label="Columnas encontradas">
+            <li *ngFor="let c of resultado.columnas; let i = index" class="res-item res-col" [class.sel]="seleccion === indiceItem('columna', i)" role="option" [attr.aria-selected]="seleccion === indiceItem('columna', i)"
+                (mouseenter)="seleccion = indiceItem('columna', i)">
+              <button type="button" class="res-principal" (click)="verColumna(c)" [attr.aria-expanded]="columnaAbierta === c.nombre">
+                <span class="res-ico col" aria-hidden="true">C</span>
+                <span class="res-textos">
+                  <span class="res-nombre mono">{{ c.nombre }}</span>
+                  <span class="res-ruta">En {{ c.apariciones }} tabla(s) de {{ c.bases }} base(s) · p. ej. {{ c.ejemplos[0].nombre }} ({{ c.ejemplos[0].tipoDato }})</span>
+                </span>
+              </button>
+              <span class="btn-mini sin-borde">{{ columnaAbierta === c.nombre ? 'Ocultar' : 'Ver dónde' }}</span>
+
+              <div class="res-lugares" *ngIf="columnaAbierta === c.nombre">
+                <div class="cargando chico-v" *ngIf="cargandoLugares"><div class="spinner mini"></div></div>
+                <ul class="lugares" *ngIf="lugares as l">
+                  <li *ngFor="let x of l.lugares">
+                    <button type="button" class="enlace mono" (click)="abrirTabla(x.ref)">{{ x.nombre }}</button>
+                    <span class="gris">{{ x.origen }} › {{ etiquetaTabla(x) }}</span>
+                    <span class="gris mono">{{ x.tipoDato }}</span>
+                    <span class="marca marca-pk" *ngIf="x.pk">PK</span>
+                  </li>
+                  <li class="gris" *ngIf="l.total > l.lugares.length">… y {{ l.total - l.lugares.length }} más (acota con los filtros).</li>
+                </ul>
+              </div>
+            </li>
+          </ul>
+        </ng-container>
+      </div>
+    </section>
+
+    <!-- ===== Mapa estelar ===== -->
+    <app-catalogo-mapa *ngIf="vista === 'mapa'" [version]="versionMapa" [baseInicial]="baseInicial" (abrirTabla)="abrirTabla($event)" (verQueries)="abrirQueries('repositorio', [], null, $event.bd)"></app-catalogo-mapa>
+  </ng-container>
+</ng-container>
+
+<app-catalogo-origenes *ngIf="mostrarOrigenes" (cerrar)="cerrarOrigenes($event)"></app-catalogo-origenes>
+<app-catalogo-credenciales *ngIf="mostrarCredenciales && resumen" [credenciales]="resumen.credenciales" (cerrar)="cerrarCredenciales($event)"></app-catalogo-credenciales>
+<app-catalogo-queries *ngIf="mostrarQueries" [origenes]="resumen?.origenes || []" [puedeEditar]="puedeEditar" [pestanaInicial]="queriesPestana"
+                      [tablasIniciales]="queriesTablas" [tablaFiltro]="queriesFiltro" [bdFiltro]="queriesBase" [queryInicial]="queryInicial"
+                      (verTabla)="verTablaDesdeQueries($event)" (cerrar)="cerrarQueries()"></app-catalogo-queries>

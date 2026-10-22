@@ -1,0 +1,137 @@
+<div class="modal-overlay" (click)="cerrarModal()">
+  <div class="modal-card modal-origenes" (click)="$event.stopPropagation()" role="dialog" aria-modal="true" aria-label="Orígenes de Swagger">
+    <div class="modal-header">
+      <div>
+        <h2>Orígenes de Swagger</h2>
+        <p class="sub">Servicios cuyo Swagger/OpenAPI se puede leer y consumir desde AXIS. Lo que registras es <strong>privado</strong>: solo tú lo ves hasta que lo compartas. El servidor solo consulta los hosts de estos orígenes.</p>
+      </div>
+      <button type="button" class="close-btn" (click)="cerrarModal()" aria-label="Cerrar">✕</button>
+    </div>
+
+    <div class="error-state" *ngIf="error">{{ error }}</div>
+    <div class="cargando" *ngIf="cargando"><div class="spinner"></div><p>Cargando…</p></div>
+
+    <div class="aviso-ok" *ngIf="avisoOk && !compartiendo">{{ avisoOk }}</div>
+
+    <ng-container *ngIf="!cargando && !mostrarForm && !compartiendo">
+      <div class="acciones-top"><button type="button" class="btn btn-purple btn-sm" (click)="nuevo()">+ Registrar origen</button></div>
+      <p class="vacio" *ngIf="!origenes.length">Todavía no tienes orígenes. Los que registres serán privados hasta que los compartas.</p>
+
+      <h3 class="titulo-seccion" *ngIf="misOrigenes.length">Mis Swagger</h3>
+      <ul class="lista" *ngIf="misOrigenes.length">
+        <li class="item-lista" *ngFor="let o of misOrigenes">
+          <div class="il-cab">
+            <strong>{{ o.Nombre }}</strong>
+            <span class="chip" [ngClass]="o.CompartidoTodos || o.CompartidoCon ? 'chip-ok' : 'chip-media'" [title]="o.CompartidoTodos || o.CompartidoCon ? 'Otros usuarios pueden verlo y consumirlo' : 'Solo tú lo ves'">{{ textoCompartido(o) }}</span>
+            <span class="chip" [ngClass]="o.ValidarTls ? 'chip-ok' : 'chip-media'" [title]="o.ValidarTls ? 'Se valida el certificado TLS' : 'No se valida el certificado TLS (certificado autofirmado)'">{{ o.ValidarTls ? 'TLS validado' : 'TLS sin validar' }}</span>
+            <span class="chip">{{ o.Consumos || 0 }} consumo(s) guardado(s)</span>
+            <span class="espacio"></span>
+            <button type="button" class="btn-mini" (click)="abrirCompartir(o)">Compartir</button>
+            <button type="button" class="btn-mini" (click)="editar(o)">Editar</button>
+            <button type="button" class="btn-mini btn-peligro" (click)="darDeBaja(o)">Dar de baja</button>
+          </div>
+          <div class="il-sub mono cortar">{{ o.UrlSwagger }}</div>
+          <div class="il-sub" *ngIf="o.Notas">{{ o.Notas }}</div>
+        </li>
+      </ul>
+
+      <h3 class="titulo-seccion" *ngIf="origenesAjenos.length">{{ verTodos ? 'De otros usuarios' : 'Compartidos conmigo' }}</h3>
+      <ul class="lista" *ngIf="origenesAjenos.length">
+        <li class="item-lista" *ngFor="let o of origenesAjenos">
+          <div class="il-cab">
+            <strong>{{ o.Nombre }}</strong>
+            <span class="chip">{{ o.SinDueno ? 'Sin dueño' : 'De ' + o.CreadoPor }}</span>
+            <span class="chip" *ngIf="!o.PuedeGestionar" title="Puedes verlo y consumirlo; solo su dueño lo modifica, comparte o da de baja">Solo ver y consumir</span>
+            <span class="chip" [ngClass]="o.CompartidoTodos || o.CompartidoCon ? 'chip-ok' : 'chip-media'" *ngIf="o.PuedeGestionar">{{ textoCompartido(o) }}</span>
+            <span class="chip">{{ o.Consumos || 0 }} consumo(s) guardado(s)</span>
+            <span class="espacio"></span>
+            <ng-container *ngIf="o.PuedeGestionar">
+              <button type="button" class="btn-mini" (click)="abrirCompartir(o)">Compartir</button>
+              <button type="button" class="btn-mini" (click)="editar(o)">Editar</button>
+              <button type="button" class="btn-mini btn-peligro" (click)="darDeBaja(o)">Dar de baja</button>
+            </ng-container>
+          </div>
+          <div class="il-sub mono cortar">{{ o.UrlSwagger }}</div>
+          <div class="il-sub" *ngIf="o.Notas">{{ o.Notas }}</div>
+        </li>
+      </ul>
+    </ng-container>
+
+    <!-- ============ Compartir ============ -->
+    <ng-container *ngIf="compartiendo">
+      <h3 class="titulo-form">Compartir «{{ compartiendo.Nombre }}»</h3>
+      <p class="ayuda">Por defecto solo tú ves este Swagger y sus consumos guardados. Quien lo reciba podrá <strong>verlo y consumirlo</strong> (si su rol en el módulo le permite ejecutar), pero no modificarlo, darlo de baja ni compartirlo. Los tokens y contraseñas que uses al consumir no se guardan ni se comparten.</p>
+      <div class="cargando chico-v" *ngIf="cargandoComp"><div class="spinner"></div><p>Cargando…</p></div>
+      <ng-container *ngIf="!cargandoComp">
+        <label class="check">
+          <input type="checkbox" [(ngModel)]="compTodos" />
+          <span>Compartir con <strong>todos</strong> los usuarios que tengan el módulo Swagger <small>(lo verán también quienes se habiliten después)</small></span>
+        </label>
+
+        <div class="usuarios-bloque" [class.atenuado]="compTodos">
+          <div class="usuarios-cab">
+            <label class="etiqueta">O con usuarios concretos <span class="contador">({{ seleccion.size }} marcado(s))</span></label>
+            <span class="espacio"></span>
+            <button type="button" class="btn-mini" [disabled]="compTodos" (click)="marcarVisibles(true)">Marcar visibles</button>
+            <button type="button" class="btn-mini" [disabled]="compTodos" (click)="marcarVisibles(false)">Quitar visibles</button>
+          </div>
+          <input class="entrada" [(ngModel)]="busqueda" [disabled]="compTodos" placeholder="Buscar por nombre o usuario…" aria-label="Buscar usuario" />
+          <p class="vacio" *ngIf="!listaComp.length">No hay otros usuarios con el módulo Swagger habilitado.</p>
+          <p class="vacio" *ngIf="listaComp.length && !listaFiltrada.length">Ningún usuario coincide con la búsqueda.</p>
+          <ul class="usuarios-lista" *ngIf="listaFiltrada.length">
+            <li *ngFor="let u of listaFiltrada">
+              <label class="usuario-fila">
+                <input type="checkbox" [checked]="marcado(u.Id)" [disabled]="compTodos" (change)="alternarUsuario(u.Id)" />
+                <span class="u-nombre">{{ nombreUsuario(u) }}</span>
+                <span class="u-user mono" *ngIf="u.Username && u.Nombre">{{ u.Username }}</span>
+                <span class="chip chip-media" *ngIf="u.sinAcceso" title="Ya no tiene el módulo Swagger habilitado (o está inactivo): no puede verlo hasta que se le habilite">sin acceso al módulo</span>
+              </label>
+            </li>
+          </ul>
+        </div>
+      </ng-container>
+      <div class="error-state" *ngIf="errorComp">{{ errorComp }}</div>
+      <div class="pie-form">
+        <button type="button" class="btn btn-ghost" (click)="cancelarCompartir()">Cancelar</button>
+        <button type="button" class="btn btn-purple" [disabled]="guardandoComp || cargandoComp" (click)="guardarComparticion()">{{ guardandoComp ? 'Guardando…' : 'Guardar' }}</button>
+      </div>
+    </ng-container>
+
+    <ng-container *ngIf="mostrarForm">
+      <h3 class="titulo-form">{{ editandoId ? 'Editar origen' : 'Registrar origen' }}</h3>
+      <p class="ayuda" *ngIf="!editandoId">Será <strong>privado</strong>: solo tú lo verás hasta que lo compartas con otros usuarios.</p>
+      <label class="etiqueta">Nombre *</label>
+      <input class="entrada" [(ngModel)]="form.Nombre" maxlength="100" placeholder="Ej. API Clientes (QA)" />
+
+      <label class="etiqueta">URL del Swagger *</label>
+      <input class="entrada mono" [(ngModel)]="form.UrlSwagger" maxlength="500" placeholder="https://10.240.1.117:4021/swagger/index.html" />
+      <p class="ayuda">Puede ser la página de Swagger UI (index.html) o directamente el swagger.json / openapi.json.</p>
+
+      <label class="check">
+        <input type="checkbox" [(ngModel)]="form.ValidarTls" />
+        <span>Validar el certificado TLS <small>(déjalo apagado si el servicio usa un certificado autofirmado)</small></span>
+      </label>
+
+      <label class="etiqueta">Notas</label>
+      <input class="entrada" [(ngModel)]="form.Notas" maxlength="500" placeholder="Opcional" />
+
+      <div class="prueba-bloque">
+        <button type="button" class="btn btn-ghost btn-sm" [disabled]="probando || !form.UrlSwagger.trim()" (click)="probar()">
+          {{ probando ? 'Probando…' : 'Probar conexión' }}
+        </button>
+        <div class="aviso-ok" *ngIf="prueba?.ok">
+          Documento encontrado: <strong>{{ prueba?.titulo || 'sin título' }}</strong> {{ prueba?.version }} · {{ prueba?.especificacion }} · {{ prueba?.operaciones }} endpoint(s)
+          <span *ngIf="(prueba?.definiciones?.length || 0) > 1"> · {{ prueba?.definiciones?.length }} definiciones</span>
+          <div class="mono pequeno cortar">{{ prueba?.urlDocumento }}</div>
+        </div>
+        <div class="error-state" *ngIf="prueba && !prueba.ok">{{ prueba.error }}</div>
+      </div>
+
+      <div class="error-state" *ngIf="errorForm">{{ errorForm }}</div>
+      <div class="pie-form">
+        <button type="button" class="btn btn-ghost" (click)="cancelarForm()">Cancelar</button>
+        <button type="button" class="btn btn-purple" [disabled]="guardando || !form.Nombre.trim() || !form.UrlSwagger.trim()" (click)="guardar()">{{ guardando ? 'Guardando…' : 'Guardar' }}</button>
+      </div>
+    </ng-container>
+  </div>
+</div>

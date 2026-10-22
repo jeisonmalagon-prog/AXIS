@@ -1,0 +1,36 @@
+<div class="barra">
+  <div class="selector-dias" role="group" aria-label="Dónde buscar">
+    <button type="button" [class.activo]="tipo === 'codigo'" (click)="tipo = 'codigo'; resultado = null">Código</button>
+    <button type="button" [class.activo]="tipo === 'wiki'" (click)="tipo = 'wiki'; resultado = null">Wiki</button>
+  </div>
+  <label class="buscar"><span aria-hidden="true"><app-ico n="buscar" class="solo"></app-ico></span><input type="text" [(ngModel)]="q" (keyup.enter)="buscar()" [placeholder]="tipo === 'codigo' ? 'Texto dentro de los archivos (ej. NombreDeClase)…' : 'Texto dentro de la wiki…'" aria-label="Buscar" /></label>
+  <label class="campo" *ngIf="tipo === 'codigo'"><input type="checkbox" [(ngModel)]="soloEsteRepo" /> Solo en el repositorio seleccionado</label>
+  <button type="button" class="btn btn-purple btn-sm" (click)="buscar()" [disabled]="cargando">Buscar</button>
+</div>
+
+<app-azure-fallo [fallo]="fallo"></app-azure-fallo>
+<div class="cargando" *ngIf="cargando"><div class="spinner"></div>Buscando…</div>
+<p class="vacio" *ngIf="!buscado && !cargando">Busca texto dentro de todos los archivos de código o de la wiki del proyecto. Requiere la extensión «Code Search» de Azure DevOps.</p>
+
+<section class="tarjeta" *ngIf="resultado && !cargando">
+  <div class="tarjeta-cab"><h2>{{ fmtNum(resultado.total) }} resultados para «{{ resultado.q }}»</h2><span class="tarjeta-sub">Página {{ pagina }}</span></div>
+  <p class="vacio" *ngIf="!resultado.resultados.length">Sin coincidencias.</p>
+  <ul class="lista">
+    <li class="item-lista" *ngFor="let r of resultado.resultados">
+      <div class="il-cab">
+        <strong class="mono">{{ r.archivo }}</strong>
+        <span class="chip" *ngIf="r.repositorio">{{ r.repositorio }}</span><span class="chip chip-marca" *ngIf="r.rama">{{ r.rama }}</span><span class="chip" *ngIf="r.wiki">Wiki: {{ r.wiki }}</span>
+        <span class="gris" *ngIf="r.cantidad">{{ r.cantidad }} coincidencia(s)</span>
+        <a class="ext" *ngIf="r.url" [href]="r.url" target="_blank" rel="noopener">Abrir en Azure DevOps<app-ico n="externo" class="fin"></app-ico></a>
+      </div>
+      <div class="il-sub"><span class="mono">{{ r.ruta }}</span></div>
+      <div class="frag" *ngFor="let f of (r.fragmentos || [])">
+        <ng-container *ngIf="f.texto !== undefined; else textoWiki"><span class="n">{{ f.linea }}</span><code>{{ f.texto }}</code></ng-container>
+        <ng-template #textoWiki><code>{{ f }}</code></ng-template>
+      </div>
+    </li>
+  </ul>
+  <div class="paginador">
+    <button type="button" class="btn-mini" (click)="cambiarPagina(-1)" [disabled]="pagina === 1"><app-ico n="izquierda"></app-ico>Anterior</button><span>Página {{ pagina }}</span><button type="button" class="btn-mini" (click)="cambiarPagina(1)" [disabled]="!hayMas">Siguiente<app-ico n="derecha" class="fin"></app-ico></button>
+  </div>
+</section>

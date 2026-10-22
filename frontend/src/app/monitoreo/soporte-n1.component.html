@@ -1,0 +1,213 @@
+<div class="sn1">
+  <header class="cab">
+    <h1>Soporte Nivel 1</h1>
+    <p class="sub">Reinicia el monitor de pagos o el monitor naranja sin entrar a Portainer.</p>
+    <a class="enlace-prosp" routerLink="/soporte-nivel-1/prospeccion">Monitorear prospección de aliados →</a>
+  </header>
+
+  @if (aviso) { <div class="toast" [class.toast--error]="aviso.tipo === 'error'" role="status">{{ aviso.texto }}</div> }
+
+  <div class="barra">
+    <p class="intro">Acciones rápidas de soporte para los monitores. Cada reinicio queda registrado en la auditoría con quién lo pidió y por qué vía.</p>
+    <div class="barra__acc">
+      <button type="button" class="btn-sec" (click)="cargar()" [disabled]="cargando">{{ cargando ? 'Consultando…' : '↻ Actualizar' }}</button>
+      @if (esAdminPod && datos) { <button type="button" class="btn-sec btn-sec--marca" (click)="abrirConfig()">⚙ Configurar</button> }
+    </div>
+  </div>
+
+  @if (error) { <div class="error-banner" role="alert">{{ error }}</div> }
+  @if (cargando && !datos) { <div class="esq"><div class="esq__bloque"></div><div class="esq__bloque"></div></div> }
+
+  @if (datos; as d) {
+    @if (d.requiereOtp) {
+      <div class="nota" [class.nota--aviso]="!puedeSolicitar">
+        <strong>Tu rol es de Consulta.</strong>
+        @if (puedeSolicitar) {
+          Para reiniciar se envía un código de aprobación a {{ d.config.aprobadoresTotal }} aprobador{{ d.config.aprobadoresTotal === 1 ? '' : 'es' }}
+          ({{ (d.config.aprobadoresEnmascarados || []).join(', ') }}). Pídeles el código: vale {{ d.config.vigenciaMin }} minutos y se usa una sola vez.
+        } @else if (d.config.aprobadoresTotal === 0) {
+          Todavía no hay aprobadores configurados, así que no puedes solicitar reinicios. Pide al ADMIN_POD que los agregue.
+        } @else {
+          El envío de correo no está disponible en el servidor, así que no se pueden enviar códigos. Avisa al ADMIN_POD.
+        }
+      </div>
+    } @else if (d.esAdminPod && d.config.aprobadoresTotal === 0) {
+      <div class="nota nota--aviso"><strong>Falta configurar los aprobadores.</strong> Los usuarios de Consulta no podrán pedir reinicios hasta que agregues sus correos en «Configurar».</div>
+    }
+
+    <section class="tarjetas">
+      @for (a of d.acciones; track trackAccion($index, a)) {
+        <article class="tarjeta" [class]="'tarjeta ' + claseEstado(a)">
+          <header>
+            <div>
+              <h3>{{ a.titulo }}</h3>
+              <p>{{ a.descripcion }}</p>
+            </div>
+            <span class="chip-est" [class]="'chip-est ' + claseEstado(a)"><i></i>{{ textoEstado(a) }}</span>
+          </header>
+          <dl>
+            <div><dt>Servidor</dt><dd>{{ a.entorno }}</dd></div>
+            <div><dt>Contenedor</dt><dd class="mono">{{ a.contenedor }}</dd></div>
+            <div><dt>Puerto</dt><dd class="mono">{{ a.puertos.length ? a.puertos.join(', ') : a.puerto }}</dd></div>
+            <div><dt>Estado Docker</dt><dd>{{ a.estadoTexto || '—' }}</dd></div>
+            @if (a.imagen) { <div class="ancho"><dt>Imagen</dt><dd class="mono cortar" [title]="a.imagen">{{ a.imagen }}</dd></div> }
+          </dl>
+          @if (!a.encontrado) { <p class="sin-ubicar">{{ a.error }}</p> }
+          <footer>
+            <button type="button" class="btn-reiniciar" (click)="abrir(a)" [disabled]="!a.encontrado || a.enfriamientoSeg > 0 || !puedeSolicitar">
+              ↻ {{ d.requiereOtp ? 'Solicitar reinicio' : 'Reiniciar' }}
+            </button>
+            @if (a.enfriamientoSeg > 0) { <span class="suave">Reiniciado hace instantes · espera {{ a.enfriamientoSeg }} s</span> }
+            @else if (d.requiereOtp && puedeSolicitar) { <span class="suave">Requiere código de un aprobador</span> }
+          </footer>
+        </article>
+      }
+    </section>
+
+    <section class="panel">
+      <header><h3>Actividad reciente</h3><p>Solicitudes de código, reinicios y cambios de configuración de Soporte Nivel 1.</p></header>
+      @if (d.actividad.length) {
+        <ul class="actividad">
+          @for (ev of d.actividad; track $index) {
+            <li [class]="claseEvento(ev.accion)">
+              <span class="ev-fecha">{{ ev.fecha | date: 'dd/MM/yyyy HH:mm' }}</span>
+              <span class="ev-tag">{{ etiquetaEvento(ev.accion) }}</span>
+              <span class="ev-det">{{ ev.detalle }}</span>
+              <span class="ev-usr">{{ ev.usuario || 'sistema' }}</span>
+            </li>
+          }
+        </ul>
+      } @else {
+        <p class="vacio">Aún no hay actividad registrada.</p>
+      }
+    </section>
+  }
+</div>
+
+<!-- ======================= DIÁLOGO DE REINICIO ======================= -->
+@if (accion; as a) {
+  <div class="modal-overlay" (click)="cerrar()">
+    <div class="modal-card modal-sn1" role="dialog" aria-modal="true" [attr.aria-label]="a.titulo" (click)="$event.stopPropagation()">
+      <div class="modal-header">
+        <div><h2>{{ a.titulo }}</h2><p class="sub-modal">{{ a.contenedor }} · {{ a.entorno }}</p></div>
+        @if (paso !== 'trabajando') { <button type="button" class="close-btn" (click)="cerrar()" aria-label="Cerrar">✕</button> }
+      </div>
+
+      @if (paso === 'confirmar') {
+        <p class="texto">El servicio puede quedar sin responder unos segundos mientras el contenedor se reinicia.</p>
+        @if (requiereOtp) {
+          <p class="texto">Se enviará un código a los aprobadores ({{ aprobadoresMasc }}). Con él completarás el reinicio.</p>
+        }
+        @if (errorDialogo) { <div class="error-banner" role="alert">{{ errorDialogo }}</div> }
+        <div class="pie">
+          <button type="button" class="btn-sec" (click)="cerrar()">Cancelar</button>
+          <button type="button" class="btn-reiniciar" (click)="confirmar()" [disabled]="enviando">
+            @if (enviando) { <span class="spinner chico"></span> }{{ requiereOtp ? (enviando ? 'Enviando código…' : 'Enviar código a aprobadores') : 'Reiniciar ahora' }}
+          </button>
+        </div>
+      }
+
+      @if (paso === 'codigo') {
+        @if (solicitud) {
+          <p class="texto">Enviamos un código de 6 dígitos a {{ solicitud.enviadoA.join(', ') }}. Pídeselo a un aprobador y escríbelo aquí.</p>
+          <label class="etiqueta" for="sn1-codigo">Código de aprobación</label>
+          <input id="sn1-codigo" class="codigo" type="text" inputmode="numeric" autocomplete="one-time-code" maxlength="6" placeholder="••••••"
+                 [(ngModel)]="codigo" name="sn1-codigo" (ngModelChange)="soloDigitos()" (keyup.enter)="ejecutar()" [disabled]="restanteSeg === 0" />
+          <p class="meta">
+            @if (restanteSeg > 0) { Vence en <strong class="mono">{{ mmss(restanteSeg) }}</strong> }
+            @else { <strong class="mal">El código venció.</strong> }
+            @if (intentosRestantes !== null && restanteSeg > 0) { · {{ intentosRestantes }} intento{{ intentosRestantes === 1 ? '' : 's' }} restante{{ intentosRestantes === 1 ? '' : 's' }} }
+          </p>
+        } @else {
+          <p class="texto">Pide un código nuevo a los aprobadores para continuar.</p>
+        }
+        @if (errorDialogo) { <div class="error-banner" role="alert">{{ errorDialogo }}</div> }
+        <div class="pie">
+          <button type="button" class="btn-sec" (click)="reenviar()" [disabled]="reenvioSeg > 0 || enviando">
+            {{ reenvioSeg > 0 ? 'Reenviar código (' + reenvioSeg + ' s)' : (solicitud && restanteSeg > 0 ? 'Reenviar código' : 'Pedir código nuevo') }}
+          </button>
+          <button type="button" class="btn-reiniciar" (click)="ejecutar()" [disabled]="!solicitud || !codigoCompleto || restanteSeg === 0 || enviando">Reiniciar</button>
+        </div>
+      }
+
+      @if (paso === 'trabajando') {
+        <div class="trabajando"><div class="spinner"></div><p>Reiniciando el contenedor y verificando que vuelva a estar en ejecución…</p></div>
+      }
+
+      @if (paso === 'listo' && resultado; as r) {
+        <div class="resultado" [class.resultado--aviso]="!r.arriba">
+          <strong>{{ r.arriba ? 'Reinicio completado' : 'Reinicio enviado, aún sin confirmar' }}</strong>
+          <p>
+            @if (r.arriba) { El contenedor <span class="mono">{{ r.contenedor }}</span> volvió a estar en ejecución ({{ r.estadoTexto }}). }
+            @else { Portainer aceptó el reinicio de <span class="mono">{{ r.contenedor }}</span>, pero todavía no figura en ejecución (estado: {{ r.estado || 'sin confirmar' }}). Actualiza en unos segundos y, si sigue así, escala el caso. }
+          </p>
+        </div>
+        <div class="pie"><button type="button" class="btn-reiniciar" (click)="cerrar()">Listo</button></div>
+      }
+
+      @if (paso === 'error') {
+        <div class="error-banner" role="alert">{{ errorDialogo }}</div>
+        <div class="pie">
+          <button type="button" class="btn-sec" (click)="cerrar()">Cerrar</button>
+        </div>
+      }
+    </div>
+  </div>
+}
+
+<!-- ======================= CONFIGURACIÓN (ADMIN_POD) ======================= -->
+@if (mostrarConfig && form; as f) {
+  <div class="modal-overlay" (click)="cerrarConfig()">
+    <div class="modal-card modal-sn1 modal-sn1--config" role="dialog" aria-modal="true" aria-label="Configuración de Soporte Nivel 1" (click)="$event.stopPropagation()">
+      <div class="modal-header">
+        <div><h2>Configuración · Soporte Nivel 1</h2><p class="sub-modal">Solo el ADMIN_POD ve y cambia esto.</p></div>
+        <button type="button" class="close-btn" (click)="cerrarConfig()" aria-label="Cerrar">✕</button>
+      </div>
+
+      @if (datos?.config?.correo; as c) {
+        <div class="envio" [class.envio--mal]="!c.configurado">
+          @if (c.configurado) {
+            <span><strong>Cuenta de envío:</strong> {{ c.remitente || c.usuario }} · {{ c.host }}:{{ c.port }}. Es la misma que usan la recuperación de contraseña, los informes y las alertas.</span>
+          } @else {
+            <span><strong>El correo saliente no está configurado</strong>, así que no se pueden enviar códigos.</span>
+          }
+          <a routerLink="/configuracion" class="envio__link" (click)="cerrarConfig()">{{ c.configurado ? 'Cambiar en Configuración' : 'Configurarlo' }} →</a>
+        </div>
+      }
+
+      <h3 class="sec">Aprobadores del código (OTP)</h3>
+      <label class="etiqueta" for="sn1-aprob">Correos aprobadores (uno por línea)</label>
+      <textarea id="sn1-aprob" class="entrada" rows="4" [(ngModel)]="f.aprobadores" name="sn1-aprob" placeholder="nombre.apellido&#64;bancofinandina.com"></textarea>
+      <p class="ayuda">El código llega a todos; basta con que uno lo entregue. Solo correos de {{ dominiosTxt }}. Máximo unos 6 correos.</p>
+      <div class="fila">
+        <label class="etiqueta" for="sn1-vig">Vigencia del código (minutos)
+          <input id="sn1-vig" class="entrada corto" type="number" min="3" max="30" [(ngModel)]="f.vigenciaMin" name="sn1-vig" />
+        </label>
+        <button type="button" class="btn-sec" (click)="probarCorreo()" [disabled]="probando || guardando">{{ probando ? 'Enviando…' : 'Enviar correo de prueba' }}</button>
+      </div>
+      <p class="ayuda">La prueba se envía a los aprobadores ya guardados (guarda primero si los cambiaste).</p>
+
+      <h3 class="sec">Contenedor de cada acción</h3>
+      <div class="dest">
+        <div class="dest__fila">
+          <strong>Monitor de pagos</strong>
+          <label class="etiqueta" for="sn1-e1">Servidor (entorno de Portainer)<input id="sn1-e1" class="entrada" type="text" [(ngModel)]="f.acciones.monitor_pagos.entorno" name="sn1-e1" autocomplete="off" /></label>
+          <label class="etiqueta" for="sn1-c1">Contenedor<input id="sn1-c1" class="entrada" type="text" [(ngModel)]="f.acciones.monitor_pagos.contenedor" name="sn1-c1" autocomplete="off" /></label>
+        </div>
+        <div class="dest__fila">
+          <strong>Monitor naranja</strong>
+          <label class="etiqueta" for="sn1-e2">Servidor (entorno de Portainer)<input id="sn1-e2" class="entrada" type="text" [(ngModel)]="f.acciones.monitor_naranja.entorno" name="sn1-e2" autocomplete="off" /></label>
+          <label class="etiqueta" for="sn1-c2">Contenedor<input id="sn1-c2" class="entrada" type="text" [(ngModel)]="f.acciones.monitor_naranja.contenedor" name="sn1-c2" autocomplete="off" /></label>
+        </div>
+      </div>
+      <p class="ayuda">Por defecto: FABOGAPPLIN07 · container_monitor_pagos / container_monitor_naranja. Dejar un campo vacío vuelve al valor por defecto.</p>
+
+      @if (errorConfig) { <div class="error-banner" role="alert">{{ errorConfig }}</div> }
+      @if (avisoConfig) { <div class="ok-banner" role="status">{{ avisoConfig }}</div> }
+      <div class="pie">
+        <button type="button" class="btn-sec" (click)="cerrarConfig()" [disabled]="guardando">Cancelar</button>
+        <button type="button" class="btn-reiniciar" (click)="guardarConfig()" [disabled]="guardando">@if (guardando) { <span class="spinner chico"></span> }{{ guardando ? 'Guardando…' : 'Guardar' }}</button>
+      </div>
+    </div>
+  </div>
+}

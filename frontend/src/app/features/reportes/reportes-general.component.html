@@ -1,0 +1,122 @@
+<header class="page-header">
+  <div>
+    <h1>Informe General del Aplicativo</h1>
+    <p class="subtitle">Combina, en un solo informe (pantalla y PDF), las secciones que elijas de los módulos con informe propio.</p>
+  </div>
+</header>
+
+<div class="mensaje-error mensaje-error-seccion" *ngIf="errorSecciones">{{ errorSecciones }}</div>
+
+<ng-container *ngIf="!cargandoSecciones && !errorSecciones">
+  <div class="mensaje-error aviso-snapshot" *ngIf="!seccionesDisponibles.length">
+    No tienes ningún módulo con informe habilitado todavía. Contacta al administrador si crees que deberías tenerlo.
+  </div>
+
+  <ng-container *ngIf="seccionesDisponibles.length">
+    <!-- ===================================================
+         SELECTOR DE SECCIONES
+    ==================================================== -->
+    <section class="seccion-checklist">
+      <div class="checklist-header">
+        <span class="checklist-titulo">Secciones a incluir</span>
+        <div class="checklist-acciones">
+          <button type="button" class="btn-link" (click)="seleccionarTodas()">Marcar todas</button>
+          <button type="button" class="btn-link" (click)="quitarTodas()">Quitar todas</button>
+        </div>
+      </div>
+      <div class="checklist-grid">
+        <label class="checklist-item" *ngFor="let s of seccionesDisponibles">
+          <input type="checkbox" [checked]="seleccion[s.clave]" (change)="alternarSeccion(s.clave)">
+          <span>{{ s.etiqueta }}</span>
+        </label>
+      </div>
+    </section>
+
+    <!-- ===================================================
+         SELECTOR DE PERIODO
+    ==================================================== -->
+    <section class="seccion-selector">
+      <div class="selector-periodo">
+        <button type="button" class="btn-periodo" [class.activo]="periodo === 'dia'" (click)="seleccionarPeriodo('dia')">Día</button>
+        <button type="button" class="btn-periodo" [class.activo]="periodo === 'semana'" (click)="seleccionarPeriodo('semana')">Semana</button>
+        <button type="button" class="btn-periodo" [class.activo]="periodo === 'mes'" (click)="seleccionarPeriodo('mes')">Mes</button>
+        <button type="button" class="btn-periodo" [class.activo]="periodo === 'rango'" (click)="seleccionarPeriodo('rango')">Rango personalizado</button>
+      </div>
+
+      <div class="rango-fechas" *ngIf="periodo === 'rango'">
+        <label>
+          Desde
+          <input type="date" [(ngModel)]="desde" [max]="hasta">
+        </label>
+        <label>
+          Hasta
+          <input type="date" [(ngModel)]="hasta" [min]="desde">
+        </label>
+        <button type="button" class="btn-sm" (click)="generarInforme()">Generar</button>
+      </div>
+
+      <div class="acciones-informe">
+        <button type="button" class="btn-sm" (click)="generarInforme()" [disabled]="cargando">↻ Generar informe general</button>
+        <button type="button" class="btn-sm btn-pdf" (click)="descargarPdf()" [disabled]="generandoPdf">
+          {{ generandoPdf ? 'Generando PDF…' : '⬇ Descargar PDF combinado' }}
+        </button>
+      </div>
+    </section>
+
+    <div class="mensaje-error mensaje-error-seccion" *ngIf="error">{{ error }}</div>
+    <div class="mensaje-error mensaje-error-seccion" *ngIf="errorPdf">{{ errorPdf }}</div>
+
+    <div class="loading-state" *ngIf="cargando">
+      <div class="spinner"></div>
+      <p>Generando informe general...</p>
+    </div>
+
+    <ng-container *ngIf="!cargando && informe">
+      <p class="etiqueta-periodo-activo">Periodo: <strong>{{ etiquetaPeriodo }}</strong></p>
+
+      <div class="mensaje-error aviso-snapshot" *ngIf="informe.seccionesSinPermiso.length">
+        Algunas secciones pedidas no están habilitadas para tu usuario y no se incluyeron: {{ informe.seccionesSinPermiso.join(', ') }}.
+      </div>
+
+      <section class="secciones-resumen">
+        <div class="seccion-card" *ngFor="let s of informe.seccionesIncluidas">
+          <div class="seccion-card-header">
+            <h2>{{ s.etiqueta }}</h2>
+            <a [routerLink]="rutaPorSeccion[s.clave]">Ver informe completo →</a>
+          </div>
+
+          <div class="mensaje-error mensaje-error-seccion" *ngIf="tieneError(s.clave)">
+            No se pudo generar esta sección ahora mismo: {{ mensajeError(s.clave) }}. El resto del informe general sigue disponible — puedes reintentar generándolo de nuevo.
+          </div>
+
+          <ng-container *ngIf="!tieneError(s.clave)">
+            <div class="mensaje-error aviso-snapshot" *ngIf="avisoSeccion(s.clave) as aviso">{{ aviso }}</div>
+            <div class="kpis-grid">
+              <div class="kpi-card kpi-info" *ngFor="let kpi of kpisSeccion(s.clave)">
+                <div class="kpi-texto">
+                  <span class="kpi-valor">{{ kpi.valor }}</span>
+                  <span class="kpi-label">{{ kpi.etiqueta }}</span>
+                </div>
+                <span class="pill-comparacion" *ngIf="kpi.cambioPorc !== undefined" [ngClass]="claseComparacion(kpi.cambioPorc, kpi.invertido)">
+                  {{ textoComparacion(kpi.cambioPorc) }}
+                </span>
+              </div>
+            </div>
+
+            <div class="panel-analitica panel-analitica-ancho" *ngIf="lineChartSeccion(s.clave) as tendenciaChart">
+              <h3>Tendencia del periodo</h3>
+              <app-line-chart [etiquetas]="tendenciaChart.etiquetas" [series]="tendenciaChart.series"></app-line-chart>
+            </div>
+
+            <div class="panel-analitica panel-analitica-mini" *ngIf="donutSeccion(s.clave) as segmentos">
+              <h3>Distribución actual</h3>
+              <app-donut-chart [segmentos]="segmentos" [centroEtiqueta]="centroEtiquetaSeccion(s.clave)"></app-donut-chart>
+            </div>
+          </ng-container>
+        </div>
+      </section>
+
+      <p class="nota-pie">El detalle completo de cada sección (tablas, rankings, tendencia del periodo) está en el PDF combinado y en el informe individual de cada módulo.</p>
+    </ng-container>
+  </ng-container>
+</ng-container>
