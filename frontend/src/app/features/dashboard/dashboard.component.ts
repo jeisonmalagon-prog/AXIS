@@ -25,6 +25,10 @@ export class DashboardComponent implements OnInit {
   proyeccionTiempo: RangoTiempo[] = [];
   renovacionesTrimestre: number = 0;
 
+  // Alcance: por defecto solo certificados en uso; "Todos" incluye los que solo
+  // están instalados en el almacén de un servidor (sin uso detectado).
+  incluirSinUso = false;
+
   // Geometría del donut (SVG)
   readonly donutTamano = 150;
   readonly donutRadio = 65;
@@ -34,14 +38,24 @@ export class DashboardComponent implements OnInit {
   constructor(private dashboardService: DashboardService) {}
 
   ngOnInit(): void {
+    this.cargar();
+  }
+
+  cambiarAlcance(incluirSinUso: boolean): void {
+    if (this.incluirSinUso === incluirSinUso) return;
+    this.incluirSinUso = incluirSinUso;
+    this.cargar();
+  }
+
+  private cargar(): void {
     // 1. Cargamos el resumen general
-    this.dashboardService.resumen().subscribe((r) => {
+    this.dashboardService.resumen(this.incluirSinUso).subscribe((r) => {
       this.resumen = r;
       setTimeout(() => this.segmentosDonut = this.calcularDonut(r), 100);
     });
 
     // 2. Cargamos el panorama de TODO el año (365 días) para nutrir la analítica
-    this.dashboardService.porVencer(365).subscribe((certificados) => {
+    this.dashboardService.porVencer(365, this.incluirSinUso).subscribe((certificados) => {
       // Filtramos solo los urgentes para las tablas de abajo
       this.porVencerUrgentes = certificados.filter(c => c.DiasRestantes <= 30);
       
@@ -49,7 +63,13 @@ export class DashboardComponent implements OnInit {
       // aplicación puntual, así que los certificados nuevos (ligados a
       // servidor + aplicación interna compartida) no traen un solo nombre de
       // aplicación resuelto en esta vista — se agrupan como "Sin especificar".
-      this.porAplicacion = this.agrupar(this.porVencerUrgentes, (x) => x.Aplicacion || 'Sin especificar');
+      // Las aplicaciones ligadas por el descubrimiento (AplicacionesDetectadas) completan
+      // las que la vista no resuelve; un certificado cuenta en cada aplicación que afecta.
+      this.porAplicacion = this.agrupar(this.porVencerUrgentes, (x) => {
+        const apps = (x.AplicacionesDetectadas || '').split('||').map((a) => a.trim()).filter(Boolean);
+        if (x.Aplicacion && !apps.includes(x.Aplicacion)) apps.unshift(x.Aplicacion);
+        return apps.length ? apps : 'Sin especificar';
+      });
       this.porServidor = this.agrupar(this.porVencerUrgentes, (x) => x.Hostname);
 
       // Analítica extendida
@@ -120,11 +140,12 @@ export class DashboardComponent implements OnInit {
     return rangos;
   }
 
-  private agrupar(items: CertificadoVigencia[], selector: (c: CertificadoVigencia) => string, limite = 5): GrupoConteo[] {
+  private agrupar(items: CertificadoVigencia[], selector: (c: CertificadoVigencia) => string | string[], limite = 5): GrupoConteo[] {
     const mapa = new Map<string, number>();
     for (const item of items) {
-      const clave = selector(item) || 'Sin especificar';
-      mapa.set(clave, (mapa.get(clave) || 0) + 1);
+      const valor = selector(item);
+      const claves = Array.isArray(valor) ? valor : [valor || 'Sin especificar'];
+      for (const clave of claves) mapa.set(clave, (mapa.get(clave) || 0) + 1);
     }
     const grupos: GrupoConteo[] = Array.from(mapa.entries())
       .map(([nombre, cantidad]) => ({ nombre, cantidad, porcentajeAncho: 0 }))

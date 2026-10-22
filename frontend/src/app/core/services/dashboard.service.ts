@@ -10,13 +10,17 @@ export class DashboardService {
 
   constructor(private http: HttpClient) {}
 
-  resumen(): Observable<ResumenDashboard> {
-    return this.http.get<ResumenDashboard>(`${this.baseUrl}/resumen`);
+  // incluirSinUso = true cuenta también los certificados que solo están instalados en el
+  // almacén de un servidor (sin uso detectado). Por defecto el backend los excluye.
+  resumen(incluirSinUso = false): Observable<ResumenDashboard> {
+    return this.http.get<ResumenDashboard>(`${this.baseUrl}/resumen`, {
+      params: incluirSinUso ? { incluirSinUso: 1 } : {},
+    });
   }
 
-  porVencer(dias = 30): Observable<CertificadoVigencia[]> {
+  porVencer(dias = 30, incluirSinUso = false): Observable<CertificadoVigencia[]> {
     return this.http.get<CertificadoVigencia[]>(`${this.baseUrl}/por-vencer`, {
-      params: { dias },
+      params: incluirSinUso ? { dias, incluirSinUso: 1 } : { dias },
     });
   }
 }

@@ -54,6 +54,16 @@ export interface CertificadoVigencia extends Certificado {
   DiasRestantes: number;
   Estado: 'Vigente' | 'Por vencer' | 'Vencido';
   FechaUltimaActualizacion: string;
+  // Descubrimiento automático (VW_CertificadosVigencia, script 06). Opcionales:
+  // si la vista de la BD aún no tiene estas columnas, la pantalla las oculta.
+  Origen?: string | null;                // SCAN_RED | PORTAINER | WINDOWS | null = registro manual
+  FechaUltimaDeteccion?: string | null;  // última vez que un colector lo vio en el servidor
+  DiasSinDetectar?: number | null;
+  UsoCodigo?: number | null;             // 1 En uso · 2 En uso (otro registro) · 3 Sin uso detectado
+  Uso?: string | null;
+  EvidenciaCodigo?: number | null;       // 1 Puerto TLS · 2 Binding Windows · 3 Manual confirmado · 4 Contenedor · 5 Sin verificar · 6 Solo almacén Windows
+  Evidencia?: string | null;
+  AplicacionesDetectadas?: string | null; // aplicaciones ligadas por el descubrimiento (Certificado_Aplicacion), separadas por '||'
 }
 
 export interface HistoricoCertificado {

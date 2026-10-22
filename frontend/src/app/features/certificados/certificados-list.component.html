@@ -67,6 +67,10 @@
     <span class="indicador__numero">{{ contarPorEstado('Vencido') }}</span>
     <span class="indicador__etiqueta">Vencidos</span>
   </div>
+  <div class="indicador indicador--sinuso" *ngIf="hayDeteccion" title="Instalados en el almacén del servidor sin binding, puerto, servicio ni sub-aplicativo que los use">
+    <span class="indicador__numero">{{ contarSinUso() }}</span>
+    <span class="indicador__etiqueta">Sin uso detectado</span>
+  </div>
   <div class="indicador">
     <span class="indicador__numero">{{ grupos.length }}</span>
     <span class="indicador__etiqueta">Certificados</span>
@@ -83,6 +87,16 @@
     [class.active]="filtro === f"
     *ngFor="let f of opcionesFiltro"
     (click)="elegirFiltro(f)"
+  >
+    {{ f }}
+  </button>
+</section>
+<section class="filtros filtros--uso" *ngIf="hayDeteccion" aria-label="Filtrar por uso detectado">
+  <button
+    class="btn"
+    [class.active]="filtroUso === f"
+    *ngFor="let f of opcionesUso"
+    (click)="elegirFiltroUso(f)"
   >
     {{ f }}
   </button>
@@ -113,6 +127,10 @@
               Estado
               <span class="th-flecha" *ngIf="ordenCampo === 'estado'">{{ ordenDireccion === 1 ? '↑' : '↓' }}</span>
             </th>
+            <th *ngIf="hayDeteccion" class="th-ordenable" [class.th-activa]="ordenCampo === 'deteccion'" (click)="ordenarPor('deteccion')" title="Última vez que un colector automático encontró el certificado instalado">
+              Última detección
+              <span class="th-flecha" *ngIf="ordenCampo === 'deteccion'">{{ ordenDireccion === 1 ? '↑' : '↓' }}</span>
+            </th>
             <th *ngIf="puedeEditar" class="th-acciones">Acciones</th>
           </tr>
         </thead>
@@ -122,6 +140,7 @@
             <td class="celda-certificado">
               <span class="nombre-comun" [title]="g.nombreComun || ''">{{ g.nombreComun || '(sin nombre común)' }}</span>
               <span class="aplicacion-linea">{{ g.entidadEmisora || 'Emisor no indicado' }}</span>
+              <span class="badge-sinuso" *ngIf="hayDeteccion && g.usoCodigo === 3">Sin uso detectado</span>
             </td>
             <td class="celda-ubicaciones">
               <span class="ubic-principal" [title]="ubicacionResumen(g)">{{ ubicacionResumen(g) }}</span>
@@ -139,6 +158,12 @@
               <span class="dias-chip" [ngClass]="estadoClase(g.estado)">{{ g.diasRestantes }} día(s)</span>
             </td>
             <td><span class="status-pill" [ngClass]="estadoClase(g.estado)">{{ g.estado }}</span></td>
+            <td *ngIf="hayDeteccion" class="celda-deteccion">
+              <span class="det-chip" [ngClass]="deteccionClase(g.diasSinDetectar, g.ultimaDeteccion)"
+                    [title]="g.ultimaDeteccion ? ('Detectado el ' + (g.ultimaDeteccion | date: 'dd/MM/yyyy HH:mm')) : 'Ningún colector lo ha encontrado todavía'">
+                {{ deteccionTexto(g.diasSinDetectar, g.ultimaDeteccion) }}
+              </span>
+            </td>
             <td *ngIf="puedeEditar" class="celda-acciones">
               <button class="btn-icono" (click)="$event.stopPropagation(); renovarCertificado(g)" title="Renovar (nuevas fechas)">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
@@ -217,6 +242,14 @@
             <strong>{{ u.componente }}</strong>
             <span class="mono">{{ u.servidor }} · {{ u.ip }}</span>
             <span class="mono" *ngIf="u.puerto">puerto {{ u.puerto }}</span>
+          </div>
+          <div class="ubic-lista__deteccion" *ngIf="hayDeteccion">
+            <span class="det-chip" [ngClass]="deteccionClase(u.diasSinDetectar, u.ultimaDeteccion)">
+              {{ u.ultimaDeteccion ? ('Detectado ' + (u.ultimaDeteccion | date: 'dd/MM/yyyy HH:mm')) : 'Nunca detectado' }}
+            </span>
+            <span class="det-evidencia" *ngIf="u.evidencia">{{ u.evidencia }}</span>
+            <span class="badge-sinuso" *ngIf="u.usoCodigo === 3">Sin uso detectado</span>
+            <span class="det-evidencia" *ngIf="u.usoCodigo === 2">{{ usoEtiqueta(2) }}</span>
           </div>
         </ng-container>
         <ng-template #sinDef>

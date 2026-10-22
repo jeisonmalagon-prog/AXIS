@@ -158,3 +158,16 @@ tbody tr { transition: background 0.2s; &:hover { background: var(--ax-surface-2
 ::ng-deep .status-por-vencer { color: $state-warn; background: #fef3c7; }
 ::ng-deep .status-vencido { color: $state-danger; background: #fee2e2; }
 .h-bar-fill.status-vigente { background: $state-ok; } .h-bar-fill.status-por-vencer { background: $state-warn; } .h-bar-fill.status-vencido { background: $state-danger; }
+
+// Alcance del tablero: En uso / Todos
+.alcance {
+  display: inline-flex; gap: 2px; margin-top: 10px; padding: 3px;
+  background: var(--ax-surface-2, #f8fafc); border: 1px solid var(--ax-border, #e2e8f0); border-radius: 10px;
+  button {
+    border: none; background: transparent; cursor: pointer;
+    padding: 5px 14px; border-radius: 8px; font-size: 13px; font-weight: 600;
+    color: var(--ax-text-muted, #64748b);
+    &:hover { background: var(--ax-surface, #fff); }
+    &.activo { background: var(--ax-brand-primary, #2563eb); color: #fff; }
+  }
+}

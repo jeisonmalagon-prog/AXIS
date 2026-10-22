@@ -656,6 +656,27 @@ $border-light:  var(--ax-border, #e2e8f0);
   background: var(--ax-brand-soft, #eef2ff); color: var(--ax-brand-ink, #3730a3); border: 1px solid var(--ax-brand-soft-strong, #c7d2fe); margin: 1px 4px 1px 0; white-space: nowrap;
   &--mas { background: $surface-bg; color: $brand-gray; border-color: $border-light; }
 }
+// ---------- Descubrimiento automático (script 06) ----------
+.filtros--uso { margin-left: 8px; }
+.indicador--sinuso .indicador__numero { color: $brand-gray; }
+
+.badge-sinuso {
+  display: inline-block; margin-top: 4px; font-size: 11px; font-weight: 600;
+  color: $brand-gray; background: $surface-bg; border: 1px dashed $border-light;
+  padding: 1px 8px; border-radius: 99px;
+}
+
+.det-chip {
+  display: inline-block; white-space: nowrap; font-size: 12px; font-weight: 600;
+  padding: 2px 9px; border-radius: 99px;
+  &.det--ok    { color: #047857; background: #d1fae5; }
+  &.det--vieja { color: #92400e; background: #fef3c7; }
+  &.det--nunca { color: $brand-gray; background: $surface-bg; border: 1px solid $border-light; }
+}
+.det-evidencia { font-size: 12px; color: $brand-gray; }
+.ubic-lista__deteccion { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: 6px; }
+.tabla-certificados .celda-deteccion { white-space: nowrap; }
+
 .sin-apps { font-size: 12px; color: #92400e; background: #fffbeb; border: 1px solid #fde68a; padding: 2px 9px; border-radius: 99px; }
 
 .tabla-certificados {

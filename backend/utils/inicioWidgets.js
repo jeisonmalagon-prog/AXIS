@@ -29,7 +29,9 @@ const { conCache } = M;
 // ---------------------------------------------------------------------------
 async function datosCertificados() {
   const pool = await getPool();
-  const [conteos] = await pool.query('SELECT Estado, COUNT(*) AS total FROM VW_CertificadosVigencia GROUP BY Estado');
+  // Solo certificados en uso (los "sin uso detectado" no cuentan en el widget de Inicio).
+  const filtroUso = await require('./certificadosUso').condicionEnUso(pool);
+  const [conteos] = await pool.query(`SELECT Estado, COUNT(*) AS total FROM VW_CertificadosVigencia WHERE 1 = 1${filtroUso} GROUP BY Estado`);
   const resumen = { vigentes: 0, porVencer: 0, vencidos: 0 };
   for (const f of conteos) {
     if (f.Estado === 'Vigente') resumen.vigentes = Number(f.total);
@@ -39,7 +41,7 @@ async function datosCertificados() {
   const [proximos] = await pool.query(
     `SELECT Aplicacion, Hostname, NombreComun, FechaFin, DiasRestantes, Estado
        FROM VW_CertificadosVigencia
-      WHERE DiasRestantes <= 60
+      WHERE DiasRestantes <= 60${filtroUso}
       ORDER BY DiasRestantes ASC
       LIMIT 7`
   );

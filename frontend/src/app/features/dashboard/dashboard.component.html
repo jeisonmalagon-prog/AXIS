@@ -2,6 +2,12 @@
   <div class="header-content">
     <h1>Centro de Analítica</h1>
     <p class="subtitle">Monitoreo en tiempo real de seguridad, infraestructura y proyecciones</p>
+    <div class="alcance" role="group" aria-label="Certificados que se cuentan">
+      <button type="button" [class.activo]="!incluirSinUso" (click)="cambiarAlcance(false)"
+              title="Solo certificados con binding, puerto, servicio o sub-aplicativo que los usa">En uso</button>
+      <button type="button" [class.activo]="incluirSinUso" (click)="cambiarAlcance(true)"
+              title="Incluye los que solo están instalados en el almacén del servidor (sin uso detectado)">Todos</button>
+    </div>
   </div>
   
   <div class="health-indicator" *ngIf="resumen">

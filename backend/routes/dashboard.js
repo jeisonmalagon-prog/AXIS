@@ -2,12 +2,15 @@ const express = require('express');
 const { mensajeErrorAmigable } = require('../utils/mensajesError');
 const router = express.Router();
 const { getPool } = require('../db');
+const { condicionEnUso, pideIncluirSinUso } = require('../utils/certificadosUso');
 
 // GET /api/dashboard/resumen
 router.get('/resumen', async (req, res) => {
   try {
     const pool = await getPool();
-    const [rows] = await pool.query('SELECT Estado, COUNT(*) AS Total FROM VW_CertificadosVigencia GROUP BY Estado');
+    // Por defecto solo certificados en uso; ?incluirSinUso=1 cuenta también los que solo están en el almacén.
+    const filtroUso = await condicionEnUso(pool, pideIncluirSinUso(req));
+    const [rows] = await pool.query(`SELECT Estado, COUNT(*) AS Total FROM VW_CertificadosVigencia WHERE 1 = 1${filtroUso} GROUP BY Estado`);
 
     const resumen = { Vigente: 0, 'Por vencer': 0, Vencido: 0 };
     rows.forEach((row) => {
@@ -29,10 +32,11 @@ router.get('/por-vencer', async (req, res) => {
     
     // En lugar del Stored Procedure, consultamos la vista directamente.
     // Esto garantiza que podamos pedir 30, 365 o 1000 días sin que la BD se queje.
+    const filtroUso = await condicionEnUso(pool, pideIncluirSinUso(req));
     const query = `
       SELECT * 
       FROM VW_CertificadosVigencia 
-      WHERE DiasRestantes <= ? 
+      WHERE DiasRestantes <= ?${filtroUso}
       ORDER BY DiasRestantes ASC
     `;
     

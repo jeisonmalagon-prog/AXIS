@@ -1,0 +1,102 @@
+-- =====================================================================
+-- AXIS · BIC_CERTI_MARIA · 06 - Pantalla de Certificados con detección y uso
+-- Recrea VW_CertificadosVigencia (la que lee GET /api/certificados) con las
+-- MISMAS columnas de hoy, en el mismo orden, y agrega al final:
+--   Origen, FechaUltimaDeteccion, DiasSinDetectar,
+--   UsoCodigo / Uso, EvidenciaCodigo / Evidencia, AplicacionesDetectadas
+--   Evidencia: 1 Puerto TLS · 2 Binding/servicio Windows · 3 Manual confirmado
+--              4 Archivo en contenedor · 5 Sin verificar · 6 Solo en almacén Windows
+--   AplicacionesDetectadas: aplicaciones de negocio ligadas por el descubrimiento
+--              (Certificado_Aplicacion), separadas por '||'
+-- No modifica tablas ni datos. Requiere haber aplicado 01..05.
+-- DEV: ejecutar con jeimal. PROD: lo ejecuta el DBA.
+-- =====================================================================
+SET NAMES utf8mb4;
+USE `BIC_CERTI_MARIA`;
+
+CREATE OR REPLACE ALGORITHM = UNDEFINED SQL SECURITY DEFINER VIEW `VW_CertificadosVigencia` AS
+SELECT c.Id                                              AS Id,
+       c.AplicacionId                                    AS AplicacionId,
+       c.ServidorId                                      AS ServidorId,
+       c.Componente                                      AS Componente,
+       COALESCE(sc.Hostname, s.Hostname)                 AS Hostname,
+       COALESCE(sc.IP, s.IP)                             AS IP,
+       COALESCE(soc.Nombre, so.Nombre)                   AS SistemaOperativo,
+       a.Nombre                                          AS Aplicacion,
+       c.NombreComun                                     AS NombreComun,
+       c.EntidadEmisora                                  AS EntidadEmisora,
+       c.NumeroSerie                                     AS NumeroSerie,
+       c.Thumbprint                                      AS Thumbprint,
+       c.Puerto                                          AS Puerto,
+       c.FechaInicio                                     AS FechaInicio,
+       c.FechaFin                                        AS FechaFin,
+       TO_DAYS(c.FechaFin) - TO_DAYS(CURDATE())          AS DiasRestantes,
+       CASE WHEN c.FechaFin < CURDATE() THEN 'Vencido'
+            WHEN TO_DAYS(c.FechaFin) - TO_DAYS(CURDATE()) <= 30 THEN 'Por vencer'
+            ELSE 'Vigente' END                           AS Estado,
+       c.Responsable                                     AS Responsable,
+       c.Observaciones                                   AS Observaciones,
+       c.FechaUltimaActualizacion                        AS FechaUltimaActualizacion,
+       -- ---------------------------------------------- columnas nuevas (06)
+       c.Origen                                          AS Origen,
+       c.FechaUltimaDeteccion                            AS FechaUltimaDeteccion,
+       IF(c.FechaUltimaDeteccion IS NULL, NULL,
+          TIMESTAMPDIFF(DAY, c.FechaUltimaDeteccion, NOW())) AS DiasSinDetectar,
+       CASE
+         WHEN NOT (c.Componente IS NULL OR c.Componente = '' OR c.Componente LIKE 'ALMACEN %'
+                   OR c.Componente = 'SIN COMPONENTE IDENTIFICADO') THEN 1
+         WHEN EXISTS (SELECT 1 FROM Certificados c2
+                       WHERE c2.ServidorId = c.ServidorId AND c2.ThumbprintNorm = c.ThumbprintNorm
+                         AND c2.Activo = 1 AND c2.Id <> c.Id
+                         AND NOT (c2.Componente IS NULL OR c2.Componente = '' OR c2.Componente LIKE 'ALMACEN %'
+                                  OR c2.Componente = 'SIN COMPONENTE IDENTIFICADO')) THEN 2
+         ELSE 3
+       END                                               AS UsoCodigo,
+       CASE
+         WHEN NOT (c.Componente IS NULL OR c.Componente = '' OR c.Componente LIKE 'ALMACEN %'
+                   OR c.Componente = 'SIN COMPONENTE IDENTIFICADO') THEN 'En uso'
+         WHEN EXISTS (SELECT 1 FROM Certificados c2
+                       WHERE c2.ServidorId = c.ServidorId AND c2.ThumbprintNorm = c.ThumbprintNorm
+                         AND c2.Activo = 1 AND c2.Id <> c.Id
+                         AND NOT (c2.Componente IS NULL OR c2.Componente = '' OR c2.Componente LIKE 'ALMACEN %'
+                                  OR c2.Componente = 'SIN COMPONENTE IDENTIFICADO')) THEN 'En uso (otro registro)'
+         ELSE 'Sin uso detectado'
+       END                                               AS Uso,
+       CASE
+         WHEN c.FechaUltimaDeteccion IS NULL OR c.FechaUltimaDeteccion < NOW() - INTERVAL 3 DAY THEN 5
+         WHEN c.Origen = 'SCAN_RED'  THEN 1
+         WHEN c.Origen = 'WINDOWS' AND (c.Componente IS NULL OR c.Componente = '' OR c.Componente LIKE 'ALMACEN %'
+                                        OR c.Componente = 'SIN COMPONENTE IDENTIFICADO') THEN 6
+         WHEN c.Origen = 'WINDOWS'   THEN 2
+         WHEN c.Origen = 'PORTAINER' THEN 4
+         ELSE 3
+       END                                               AS EvidenciaCodigo,
+       CASE
+         WHEN c.FechaUltimaDeteccion IS NULL THEN 'Nunca verificado'
+         WHEN c.FechaUltimaDeteccion < NOW() - INTERVAL 3 DAY THEN 'Sin lectura reciente'
+         WHEN c.Origen = 'SCAN_RED'  THEN 'Puerto TLS respondiendo'
+         WHEN c.Origen = 'WINDOWS' AND (c.Componente IS NULL OR c.Componente = '' OR c.Componente LIKE 'ALMACEN %'
+                                        OR c.Componente = 'SIN COMPONENTE IDENTIFICADO') THEN 'Instalado en almacén Windows'
+         WHEN c.Origen = 'WINDOWS'   THEN 'Binding o servicio Windows'
+         WHEN c.Origen = 'PORTAINER' THEN 'Archivo en contenedor'
+         ELSE 'Registro manual confirmado'
+       END                                               AS Evidencia,
+       (SELECT GROUP_CONCAT(DISTINCT ap.Nombre ORDER BY ap.Nombre SEPARATOR '||')
+          FROM Certificado_Aplicacion ca
+          JOIN Aplicaciones ap ON ap.Id = ca.AplicacionId AND ap.Activo = 1
+         WHERE ca.CertificadoId = c.Id)                  AS AplicacionesDetectadas
+  FROM Certificados c
+  LEFT JOIN Aplicaciones a        ON c.AplicacionId = a.Id
+  LEFT JOIN Servidores s          ON a.ServidorId = s.Id
+  LEFT JOIN SistemasOperativos so ON s.SistemaOperativoId = so.Id
+  LEFT JOIN Servidores sc         ON c.ServidorId = sc.Id
+  LEFT JOIN SistemasOperativos soc ON sc.SistemaOperativoId = soc.Id
+ WHERE c.Activo = 1
+   AND (c.AplicacionId IS NULL OR a.Activo = 1);
+
+-- Verificación: mismas filas que antes + columnas nuevas
+SELECT COUNT(*) AS Filas,
+       SUM(FechaUltimaDeteccion IS NOT NULL) AS ConDeteccion,
+       SUM(UsoCodigo = 1) AS EnUso, SUM(UsoCodigo = 2) AS EnUsoOtroRegistro, SUM(UsoCodigo = 3) AS SinUsoDetectado,
+       SUM(AplicacionesDetectadas IS NOT NULL) AS ConAplicacionDetectada
+  FROM VW_CertificadosVigencia;

@@ -11,7 +11,8 @@ import { CertificadosContenedoresComponent } from './certificados-contenedores.c
 import { GrupoCertificado, agruparCertificados, idDe } from './certificado-grupo';
 
 type Filtro = 'Todos' | 'Vigente' | 'Por vencer' | 'Vencido';
-type CampoOrden = 'nombre' | 'servidor' | 'vence' | 'estado';
+type FiltroUso = 'Todos' | 'En uso' | 'Sin uso detectado';
+type CampoOrden = 'nombre' | 'servidor' | 'vence' | 'estado' | 'deteccion';
 
 // Un certificado (lo que la gente entiende) con lo que la tabla necesita ya calculado.
 export interface GrupoVista extends GrupoCertificado {
@@ -29,6 +30,13 @@ export interface UbicacionVista {
   apps: string[];
   sinDefinir: boolean;
   antes: string | null;
+  // Descubrimiento automático de esta ubicación
+  evidencia: string | null;
+  evidenciaCodigo: number | null;
+  uso: string | null;
+  usoCodigo: number | null;
+  ultimaDeteccion: string | null;
+  diasSinDetectar: number | null;
 }
 
 @Component({
@@ -45,6 +53,11 @@ export class CertificadosListComponent implements OnInit {
 
   opcionesFiltro: Filtro[] = ['Todos', 'Vigente', 'Por vencer', 'Vencido'];
   filtro: Filtro = 'Todos';
+
+  // Uso detectado por los colectores (solo si la vista trae las columnas del script 06).
+  opcionesUso: FiltroUso[] = ['Todos', 'En uso', 'Sin uso detectado'];
+  filtroUso: FiltroUso = 'En uso';
+  hayDeteccion = false;
 
   // Orden y paginación. Por defecto: los que vencen antes primero.
   ordenCampo: CampoOrden = 'vence';
@@ -101,6 +114,8 @@ export class CertificadosListComponent implements OnInit {
   cargar(): void {
     this.certificadoService.listar().subscribe((data) => {
       this.certificados = data;
+      this.hayDeteccion = data.some((c) => c.UsoCodigo !== undefined);
+      if (!this.hayDeteccion) this.filtroUso = 'Todos';
       this.reconstruir();
       this.paginaActual = 1;
     });
@@ -118,16 +133,20 @@ export class CertificadosListComponent implements OnInit {
 
   // ============================================================ agrupación
   // Aplicaciones de negocio de una ubicación (servidor + componente), tomadas del catálogo.
+  // Se combinan: las del sub-aplicativo registrado en el catálogo y las que ligó el
+  // descubrimiento automático (Certificado_Aplicacion), que cubren los componentes
+  // detectados como "PUERTO n" o nombre de contenedor.
   private appsDeFila(f: CertificadoVigencia): string[] {
+    const detectadas = (f.AplicacionesDetectadas || '').split('||').map((a) => a.trim()).filter(Boolean);
     if (f.ServidorId != null && f.Componente && this.catalogo) {
       const srv = this.catalogo.servidores.find((s) => s.id === f.ServidorId);
       const clave = f.Componente.toLowerCase();
       const comp = srv?.componentes.find((c) => c.rol.toLowerCase() === clave);
-      if (comp) return comp.aplicaciones.map((a) => a.nombre);
-      return [];
+      const delCatalogo = comp ? comp.aplicaciones.map((a) => a.nombre) : [];
+      return Array.from(new Set([...delCatalogo, ...detectadas]));
     }
     // Certificados de antes: solo se sabe la aplicación a la que estaban ligados.
-    return f.Aplicacion ? [f.Aplicacion] : [];
+    return Array.from(new Set([...(f.Aplicacion ? [f.Aplicacion] : []), ...detectadas]));
   }
 
   private reconstruir(): void {
@@ -160,9 +179,21 @@ export class CertificadosListComponent implements OnInit {
     this.paginaActual = 1;
   }
 
+  elegirFiltroUso(f: FiltroUso): void {
+    this.filtroUso = f;
+    this.paginaActual = 1;
+  }
+
+  private cumpleUso(g: GrupoVista, f: FiltroUso): boolean {
+    if (!this.hayDeteccion || f === 'Todos') return true;
+    const enUso = g.usoCodigo == null || g.usoCodigo < 3;
+    return f === 'En uso' ? enUso : !enUso;
+  }
+
   filtrados(): GrupoVista[] {
     let resultado = this.grupos;
     if (this.filtro !== 'Todos') resultado = resultado.filter((g) => g.estado === this.filtro);
+    if (this.filtroUso !== 'Todos') resultado = resultado.filter((g) => this.cumpleUso(g, this.filtroUso));
     const termino = this.terminoBusqueda.toLowerCase().trim();
     if (termino) resultado = resultado.filter((g) => g.busqueda.includes(termino));
     return resultado;
@@ -183,6 +214,7 @@ export class CertificadosListComponent implements OnInit {
       case 'nombre': return (g.nombreComun || '').toLowerCase();
       case 'servidor': return g.primerServidor;
       case 'estado': return ({ Vencido: 0, 'Por vencer': 1, Vigente: 2 } as Record<string, number>)[g.estado] ?? 9;
+      case 'deteccion': return g.diasSinDetectar ?? 99999;   // nunca verificados al final
       case 'vence':
       default: return g.diasRestantes ?? 0;
     }
@@ -228,8 +260,33 @@ export class CertificadosListComponent implements OnInit {
     return 'borde-vencido';
   }
 
+  // Los indicadores respetan el filtro de uso: por defecto cuentan solo lo que está en uso.
   contarPorEstado(estado: 'Vigente' | 'Por vencer' | 'Vencido'): number {
-    return this.grupos.filter((g) => g.estado === estado).length;
+    return this.grupos.filter((g) => g.estado === estado && this.cumpleUso(g, this.filtroUso)).length;
+  }
+
+  contarSinUso(): number {
+    return this.grupos.filter((g) => this.cumpleUso(g, 'Sin uso detectado')).length;
+  }
+
+  // ============================================================ detección
+  deteccionTexto(dias: number | null | undefined, fecha: string | null | undefined): string {
+    if (!fecha || dias == null) return 'Nunca';
+    if (dias <= 0) return 'Hoy';
+    if (dias === 1) return 'Ayer';
+    return `Hace ${dias} días`;
+  }
+
+  deteccionClase(dias: number | null | undefined, fecha: string | null | undefined): string {
+    if (!fecha || dias == null) return 'det--nunca';
+    return dias <= 3 ? 'det--ok' : 'det--vieja';
+  }
+
+  usoEtiqueta(codigo: number | null | undefined): string {
+    if (codigo === 3) return 'Sin uso detectado';
+    if (codigo === 2) return 'En uso (otro registro)';
+    if (codigo === 1) return 'En uso';
+    return '';
   }
 
   // Texto corto de "dónde está instalado" para la tabla.
@@ -257,6 +314,12 @@ export class CertificadosListComponent implements OnInit {
         apps: this.appsDeFila(f),
         sinDefinir,
         antes: sinDefinir ? f.Aplicacion || null : null,
+        evidencia: f.Evidencia ?? null,
+        evidenciaCodigo: f.EvidenciaCodigo ?? null,
+        uso: f.Uso ?? null,
+        usoCodigo: f.UsoCodigo ?? null,
+        ultimaDeteccion: f.FechaUltimaDeteccion ?? null,
+        diasSinDetectar: f.DiasSinDetectar ?? null,
       };
     });
   }

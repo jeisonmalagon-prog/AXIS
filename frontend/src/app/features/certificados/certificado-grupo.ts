@@ -23,6 +23,10 @@ export interface GrupoCertificado {
   estado: EstadoCertificado;
   diasRestantes: number;
   filas: CertificadoVigencia[];
+  // Descubrimiento automático: lo más reciente / lo más fuerte entre sus ubicaciones.
+  ultimaDeteccion: string | null;
+  diasSinDetectar: number | null;
+  usoCodigo: number | null;   // 1 en uso · 2 en uso (otro registro) · 3 sin uso detectado · null = sin dato
 }
 
 export function idDe(c: any): number {
@@ -67,6 +71,9 @@ export function agruparCertificados(lista: CertificadoVigencia[]): GrupoCertific
         estado: c.Estado,
         diasRestantes: c.DiasRestantes,
         filas: [],
+        ultimaDeteccion: null,
+        diasSinDetectar: null,
+        usoCodigo: null,
       };
       mapa.set(clave, g);
     }
@@ -74,6 +81,11 @@ export function agruparCertificados(lista: CertificadoVigencia[]): GrupoCertific
     // Datos "de cabecera": si la primera fila no los tenía, se toman de otra.
     if (!g.responsable && c.Responsable) g.responsable = c.Responsable;
     if (!g.observaciones && c.Observaciones) g.observaciones = c.Observaciones;
+    if (c.FechaUltimaDeteccion && (!g.ultimaDeteccion || String(c.FechaUltimaDeteccion) > String(g.ultimaDeteccion))) {
+      g.ultimaDeteccion = String(c.FechaUltimaDeteccion);
+      g.diasSinDetectar = c.DiasSinDetectar ?? null;
+    }
+    if (c.UsoCodigo != null && (g.usoCodigo == null || c.UsoCodigo < g.usoCodigo)) g.usoCodigo = c.UsoCodigo;
   }
   return Array.from(mapa.values());
 }
