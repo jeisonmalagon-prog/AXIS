@@ -1,0 +1,276 @@
+<div class="pestanas" role="tablist">
+  <button type="button" [class.activa]="vista === 'ejecuciones'" (click)="cambiarVista('ejecuciones')">▶ Ejecuciones</button>
+  <button type="button" [class.activa]="vista === 'pipelines'" (click)="cambiarVista('pipelines')"><app-ico n="pipeline"></app-ico>Pipelines</button>
+  <button type="button" [class.activa]="vista === 'estadisticas'" (click)="cambiarVista('estadisticas')"><app-ico n="resumen"></app-ico>Estadísticas</button>
+  <button type="button" [class.activa]="vista === 'pruebas'" (click)="cambiarVista('pruebas')"><app-ico n="matraz"></app-ico>Pruebas</button>
+</div>
+
+<app-azure-fallo [fallo]="falloVista"></app-azure-fallo>
+<div class="cargando" *ngIf="cargandoVista"><div class="spinner"></div>Cargando…</div>
+
+<!-- EJECUCIONES -->
+<ng-container *ngIf="vista === 'ejecuciones'">
+  <div class="barra">
+    <label class="campo">Pipeline
+      <select [(ngModel)]="definicion" (change)="filtrar()"><option value="">Todos</option><option *ngFor="let d of definiciones || []" [value]="d.id">{{ d.nombre }}</option></select>
+    </label>
+    <label class="campo">Resultado
+      <select [(ngModel)]="resultado" (change)="filtrar()"><option value="">Todos</option><option value="succeeded">Exitoso</option><option value="failed">Fallido</option><option value="partiallySucceeded">Parcial</option><option value="canceled">Cancelado</option></select>
+    </label>
+    <label class="campo">Estado
+      <select [(ngModel)]="estado" (change)="filtrar()"><option value="">Todos</option><option value="inProgress">En curso</option><option value="notStarted">En cola</option><option value="completed">Completado</option></select>
+    </label>
+    <label class="campo">Motivo
+      <select [(ngModel)]="motivo" (change)="filtrar()"><option value="">Todos</option><option value="individualCI">CI (push)</option><option value="batchedCI">CI agrupado</option><option value="manual">Manual</option><option value="schedule">Programado</option><option value="pullRequest">Pull Request</option><option value="buildCompletion">Tras otro build</option></select>
+    </label>
+    <label class="campo">Periodo
+      <select [(ngModel)]="dias" (change)="filtrar()"><option [ngValue]="7">7 días</option><option [ngValue]="30">30 días</option><option [ngValue]="90">90 días</option><option [ngValue]="180">180 días</option></select>
+    </label>
+    <label class="campo">Rama<input type="text" [(ngModel)]="rama" (keyup.enter)="filtrar()" placeholder="master" /></label>
+    <label class="campo">Solicitó<input type="text" [(ngModel)]="solicitante" (keyup.enter)="filtrar()" placeholder="Nombre" /></label>
+    <button type="button" class="btn btn-purple btn-sm" (click)="filtrar()">Buscar</button>
+    <button type="button" class="btn btn-ghost btn-sm" (click)="limpiar()">Limpiar</button>
+    <span class="espacio"></span>
+    <button type="button" class="btn btn-ghost btn-sm" (click)="exportar()" [disabled]="!ejecuciones.length"><app-ico n="descargar"></app-ico>CSV</button>
+  </div>
+  <section class="tarjeta" *ngIf="!cargandoVista && !falloVista">
+    <p class="vacio" *ngIf="!ejecuciones.length">No hay ejecuciones con esos filtros.</p>
+    <div class="tabla-wrap" *ngIf="ejecuciones.length">
+      <table class="tabla">
+        <thead><tr><th>Estado</th><th>Pipeline</th><th>Rama</th><th>Motivo</th><th>Solicitó</th><th>Inicio</th><th class="num">Duración</th><th class="num">Espera</th></tr></thead>
+        <tbody>
+          <tr class="fila-click" *ngFor="let b of ejecuciones" (click)="abrir(b)" tabindex="0" (keyup.enter)="abrir(b)">
+            <td><span class="est" [ngClass]="'est-' + claseGrupo(b.grupo)">{{ textoGrupo(b.grupo) }}</span></td>
+            <td class="td-nombre"><strong>{{ b.definicion }}</strong> <span class="gris">#{{ b.numero }}</span></td>
+            <td><code class="sha">{{ b.rama || '—' }}</code> <code class="sha" *ngIf="b.commit">{{ b.commit }}</code></td>
+            <td>{{ b.motivoTexto || '—' }}</td>
+            <td>{{ b.solicitadoPor }}</td>
+            <td [title]="fmtFecha(b.inicio || b.encolado)">{{ fmtRelativo(b.inicio || b.encolado) }}</td>
+            <td class="num">{{ fmtDuracion(b.duracionMs) }}</td><td class="num">{{ fmtDuracion(b.esperaMs) }}</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="paginador" *ngIf="continuacion">
+      <button type="button" class="btn-mini" (click)="cargarEjecuciones(false)" [disabled]="masCargando">{{ masCargando ? 'Cargando…' : 'Cargar más ejecuciones' }}</button>
+    </div>
+  </section>
+</ng-container>
+
+<!-- PIPELINES (DEFINICIONES) -->
+<section class="tarjeta" *ngIf="vista === 'pipelines' && definiciones">
+  <div class="tarjeta-cab"><h2>Pipelines del proyecto</h2><span class="tarjeta-sub">{{ definiciones.length }} definiciones</span></div>
+  <p class="vacio" *ngIf="!definiciones.length">No hay pipelines definidos.</p>
+  <div class="tabla-wrap" *ngIf="definiciones.length">
+    <table class="tabla">
+      <thead><tr><th>Pipeline</th><th>Tipo</th><th>Repositorio</th><th>Último resultado</th><th>Última ejecución</th><th>Estado</th></tr></thead>
+      <tbody>
+        <tr class="fila-click" *ngFor="let d of definiciones" (click)="abrirDef(d)" tabindex="0" (keyup.enter)="abrirDef(d)">
+          <td class="td-nombre"><strong>{{ d.nombre }}</strong><div class="gris peq" *ngIf="d.carpeta !== '\\'">{{ d.carpeta }}</div></td>
+          <td><span class="chip" [class.chip-marca]="d.tipo === 'YAML'">{{ d.tipo }}</span></td>
+          <td>{{ d.repositorio || '—' }}</td>
+          <td><span class="est" *ngIf="d.ultimoCompletado || d.ultimo; else sinEj" [ngClass]="'est-' + claseGrupo((d.ultimoCompletado || d.ultimo).grupo)">{{ textoGrupo((d.ultimoCompletado || d.ultimo).grupo) }}</span><ng-template #sinEj><span class="gris">Sin ejecuciones</span></ng-template></td>
+          <td>{{ d.ultimo ? fmtRelativo(d.ultimo.encolado) : '—' }}</td>
+          <td><span class="chip" [class.chip-media]="d.estadoCola !== 'enabled'">{{ d.estadoCola === 'enabled' ? 'Habilitado' : d.estadoCola === 'paused' ? 'En pausa' : 'Deshabilitado' }}</span></td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<!-- ESTADÍSTICAS -->
+<ng-container *ngIf="vista === 'estadisticas' && est as e">
+  <div class="barra">
+    <div class="selector-dias" role="group" aria-label="Periodo"><button type="button" *ngFor="let d of [7, 30, 60, 90]" [class.activo]="diasEst === d" (click)="cambiarDiasEst(d)">{{ d }} días</button></div>
+    <span class="gris" *ngIf="e.limitada">Muestra limitada a las {{ fmtNum(e.muestra) }} ejecuciones más recientes.</span>
+  </div>
+  <div class="kpis kpis-6">
+    <div class="kpi"><span class="kpi-et">Ejecuciones</span><span class="kpi-v">{{ fmtNum(e.estadisticas.total) }}</span></div>
+    <div class="kpi"><span class="kpi-et">Tasa de éxito</span><span class="kpi-v" [ngClass]="'t-' + claseTasa(e.estadisticas.tasaExito)">{{ fmtPct(e.estadisticas.tasaExito) }}</span></div>
+    <div class="kpi"><span class="kpi-et">Duración p50</span><span class="kpi-v">{{ fmtDuracion(e.estadisticas.duracionMs.p50) }}</span></div>
+    <div class="kpi"><span class="kpi-et">Duración p95</span><span class="kpi-v">{{ fmtDuracion(e.estadisticas.duracionMs.p95) }}</span></div>
+    <div class="kpi"><span class="kpi-et">Espera p50</span><span class="kpi-v">{{ fmtDuracion(e.estadisticas.esperaMs.p50) }}</span><span class="kpi-s">p95: {{ fmtDuracion(e.estadisticas.esperaMs.p95) }}</span></div>
+    <div class="kpi"><span class="kpi-et">Fallidos</span><span class="kpi-v" [class.t-mal]="e.estadisticas.grupos.fallido > 0">{{ e.estadisticas.grupos.fallido }}</span></div>
+  </div>
+  <div class="contenido">
+    <section class="tarjeta"><div class="tarjeta-cab"><h2>Ejecuciones por día</h2></div><app-stacked-bar-chart [etiquetas]="estEtq" [series]="estSeries" [alto]="190" unidad="ejecuciones"></app-stacked-bar-chart></section>
+    <section class="tarjeta">
+      <div class="tarjeta-cab"><h2>Por pipeline</h2><span class="tarjeta-sub">«Inestable» = alterna entre éxito y fallo</span></div>
+      <div class="tabla-wrap">
+        <table class="tabla">
+          <thead><tr><th>Pipeline</th><th class="num">Total</th><th class="num">Éxito</th><th class="num">Fallidos</th><th class="num">Duración media</th><th class="num">p95</th><th>Último</th></tr></thead>
+          <tbody>
+            <tr *ngFor="let d of e.estadisticas.porDefinicion">
+              <td class="td-nombre"><strong>{{ d.nombre }}</strong> <span class="chip chip-media" *ngIf="d.inestable">inestable</span></td>
+              <td class="num">{{ d.total }}</td><td class="num" [ngClass]="'t-' + claseTasa(d.tasaExito)">{{ fmtPct(d.tasaExito) }}</td><td class="num">{{ d.fallidos }}</td>
+              <td class="num">{{ fmtDuracion(d.duracionMediaMs) }}</td><td class="num">{{ fmtDuracion(d.duracionP95Ms) }}</td>
+              <td><span class="est" [ngClass]="'est-' + claseGrupo(d.ultimo?.grupo)">{{ textoGrupo(d.ultimo?.grupo) }}</span></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+    <div class="grilla g-3">
+      <section class="tarjeta"><div class="tarjeta-cab"><h2>Ramas</h2></div><app-bar-list [items]="estRamas"></app-bar-list></section>
+      <section class="tarjeta"><div class="tarjeta-cab"><h2>Motivo</h2></div><app-bar-list [items]="estMotivos"></app-bar-list></section>
+      <section class="tarjeta"><div class="tarjeta-cab"><h2>Quién dispara</h2></div><app-bar-list [items]="estSolicitantes"></app-bar-list></section>
+    </div>
+    <section class="tarjeta" *ngIf="e.estadisticas.fallosRecientes.length">
+      <div class="tarjeta-cab"><h2>Fallos recientes</h2></div>
+      <ul class="lista">
+        <li class="item-lista click" *ngFor="let b of e.estadisticas.fallosRecientes" (click)="abrir(b)" tabindex="0" (keyup.enter)="abrir(b)">
+          <div class="il-cab"><span class="est est-mal">Fallido</span><strong>{{ b.definicion }}</strong><span class="gris">#{{ b.numero }}</span></div>
+          <div class="il-sub"><span>{{ b.rama }}</span><span>{{ b.solicitadoPor }}</span><span>{{ fmtRelativo(b.encolado) }}</span></div>
+        </li>
+      </ul>
+    </section>
+  </div>
+</ng-container>
+
+<!-- PRUEBAS -->
+<ng-container *ngIf="vista === 'pruebas' && pruebas">
+  <div class="aviso-info">Azure DevOps solo permite consultar las pruebas de los últimos 7 días.</div>
+  <div class="kpis">
+    <div class="kpi"><span class="kpi-et">Ejecuciones de prueba</span><span class="kpi-v">{{ pruebas.resumen.ejecuciones }}</span></div>
+    <div class="kpi"><span class="kpi-et">Pruebas</span><span class="kpi-v">{{ fmtNum(pruebas.resumen.total) }}</span></div>
+    <div class="kpi"><span class="kpi-et">Tasa de éxito</span><span class="kpi-v" [ngClass]="'t-' + claseTasa(pruebas.resumen.tasaExito)">{{ fmtPct(pruebas.resumen.tasaExito) }}</span></div>
+    <div class="kpi"><span class="kpi-et">Fallidas</span><span class="kpi-v" [class.t-mal]="pruebas.resumen.fallidas > 0">{{ fmtNum(pruebas.resumen.fallidas) }}</span></div>
+  </div>
+  <section class="tarjeta">
+    <p class="vacio" *ngIf="!pruebas.runs.length">No hubo ejecuciones de pruebas en los últimos 7 días.</p>
+    <ul class="lista">
+      <li class="item-lista" *ngFor="let r of pruebas.runs">
+        <div class="il-cab click-cab" (click)="verRun(r)" tabindex="0" (keyup.enter)="verRun(r)" role="button">
+          <strong>{{ r.nombre }}</strong><span class="chip">{{ r.automatizada ? 'automatizada' : 'manual' }}</span>
+          <span class="t-ok"><app-ico n="check"></app-ico>{{ r.pasadas }}</span><span class="t-mal" *ngIf="r.fallidas"><app-ico n="x"></app-ico>{{ r.fallidas }}</span><span class="gris">de {{ r.total }}</span>
+          <span class="espacio"></span><span class="gris">{{ fmtRelativo(r.inicio) }}</span><span class="enlace">{{ runAbierto === r.id ? 'Ocultar' : 'Ver fallos' }}</span>
+        </div>
+        <div class="barra-segmentos"><span class="s-ok" [style.flex]="r.pasadas"></span><span class="s-mal" [style.flex]="r.fallidas"></span><span class="s-nulo" [style.flex]="r.total - r.pasadas - r.fallidas > 0 ? r.total - r.pasadas - r.fallidas : 0"></span></div>
+        <ng-container *ngIf="runAbierto === r.id">
+          <div class="cargando" *ngIf="runCargando"><div class="spinner chico"></div></div>
+          <ng-container *ngIf="runDet">
+            <p class="gris" *ngIf="runDet.errorFallos">{{ runDet.errorFallos }}</p>
+            <p class="gris" *ngIf="!runDet.errorFallos && !runDet.fallos.length">Sin pruebas fallidas.</p>
+            <div class="fallo-prueba" *ngFor="let f of runDet.fallos"><strong>{{ f.nombre }}</strong><div class="gris peq" *ngIf="f.responsable">{{ f.responsable }}</div><pre class="texto-bloque">{{ f.mensaje || '(sin mensaje)' }}</pre></div>
+          </ng-container>
+        </ng-container>
+      </li>
+    </ul>
+  </section>
+</ng-container>
+
+<!-- DETALLE DE EJECUCIÓN -->
+<div class="modal-overlay" *ngIf="abierta" (click)="cerrar()">
+  <div class="modal-card" role="dialog" aria-modal="true" (click)="$event.stopPropagation()">
+    <div class="modal-header">
+      <div>
+        <h2>{{ det?.ejecucion?.definicion || abierta.definicion }} <span class="gris">#{{ det?.ejecucion?.numero || abierta.numero }}</span></h2>
+        <div class="meta" *ngIf="det as d">
+          <span class="est" [ngClass]="'est-' + claseGrupo(d.ejecucion.grupo)">{{ textoGrupo(d.ejecucion.grupo) }}</span>
+          <span><code class="sha">{{ d.ejecucion.rama }}</code> <code class="sha" *ngIf="d.ejecucion.commit">{{ d.ejecucion.commit }}</code></span>
+          <span>{{ d.ejecucion.motivoTexto }}</span><span>{{ d.ejecucion.solicitadoPor }}</span><span>{{ fmtFecha(d.ejecucion.inicio || d.ejecucion.encolado) }}</span>
+          <a class="ext" *ngIf="d.ejecucion.url" [href]="d.ejecucion.url" target="_blank" rel="noopener">Ver en Azure DevOps<app-ico n="externo" class="fin"></app-ico></a>
+        </div>
+      </div>
+      <button type="button" class="close-btn" (click)="cerrar()" aria-label="Cerrar"><app-ico n="cerrar" class="solo"></app-ico></button>
+    </div>
+    <div class="cargando" *ngIf="detCargando"><div class="spinner"></div>Cargando…</div>
+    <app-azure-fallo [fallo]="detFallo"></app-azure-fallo>
+
+    <ng-container *ngIf="det as d">
+      <div class="kpis">
+        <div class="kpi"><span class="kpi-et">Duración</span><span class="kpi-v">{{ fmtDuracion(d.ejecucion.duracionMs) }}</span></div>
+        <div class="kpi"><span class="kpi-et">Espera en cola</span><span class="kpi-v">{{ fmtDuracion(d.ejecucion.esperaMs) }}</span></div>
+        <div class="kpi"><span class="kpi-et">Agente / cola</span><span class="kpi-v peq-v">{{ d.ejecucion.cola || '—' }}</span></div>
+        <div class="kpi"><span class="kpi-et">Commit</span><span class="kpi-v peq-v">{{ d.mensajeCommit || '—' }}</span></div>
+      </div>
+
+      <h3 class="titulo-sec" style="margin-top: 4px">Etapas, trabajos y pasos</h3>
+      <app-azure-fallo [fallo]="d.errorEtapas ? { error: d.errorEtapas } : null"></app-azure-fallo>
+      <p class="vacio" *ngIf="!pasos.length && !d.errorEtapas">Azure no devolvió el detalle de pasos para esta ejecución.</p>
+      <ul class="lista pasos">
+        <li class="paso" *ngFor="let p of pasos" [style.margin-left.px]="p.nivel * 18">
+          <div class="paso-cab">
+            <span class="est" [ngClass]="'est-' + claseTimeline(p.nodo.estado, p.nodo.resultado)">{{ textoTimeline(p.nodo.estado, p.nodo.resultado) }}</span>
+            <span class="chip">{{ tipoPaso(p.nodo.tipo) }}</span>
+            <strong class="cortar">{{ p.nodo.nombre }}</strong>
+            <span class="gris">{{ fmtDuracion(p.nodo.duracionMs) }}</span>
+            <span class="t-mal" *ngIf="p.nodo.errores"><app-ico n="x"></app-ico>{{ p.nodo.errores }}</span><span class="t-aviso" *ngIf="p.nodo.advertencias"><app-ico n="alerta"></app-ico>{{ p.nodo.advertencias }}</span>
+            <span class="espacio"></span>
+            <button type="button" class="btn-mini" *ngIf="p.nodo.logId !== null" (click)="verLog(p.nodo)">{{ logAbierto?.id === p.nodo.logId ? 'Ocultar log' : 'Ver log' }}</button>
+          </div>
+          <ul class="problemas" *ngIf="p.nodo.problemas.length">
+            <li *ngFor="let pr of p.nodo.problemas" [class.t-mal]="pr.tipo === 'error'" [class.t-aviso]="pr.tipo !== 'error'">{{ pr.mensaje }}</li>
+          </ul>
+          <ng-container *ngIf="logAbierto?.id === p.nodo.logId && p.nodo.logId !== null">
+            <div class="cargando" *ngIf="logCargando"><div class="spinner chico"></div></div>
+            <app-azure-fallo [fallo]="logFallo"></app-azure-fallo>
+            <ng-container *ngIf="logTexto">
+              <div class="log-info gris">{{ logInfo }} <button type="button" class="enlace" (click)="masLog()">Ver más líneas</button></div>
+              <pre class="log">{{ logTexto }}</pre>
+            </ng-container>
+          </ng-container>
+        </li>
+      </ul>
+
+      <div class="grilla g-1-1" style="margin-top: 14px">
+        <div>
+          <h3 class="titulo-sec">Cambios incluidos</h3>
+          <ul class="lista"><li class="item-lista" *ngFor="let c of d.cambios"><div class="il-cab"><code class="sha">{{ c.id }}</code><strong>{{ c.mensaje }}</strong></div><div class="il-sub"><span>{{ c.autor }}</span><span>{{ fmtFecha(c.fecha) }}</span></div></li><li class="vacio" *ngIf="!d.cambios.length">Sin cambios asociados.</li></ul>
+          <h3 class="titulo-sec">Work items</h3>
+          <ul class="lista"><li class="item-lista" *ngFor="let w of d.workItems"><div class="il-cab"><span class="chip">#{{ w.id }}</span><strong>{{ w.titulo }}</strong></div></li><li class="vacio" *ngIf="!d.workItems.length">Sin work items.</li></ul>
+        </div>
+        <div>
+          <h3 class="titulo-sec">Artefactos publicados</h3>
+          <ul class="lista"><li class="item-lista" *ngFor="let a of d.artefactos"><div class="il-cab"><strong>{{ a.nombre }}</strong><span class="chip">{{ a.tipo }}</span></div><div class="il-sub"><span>{{ fmtBytes(a.tamanoBytes) }}</span></div></li><li class="vacio" *ngIf="!d.artefactos.length">Sin artefactos.</li></ul>
+          <h3 class="titulo-sec">Parámetros</h3>
+          <dl class="kv" *ngIf="d.parametros.length"><ng-container *ngFor="let p of d.parametros"><dt>{{ p.nombre }}</dt><dd>{{ p.valor }}</dd></ng-container></dl>
+          <p class="vacio" *ngIf="!d.parametros.length">Sin parámetros.</p>
+        </div>
+      </div>
+    </ng-container>
+  </div>
+</div>
+
+<!-- DETALLE DE PIPELINE -->
+<div class="modal-overlay" *ngIf="defAbierta" (click)="cerrarDef()">
+  <div class="modal-card" role="dialog" aria-modal="true" (click)="$event.stopPropagation()">
+    <div class="modal-header">
+      <div><h2>{{ defAbierta.nombre }}</h2><div class="meta"><span class="chip" [class.chip-marca]="defAbierta.tipo === 'YAML'">{{ defAbierta.tipo }}</span><span>{{ defAbierta.repositorio }}</span><span *ngIf="defAbierta.ramaPorDefecto">rama {{ defAbierta.ramaPorDefecto }}</span><a class="ext" [href]="defAbierta.url" target="_blank" rel="noopener">Ver en Azure DevOps<app-ico n="externo" class="fin"></app-ico></a></div></div>
+      <button type="button" class="close-btn" (click)="cerrarDef()" aria-label="Cerrar"><app-ico n="cerrar" class="solo"></app-ico></button>
+    </div>
+    <div class="cargando" *ngIf="defCargando"><div class="spinner"></div></div>
+    <app-azure-fallo [fallo]="defFallo"></app-azure-fallo>
+    <ng-container *ngIf="defDet as r">
+      <ng-container *ngIf="r.ejecuciones as ej">
+        <div class="kpis">
+          <div class="kpi"><span class="kpi-et">Ejecuciones (30 d)</span><span class="kpi-v">{{ ej.estadisticas.total }}</span></div>
+          <div class="kpi"><span class="kpi-et">Éxito</span><span class="kpi-v" [ngClass]="'t-' + claseTasa(ej.estadisticas.tasaExito)">{{ fmtPct(ej.estadisticas.tasaExito) }}</span></div>
+          <div class="kpi"><span class="kpi-et">Duración p50</span><span class="kpi-v">{{ fmtDuracion(ej.estadisticas.duracionMs.p50) }}</span></div>
+          <div class="kpi"><span class="kpi-et">Duración p95</span><span class="kpi-v">{{ fmtDuracion(ej.estadisticas.duracionMs.p95) }}</span></div>
+        </div>
+      </ng-container>
+      <app-azure-fallo [fallo]="r.errorEjecuciones ? { error: r.errorEjecuciones } : null"></app-azure-fallo>
+      <div class="grilla g-1-1">
+        <div>
+          <h3 class="titulo-sec" style="margin-top: 0">Disparadores</h3>
+          <ul class="lista"><li class="item-lista" *ngFor="let t of r.triggers"><div class="il-cab"><strong>{{ t.tipo }}</strong></div><div class="il-sub"><span *ngFor="let x of t.ramas">{{ x }}</span><span *ngFor="let x of t.rutas">ruta {{ x }}</span><span *ngFor="let s of t.programaciones">programado {{ s.hora }}:{{ s.minuto < 10 ? '0' : '' }}{{ s.minuto }}</span></div></li><li class="vacio" *ngIf="!r.triggers.length">Sin disparadores automáticos.</li></ul>
+        </div>
+        <div>
+          <h3 class="titulo-sec" style="margin-top: 0">Variables (solo nombres)</h3>
+          <ul class="lista"><li class="item-lista" *ngFor="let v of r.variables"><div class="il-cab"><code class="sha">{{ v.nombre }}</code><span class="chip chip-media" *ngIf="v.secreta">secreta</span></div></li><li class="vacio" *ngIf="!r.variables.length">Sin variables.</li></ul>
+        </div>
+      </div>
+      <h3 class="titulo-sec">Últimas ejecuciones</h3>
+      <ul class="lista" *ngIf="r.ejecuciones">
+        <li class="item-lista click" *ngFor="let b of r.ejecuciones.ejecuciones" (click)="cerrarDef(); abrir(b)"><div class="il-cab"><span class="est" [ngClass]="'est-' + claseGrupo(b.grupo)">{{ textoGrupo(b.grupo) }}</span><strong>#{{ b.numero }}</strong><span class="gris">{{ b.rama }} · {{ b.solicitadoPor }} · {{ fmtRelativo(b.encolado) }}</span></div></li>
+      </ul>
+      <button type="button" class="btn btn-ghost btn-sm" style="margin-top: 10px" (click)="verEjecucionesDe(defAbierta)">Ver todas las ejecuciones</button>
+      <ng-container *ngIf="r.yaml || r.errorYaml">
+        <h3 class="titulo-sec">Definición YAML</h3>
+        <app-azure-fallo [fallo]="r.errorYaml ? { error: r.errorYaml } : null"></app-azure-fallo>
+        <pre class="log" *ngIf="r.yaml">{{ r.yaml }}</pre>
+      </ng-container>
+    </ng-container>
+  </div>
+</div>

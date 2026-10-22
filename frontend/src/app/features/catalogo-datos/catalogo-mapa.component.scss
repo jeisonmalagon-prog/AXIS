@@ -1,0 +1,71 @@
+@use '../../repositorio/azure/azure-base' as *;
+@include base;
+
+:host { display: block; min-width: 0; }
+.mono { font-family: 'JetBrains Mono', monospace; }
+
+.mp-barra { display: flex; align-items: center; gap: 10px 16px; flex-wrap: wrap; margin-bottom: 10px; font-size: 12.5px; color: $brand-gray; }
+.mp-ruta { display: inline-flex; align-items: center; gap: 8px; strong { color: $brand-dark; } .enlace:disabled { color: $brand-dark; cursor: default; text-decoration: none; } }
+.mp-filtro { display: inline-flex; align-items: center; gap: 6px; flex: 1 1 260px; max-width: 420px; background: $surface-bg; border: 1px solid $border-light; border-radius: 8px; padding: 6px 10px;
+  input { flex: 1; min-width: 0; border: none; background: transparent; outline: none; font-family: inherit; font-size: 13px; color: $brand-dark; }
+  button { border: none; background: transparent; color: $brand-gray; cursor: pointer; font-size: 12px; } &:focus-within { border-color: $brand; } }
+.mp-estado { font-weight: 600; }
+.mp-check { display: inline-flex; align-items: center; gap: 6px; cursor: pointer; input { accent-color: var(--ax-brand-primary, #673ab7); } }
+.mp-espacio { flex: 1; }
+.mp-zoom { display: inline-flex; gap: 6px; button { min-width: 34px; border: 1px solid rgba($brand-rgb, 0.35); background: $surface; color: $brand; border-radius: 8px; padding: 6px 10px; font-family: inherit; font-size: 13px; font-weight: 700; cursor: pointer; &:hover { background: rgba($brand-rgb, 0.08); } } }
+
+// Fondo «espacio»: oscuro en ambos temas (los colores de los orígenes están validados sobre fondo oscuro).
+.mp-lienzo { position: relative; height: min(72vh, 680px); min-height: 400px; border-radius: 14px; overflow: hidden; border: 1px solid #1e293b;
+  background: radial-gradient(ellipse at 30% 20%, #1b2442 0%, #0b1020 60%, #070b16 100%); color: #e2e8f0; }
+.mp-svg { width: 100%; height: 100%; display: block; cursor: grab; touch-action: none; user-select: none; &:active { cursor: grabbing; } }
+.mp-cargando, .mp-vacio { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; color: #cbd5e1; text-align: center; padding: 20px; pointer-events: none; p { margin: 0; max-width: 460px; font-size: 13px; line-height: 1.5; } }
+.mp-cargando .spinner { border-color: rgba(255, 255, 255, 0.2); border-top-color: #a5b4fc; }
+.mp-ayuda { position: absolute; left: 12px; right: 12px; bottom: 8px; margin: 0; font-size: 11px; color: #94a3b8; pointer-events: none; }
+.mp-tip { position: absolute; z-index: 3; width: 236px; display: flex; flex-direction: column; gap: 3px; padding: 9px 12px; border-radius: 10px; background: rgba(15, 23, 42, 0.94); border: 1px solid #334155; box-shadow: 0 10px 28px rgba(0, 0, 0, 0.45); font-size: 12px; color: #e2e8f0; pointer-events: none;
+  strong { font-size: 13px; overflow-wrap: anywhere; } .mp-tip-sub { color: #94a3b8; font-size: 11px; margin-bottom: 2px; } }
+
+// --- Galaxia ---
+.cumulo-aro { fill: rgba(148, 163, 184, 0.04); stroke-width: 1.2; stroke-dasharray: 3 6; opacity: 0.55; }
+.cumulo-nombre { font-size: 13px; font-weight: 800; letter-spacing: 0.4px; }
+.cumulo-motor { font-size: 10px; fill: #94a3b8; }
+.puente { stroke: #cbd5e1; opacity: 0.28; stroke-linecap: round; }
+.base { cursor: pointer; outline: none; transition: opacity 0.2s;
+  .base-cuerpo { fill-opacity: 0.2; stroke-width: 2; transition: fill-opacity 0.15s; }
+  .base-brillo { opacity: 0.22; fill: currentColor; }
+  .polvo { fill: #fff; opacity: 0.8; }
+  .base-nombre { font-size: 12px; font-weight: 700; fill: #e2e8f0; font-family: 'JetBrains Mono', monospace; paint-order: stroke; stroke: #0b1020; stroke-width: 3px; }
+  .base-n { font-size: 11px; font-weight: 800; fill: #fff; opacity: 0; transition: opacity 0.15s; paint-order: stroke; stroke: #0b1020; stroke-width: 3px; }
+  &:hover .base-cuerpo, &:focus-visible .base-cuerpo { fill-opacity: 0.4; }
+  &:hover .base-n, &:focus-visible .base-n { opacity: 1; }
+  &:focus-visible .base-cuerpo { stroke: #fff; stroke-width: 3; }
+  &.apagada { opacity: 0.18; }
+  &.coincide .base-cuerpo { fill-opacity: 0.5; stroke-width: 3.2; }
+  &.error .base-cuerpo { stroke-dasharray: 4 4; } }
+.insignia { fill: #facc15; stroke: #0b1020; stroke-width: 2; }
+.insignia-n { font-size: 9.5px; font-weight: 800; fill: #1e1b00; }
+
+// --- Constelación ---
+.halo { fill: rgba(148, 163, 184, 0.04); stroke: rgba(148, 163, 184, 0.22); stroke-dasharray: 2 6; }
+.enlace-fk { stroke: #94a3b8; stroke-width: 1.1; opacity: 0.55; transition: opacity 0.15s;
+  &.viva { stroke: #fff; stroke-width: 2; opacity: 1; } &.apagada { opacity: 0.08; } }
+.tabla { cursor: pointer; outline: none; transition: opacity 0.2s;
+  .tabla-hit { fill: transparent; }
+  .tabla-cuerpo { stroke: #0b1020; stroke-width: 1.5; fill-opacity: 0.95; }
+  .tabla-aro { fill: none; stroke: #facc15; stroke-width: 2.4; }
+  .tabla-nombre { font-size: 10px; fill: #e2e8f0; font-family: 'JetBrains Mono', monospace; paint-order: stroke; stroke: #0b1020; stroke-width: 3px; pointer-events: none; }
+  &.vista .tabla-cuerpo { fill-opacity: 0.25; stroke: currentColor; stroke-dasharray: 3 2; stroke-width: 1.6; }
+  &:hover .tabla-cuerpo, &:focus-visible .tabla-cuerpo { stroke: #fff; stroke-width: 2.4; }
+  &.apagada { opacity: 0.14; } }
+
+// --- Queries del equipo (turquesa, distinto de FK y puentes) ---
+$q-color: #2dd4bf;
+.mp-n { font-size: 10.5px; font-weight: 800; background: $surface-bg; border: 1px solid $border-light; border-radius: 999px; padding: 0 7px; color: $brand-dark; }
+.mp-ver-q { border: 1px solid rgba($brand-rgb, 0.35); background: $surface; color: $brand; border-radius: 8px; padding: 6px 12px; font-family: inherit; font-size: 12.5px; font-weight: 700; cursor: pointer; &:hover { background: rgba($brand-rgb, 0.08); } }
+.puente-q { stroke: $q-color; opacity: 0.55; stroke-dasharray: 7 5; stroke-linecap: round; }
+.insignia-q { fill: $q-color; stroke: #0b1020; stroke-width: 2; }
+.insignia-q-n { font-size: 9.5px; font-weight: 800; fill: #042f2e; }
+.enlace-q { stroke: $q-color; stroke-width: 1.6; opacity: 0.8; stroke-dasharray: 5 3; transition: opacity 0.15s;
+  &.sin-fk { stroke-dasharray: 2 4; stroke-width: 1.8; }
+  &.viva { stroke: #fff; stroke-width: 2.4; opacity: 1; } &.apagada { opacity: 0.1; } }
+.tabla-aro-q { fill: none; stroke: $q-color; opacity: 0.85; pointer-events: none; }
+.ley-q { color: $q-color; font-weight: 700; }

@@ -1,0 +1,118 @@
+<div class="filtros-panel">
+  <div class="filtros-grid">
+    <div class="campo" *ngIf="datos?.fuente !== 'ventana'">
+      <span class="campo__etiqueta">Periodo</span>
+      <div class="rango-selector" role="group" aria-label="Periodo">
+        <button *ngFor="let d of dias" type="button" class="rango-boton" [class.activo]="diasSeleccionados === d" (click)="elegirDias(d)">{{ d }} días</button>
+      </div>
+    </div>
+    <div class="campo" *ngIf="datos?.fuente === 'ventana'">
+      <label for="vaMin">Inicios de sesión de los últimos</label>
+      <select id="vaMin" [(ngModel)]="minutos" (ngModelChange)="cargar()"><option *ngFor="let m of minutosVentana" [ngValue]="m">{{ m }} minutos</option></select>
+    </div>
+    <div class="campo campo--accion"><button type="button" class="btn-secundario" [disabled]="cargando" (click)="cargar()">{{ cargando ? 'Calculando…' : 'Actualizar' }}</button></div>
+  </div>
+</div>
+
+<div class="error-banner" *ngIf="error">{{ error }}</div>
+<div class="carga-inicial" *ngIf="cargando && !datos">Calculando la adopción de versiones…</div>
+
+<ng-container *ngIf="datos as d">
+  <div class="banner banner--aviso" *ngIf="d.mensaje">
+    <strong>Datos parciales: solo la última ventana de inicios de sesión</strong>
+    <span>{{ d.mensaje }}</span>
+  </div>
+  <p class="detalle-aviso">{{ d.descripcion }}
+    <ng-container *ngIf="d.cobertura"> Cobertura calculada: {{ d.cobertura.dias }} de {{ d.cobertura.diasPedidos }} días<ng-container *ngIf="d.cobertura.actualizado"> (actualizado {{ d.cobertura.actualizado }})</ng-container>.
+      <ng-container *ngIf="d.cobertura.dias < d.cobertura.diasPedidos"> Los días que faltan se van completando solos en segundo plano.</ng-container>
+    </ng-container>
+  </p>
+
+  <div class="kpis-flujo">
+    <div class="kpi-flujo"><span class="kpi-flujo__etiqueta">Clientes contados</span><span class="kpi-flujo__valor">{{ d.totalClientes | number }}</span><span class="kpi-flujo__pie">una vez cada uno</span></div>
+    <div class="kpi-flujo"><span class="kpi-flujo__etiqueta">Versiones en uso</span><span class="kpi-flujo__valor">{{ d.versiones.length }}</span></div>
+    <div class="kpi-flujo kpi-flujo--ok" *ngIf="d.versiones.length"><span class="kpi-flujo__etiqueta">Versión más reciente</span><span class="kpi-flujo__valor">{{ d.masReciente }}</span><span class="kpi-flujo__pie">{{ d.versiones[0].clientes | number }} clientes · {{ pct(d.versiones[0].porcentaje, 1) }}</span></div>
+    <div class="kpi-flujo" [class.kpi-flujo--warn]="d.versiones.length > 1" *ngIf="d.versiones.length > 1"><span class="kpi-flujo__etiqueta">En versiones anteriores</span>
+      <span class="kpi-flujo__valor">{{ d.totalClientes - d.versiones[0].clientes | number }}</span><span class="kpi-flujo__pie">{{ pct(1 - d.versiones[0].porcentaje, 1) }} de los clientes</span></div>
+  </div>
+
+  <div class="vacio" *ngIf="!d.versiones.length"><p>No hay inicios de sesión con versión conocida en este periodo.</p></div>
+
+  <div class="panel-diagrama" *ngIf="d.versiones.length">
+    <div class="panel-diagrama__cabecera"><div><h2>Clientes por versión</h2><p class="sub">Cada cliente en la versión de su último inicio de sesión. «Ver CC» lista los documentos.</p></div></div>
+    <div class="tabla-scroll">
+      <table>
+        <thead><tr><th>Versión</th><th class="num">Clientes</th><th class="num">%</th><th>Participación</th><th>Plataforma</th><th></th></tr></thead>
+        <tbody>
+          <tr *ngFor="let v of d.versiones; trackBy: trackVersion">
+            <td><strong class="mono">{{ v.version }}</strong> <span class="pill pill--ok" *ngIf="v.esMasReciente">más reciente</span></td>
+            <td class="num">{{ v.clientes | number }}</td>
+            <td class="num">{{ pct(v.porcentaje, 1) }}</td>
+            <td class="celda-barra"><span class="barra-celda"><i [style.width.%]="v.porcentaje * 100"></i></span></td>
+            <td>
+              <button type="button" class="chip-plat" *ngFor="let p of v.plataformas" (click)="verClientes(v, p.plataforma)" [title]="'Ver los CC de ' + p.plataforma">{{ p.plataforma }} <b>{{ p.clientes | number }}</b></button>
+            </td>
+            <td><button type="button" class="btn-secundario btn-mini" (click)="verClientes(v)">Ver CC ({{ v.clientes | number }})</button></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="panel-diagrama panel-espacio" *ngIf="serie.length > 1">
+    <div class="panel-diagrama__cabecera"><div><h2>Clientes que iniciaron sesión, por día y versión</h2><p class="sub">Cada día cuenta los clientes distintos de ese día (un cliente puede aparecer en días distintos). Pasa el cursor sobre una barra para ver el detalle.</p></div></div>
+    <div class="leyenda">
+      <span *ngFor="let l of leyenda"><i class="punto" [style.background]="l.color"></i>{{ l.version }}</span>
+    </div>
+    <div class="grafica" role="img" aria-label="Clientes por día y versión de la app">
+      <div class="col" *ngFor="let dia of serie" [title]="textoDia(dia)">
+        <div class="col__pila" [style.height.%]="alto(dia.total)">
+          <div class="col__parte" *ngFor="let p of dia.partes" [style.flex-grow]="p.clientes" [style.background]="p.color"></div>
+        </div>
+        <span class="col__fecha">{{ dia.fecha.slice(5) }}</span>
+      </div>
+    </div>
+  </div>
+</ng-container>
+
+<!-- MODAL: CC de una versión -->
+<div class="modal-fondo" *ngIf="modalAbierto" (click)="cerrarModal()">
+  <div class="modal" role="dialog" aria-modal="true" aria-label="Clientes de la versión" (click)="$event.stopPropagation()">
+    <header class="modal__cabecera">
+      <div>
+        <h2>Clientes en la versión <span class="mono">{{ modalVersion?.version }}</span></h2>
+        <p class="sub" *ngIf="clientes">{{ clientes.total | number }} cliente(s)<ng-container *ngIf="modalPlataforma"> en {{ modalPlataforma }}</ng-container> · fuente: {{ clientes.fuente === 'tablas' ? 'tablas de análisis' : 'última ventana de inicios de sesión' }}</p>
+      </div>
+      <button type="button" class="cerrar" (click)="cerrarModal()" aria-label="Cerrar">×</button>
+    </header>
+
+    <div class="modal__acciones">
+      <div class="rango-selector" role="group" aria-label="Plataforma">
+        <button type="button" class="rango-boton" [class.activo]="!modalPlataforma" (click)="cambiarPlataforma('')">Todas</button>
+        <button type="button" class="rango-boton" [class.activo]="modalPlataforma === 'iOS'" (click)="cambiarPlataforma('iOS')">iOS</button>
+        <button type="button" class="rango-boton" [class.activo]="modalPlataforma === 'Android'" (click)="cambiarPlataforma('Android')">Android</button>
+      </div>
+      <button type="button" class="btn-secundario btn-mini" (click)="copiarPagina()" [disabled]="!clientes?.clientes?.length">{{ copiado ? '¡Copiado!' : 'Copiar CC de esta página' }}</button>
+      <button type="button" class="btn-primario btn-mini" (click)="descargarCsv()" [disabled]="descargando || !clientes?.total">{{ descargando ? 'Descargando…' : 'Descargar CSV completo' }}</button>
+    </div>
+
+    <div class="error-banner" *ngIf="errorClientes">{{ errorClientes }}</div>
+    <div class="carga-inicial" *ngIf="cargandoClientes">Buscando clientes…</div>
+
+    <div class="tabla-scroll modal__tabla" *ngIf="!cargandoClientes && clientes">
+      <table>
+        <thead><tr><th>CC</th><th>Plataforma</th><th>Primera vez con esta versión</th><th>Última vez</th></tr></thead>
+        <tbody>
+          <tr *ngFor="let c of clientes.clientes"><td class="mono"><strong>{{ c.documento }}</strong></td><td>{{ c.plataforma || '—' }}</td><td class="mono">{{ c.primeraVez }}</td><td class="mono">{{ c.ultimaVez }}</td></tr>
+        </tbody>
+      </table>
+      <div class="vacio" *ngIf="!clientes.clientes.length"><p>No hay clientes con esos filtros.</p></div>
+    </div>
+
+    <footer class="modal__pie" *ngIf="clientes && totalPaginas > 1">
+      <button type="button" class="btn-secundario btn-mini" [disabled]="pagina <= 1" (click)="irPagina(pagina - 1)">‹ Anterior</button>
+      <span>Página {{ pagina }} de {{ totalPaginas }}</span>
+      <button type="button" class="btn-secundario btn-mini" [disabled]="pagina >= totalPaginas" (click)="irPagina(pagina + 1)">Siguiente ›</button>
+    </footer>
+  </div>
+</div>

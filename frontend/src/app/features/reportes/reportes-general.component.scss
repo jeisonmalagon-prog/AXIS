@@ -1,0 +1,369 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap');
+
+$brand-dark: var(--ax-text, #1e293b);
+$brand-gray: var(--ax-text-muted, #64748b);
+$border-light: var(--ax-border, #e2e8f0);
+$state-ok: #10b981;
+$state-warn: #f59e0b;
+$state-danger: #ef4444;
+$font-ui: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+$font-mono: 'JetBrains Mono', 'Courier New', monospace;
+
+:host {
+  display: block;
+  font-family: $font-ui;
+}
+
+.page-header {
+  margin-bottom: 20px;
+  h1 { font-size: 24px; font-weight: 800; color: $brand-dark; margin: 0; }
+  .subtitle { color: $brand-gray; margin-top: 4px; font-size: 14px; }
+}
+
+// ==========================================
+// SELECTOR DE SECCIONES (checklist)
+// ==========================================
+.seccion-checklist {
+  margin-bottom: 18px;
+  padding: 14px 16px;
+  background: var(--ax-surface-2, #f8fafc);
+  border: 1px solid $border-light;
+  border-radius: 12px;
+}
+
+.checklist-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.checklist-titulo {
+  font-size: 13px;
+  font-weight: 800;
+  color: $brand-dark;
+}
+
+.checklist-acciones {
+  display: flex;
+  gap: 14px;
+}
+
+.btn-link {
+  font-family: $font-ui;
+  font-size: 11.5px;
+  font-weight: 700;
+  color: var(--ax-brand-primary, #673ab7);
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  text-decoration: underline;
+
+  &:hover { opacity: 0.75; }
+}
+
+.checklist-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+  gap: 10px;
+}
+
+.checklist-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  font-weight: 500;
+  color: $brand-dark;
+  cursor: pointer;
+
+  input[type="checkbox"] {
+    width: 16px;
+    height: 16px;
+    accent-color: var(--ax-brand-primary, #673ab7);
+    cursor: pointer;
+  }
+}
+
+// ==========================================
+// SELECTOR DE PERIODO
+// ==========================================
+.seccion-selector {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 18px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid $border-light;
+}
+
+.selector-periodo {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.btn-periodo {
+  font-family: $font-ui;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: $brand-gray;
+  background: var(--ax-surface, white);
+  border: 1px solid $border-light;
+  border-radius: 8px;
+  padding: 7px 14px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+
+  &:hover { border-color: var(--ax-brand-primary, #673ab7); color: var(--ax-brand-primary, #673ab7); }
+
+  &.activo {
+    background: var(--ax-brand-primary, #673ab7);
+    border-color: var(--ax-brand-primary, #673ab7);
+    color: white;
+  }
+}
+
+.rango-fechas {
+  display: flex;
+  align-items: flex-end;
+  gap: 10px;
+  flex-wrap: wrap;
+
+  label {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    font-size: 11px;
+    font-weight: 600;
+    color: $brand-gray;
+
+    input[type="date"] {
+      font-family: $font-ui;
+      font-size: 12.5px;
+      padding: 6px 8px;
+      border: 1px solid $border-light;
+      border-radius: 6px;
+      color: $brand-dark;
+    }
+  }
+}
+
+.acciones-informe {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.btn-sm {
+  font-family: $font-ui;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--ax-brand-primary, #673ab7);
+  background: rgba(var(--ax-brand-primary-rgb, 103, 58, 183), 0.08);
+  border: 1px solid rgba(var(--ax-brand-primary-rgb, 103, 58, 183), 0.25);
+  border-radius: 7px;
+  padding: 7px 12px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+
+  &:hover:not(:disabled) { background: rgba(var(--ax-brand-primary-rgb, 103, 58, 183), 0.15); }
+  &:disabled { opacity: 0.6; cursor: not-allowed; }
+
+  &.btn-pdf {
+    color: $state-ok;
+    background: rgba($state-ok, 0.08);
+    border-color: rgba($state-ok, 0.25);
+    &:hover:not(:disabled) { background: rgba($state-ok, 0.15); }
+  }
+}
+
+.etiqueta-periodo-activo {
+  font-size: 13px;
+  color: $brand-gray;
+  margin: 0 0 16px;
+  strong { color: $brand-dark; }
+
+  .etiqueta-comparacion-vs {
+    font-size: 11.5px;
+    margin-left: 4px;
+  }
+}
+
+// ==========================================
+// ESTADOS: carga / error
+// ==========================================
+.loading-state {
+  text-align: center;
+  padding: 40px 0;
+  color: $brand-gray;
+}
+
+.spinner {
+  width: 28px; height: 28px; margin: 0 auto 12px;
+  border: 3px solid $border-light; border-top-color: var(--ax-brand-primary, #673ab7);
+  border-radius: 50%; animation: spin 1s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+.mensaje-error {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: $state-danger;
+  font-size: 13px;
+  font-weight: 600;
+  margin-bottom: 16px;
+
+  &.mensaje-error-seccion {
+    background: rgba($state-danger, 0.08);
+    border: 1px solid rgba($state-danger, 0.25);
+    border-radius: 10px;
+    padding: 14px 16px;
+  }
+
+  // Aviso informativo (no es un error): explica una limitación conocida
+  // (Portainer/F5 sin configurar, secciones sin permiso). Reutiliza el
+  // layout de .mensaje-error-seccion pero con paleta gris/morada en vez de
+  // roja.
+  &.aviso-snapshot {
+    color: $brand-gray;
+    font-weight: 500;
+    font-style: italic;
+    background: rgba(var(--ax-brand-primary-rgb, 103, 58, 183), 0.06);
+    border-color: rgba(var(--ax-brand-primary-rgb, 103, 58, 183), 0.2);
+  }
+}
+
+// ==========================================
+// RESUMEN POR SECCIÓN (tarjetas)
+// ==========================================
+.secciones-resumen {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.seccion-card {
+  background: var(--ax-surface, white);
+  border: 1px solid $border-light;
+  border-radius: 12px;
+  padding: 16px 18px;
+}
+
+.seccion-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 12px;
+
+  h2 {
+    font-size: 15px;
+    font-weight: 800;
+    color: $brand-dark;
+    margin: 0;
+  }
+
+  a {
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--ax-brand-primary, #673ab7);
+    text-decoration: none;
+    white-space: nowrap;
+
+    &:hover { text-decoration: underline; }
+  }
+}
+
+.nota-pie {
+  color: $brand-gray;
+  font-size: 11.5px;
+  font-style: italic;
+  margin: 4px 0 0;
+}
+
+// ==========================================
+// KPIs (mismo vocabulario que los informes individuales)
+// ==========================================
+.kpis-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 12px;
+}
+
+.kpi-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 6px 12px;
+  background: var(--ax-surface-2, #f8fafc);
+  border: 1px solid $border-light;
+  border-radius: 12px;
+  padding: 14px 16px;
+
+  .kpi-texto {
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+  }
+
+  .kpi-valor {
+    font-size: 18px;
+    font-weight: 800;
+    font-family: $font-mono;
+    color: var(--ax-brand-primary, #673ab7);
+  }
+
+  .kpi-label {
+    font-size: 11px;
+    font-weight: 600;
+    color: $brand-gray;
+  }
+}
+
+.pill-comparacion {
+  font-family: $font-mono;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 3px 8px;
+  border-radius: 20px;
+  white-space: nowrap;
+
+  &.pill-positiva { background: rgba($state-ok, 0.12); color: $state-ok; }
+  &.pill-negativa { background: rgba($state-danger, 0.12); color: $state-danger; }
+  &.pill-neutral { background: rgba(148, 163, 184, 0.15); color: $brand-gray; }
+}
+
+// ==========================================
+// PANELES DE ANALÍTICA (tendencia y distribución por sección)
+// ==========================================
+.panel-analitica {
+  background: var(--ax-surface, white);
+  border: 1px solid $border-light;
+  border-radius: 12px;
+  padding: 16px 18px;
+  margin-top: 14px;
+
+  h3 {
+    font-size: 13px;
+    font-weight: 800;
+    color: $brand-dark;
+    margin: 0 0 4px;
+  }
+}
+
+.panel-analitica-ancho {
+  width: 100%;
+}
+
+.panel-analitica-mini {
+  max-width: 480px;
+}

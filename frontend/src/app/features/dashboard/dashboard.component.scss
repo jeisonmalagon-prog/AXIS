@@ -1,0 +1,160 @@
+$brand-dark:    var(--ax-text, #1e293b); 
+$brand-gray:    var(--ax-text-muted, #64748b); 
+$surface-bg:    var(--ax-surface-2, #f8fafc);
+$border-light:  var(--ax-border, #e2e8f0);
+
+$state-ok:      #10b981;
+$state-warn:    #f59e0b;
+$state-danger:  #ef4444;
+$state-purple:  var(--ax-brand-primary-claro, #8b5cf6);
+
+* { box-sizing: border-box; }
+:host { display: block; font-family: 'Inter', sans-serif; color: $brand-dark; animation: fadeIn 0.4s ease-out; }
+
+@keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+
+// --- CABECERA ---
+.page-header { 
+  display: flex; justify-content: space-between; align-items: center; margin-bottom: 32px; flex-wrap: wrap; gap: 16px;
+  h1 { font-size: 32px; font-weight: 800; color: $brand-dark; margin: 0; letter-spacing: -0.5px; }
+  .subtitle { color: $brand-gray; margin-top: 6px; font-size: 15px; }
+}
+
+.health-indicator {
+  display: flex; align-items: center; gap: 16px; background: var(--ax-surface, white); padding: 12px 24px; border-radius: 16px;
+  box-shadow: 0 4px 20px rgba(0,0,0,0.04); border: 1px solid $border-light;
+  .health-text { display: flex; flex-direction: column; align-items: flex-end; }
+  .health-label { font-size: 12px; font-weight: 600; color: $brand-gray; text-transform: uppercase; }
+  .health-value { font-size: 28px; font-weight: 800; line-height: 1; }
+  .text-ok { color: $state-ok; } .text-warn { color: $state-warn; } .text-danger { color: $state-danger; }
+  .health-icon { width: 40px; height: 40px; color: var(--ax-brand-primary, #673ab7); }
+}
+@keyframes pulseDanger { 0% { transform: scale(1); opacity: 1; color: $state-danger; } 50% { transform: scale(1.1); opacity: 0.7; color: #b91c1c; } 100% { transform: scale(1); opacity: 1; color: $state-danger; } }
+.pulse-danger { animation: pulseDanger 2s infinite; }
+
+// --- 4 TARJETAS ESTADÍSTICAS ---
+.stats {
+  display: grid; grid-template-columns: repeat(4, 1fr); gap: 20px; margin-bottom: 32px;
+  @media (max-width: 1024px) { grid-template-columns: repeat(2, 1fr); }
+  @media (max-width: 640px) { grid-template-columns: 1fr; }
+}
+.stat {
+  background: var(--ax-surface, white); border: 1px solid $border-light; border-radius: 20px; padding: 20px; display: flex; align-items: center; gap: 16px;
+  box-shadow: 0 10px 25px rgba(var(--ax-brand-primary-rgb, 103, 58, 183), 0.03); transition: transform 0.3s, box-shadow 0.3s;
+  &:hover { transform: translateY(-5px); box-shadow: 0 15px 35px rgba(var(--ax-brand-primary-rgb, 103, 58, 183), 0.08); }
+}
+.stat-icon-wrapper {
+  width: 52px; height: 52px; border-radius: 16px; display: flex; justify-content: center; align-items: center; flex-shrink: 0;
+  svg { width: 26px; height: 26px; }
+  &.ok-bg { background: #ecfdf5; color: $state-ok; }
+  &.warn-bg { background: #fffbeb; color: $state-warn; }
+  &.danger-bg { background: #fef2f2; color: $state-danger; }
+  &.purple-bg { background: var(--ax-brand-soft, #f3ebf8); color: var(--ax-brand-primary, #673ab7); }
+}
+.stat-info { display: flex; flex-direction: column; gap: 4px; }
+.stat-value { font-size: 28px; font-weight: 800; color: $brand-dark; line-height: 1; }
+.stat-label { color: $brand-gray; font-size: 13px; font-weight: 600; line-height: 1.2; }
+
+// --- ESTRUCTURA ANALÍTICA ---
+.analitica-avanzada {
+  display: grid; grid-template-columns: 1fr 2fr; gap: 20px; margin-bottom: 20px;
+  @media (max-width: 1024px) { grid-template-columns: 1fr; }
+}
+.analitica {
+  display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 32px;
+  @media (max-width: 768px) { grid-template-columns: 1fr; }
+}
+
+.chart-card {
+  background: var(--ax-surface, white); border: 1px solid $border-light; border-radius: 20px; padding: 24px;
+  box-shadow: 0 10px 25px rgba(var(--ax-brand-primary-rgb, 103, 58, 183), 0.03); display: flex; flex-direction: column;
+  &__header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 24px; h2 { font-size: 16px; font-weight: 700; margin: 0; } }
+  &__badge { font-size: 11px; font-weight: 600; color: $state-warn; background: #fffbeb; padding: 4px 10px; border-radius: 999px; }
+  .badge-purple { color: var(--ax-brand-primary, #673ab7); background: var(--ax-brand-soft, #f3ebf8); }
+}
+
+// --- DONUT ---
+.donut-wrap { display: flex; align-items: center; gap: 24px; @media (max-width: 1200px) and (min-width: 1025px) { flex-direction: column; } }
+.donut-svg { width: 140px; height: 140px; flex-shrink: 0; filter: drop-shadow(0 4px 6px rgba(0,0,0,0.05)); }
+.donut-segment { transition: stroke-dasharray 1.5s cubic-bezier(0.4, 0, 0.2, 1); }
+.donut-total-value { font-size: 28px; font-weight: 800; fill: $brand-dark; }
+.donut-total-label { font-size: 10px; font-weight: 600; fill: $brand-gray; text-transform: uppercase; letter-spacing: 1px; }
+.donut-legend {
+  list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 14px; flex: 1;
+  li { display: flex; align-items: center; gap: 10px; font-size: 13px; }
+  .dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+  &__nombre { color: $brand-dark; font-weight: 600; flex: 1; }
+  &__valor { color: $brand-gray; font-weight: 600; font-size: 12px; }
+}
+
+// --- NUEVO: GRÁFICO VERTICAL (LÍNEA DE TIEMPO) ---
+.vertical-chart-container {
+  flex: 1; display: flex; align-items: flex-end; padding-top: 20px;
+}
+.v-chart {
+  display: flex; justify-content: space-between; align-items: flex-end; width: 100%; height: 200px;
+}
+.v-bar-group {
+  display: flex; flex-direction: column; align-items: center; gap: 12px; flex: 1; height: 100%;
+}
+.v-bar-track {
+  width: 32px; flex: 1; background: $surface-bg; border-radius: 8px 8px 0 0;
+  display: flex; align-items: flex-end; overflow: hidden; position: relative;
+}
+.v-bar-fill {
+  width: 100%; border-radius: 8px 8px 0 0; transition: height 1s cubic-bezier(0.4, 0, 0.2, 1);
+  display: flex; justify-content: center; position: relative;
+  
+  &.bar-danger { background: $state-danger; }
+  &.bar-warn { background: $state-warn; }
+  &.bar-purple { background: var(--ax-brand-primary, #673ab7); }
+  &.bar-purple-light { background: var(--ax-brand-primary-claro, #a78bfa); }
+  &.bar-ok { background: $state-ok; }
+  &.bar-ok-light { background: #6ee7b7; }
+  
+  &:hover .v-bar-tooltip { opacity: 1; transform: translateY(-30px); }
+}
+.v-bar-tooltip {
+  position: absolute; top: 0; background: $brand-dark; color: white; padding: 4px 8px; border-radius: 4px;
+  font-size: 12px; font-weight: 700; pointer-events: none; opacity: 0; transform: translateY(-20px); transition: 0.2s;
+}
+.v-bar-label { font-size: 12px; font-weight: 600; color: $brand-gray; white-space: nowrap; }
+
+// --- BARRAS HORIZONTALES ---
+.bar-list {
+  list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 18px;
+  &__top { display: flex; justify-content: space-between; margin-bottom: 6px; }
+  &__nombre { font-size: 13px; font-weight: 600; color: $brand-dark; max-width: 75%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  &__valor { font-size: 12px; font-weight: 700; color: $brand-gray; }
+}
+.bar-track { width: 100%; height: 6px; border-radius: 999px; background: $surface-bg; overflow: hidden; }
+.bar-fill { height: 100%; border-radius: inherit; transition: width 1s cubic-bezier(0.4, 0, 0.2, 1); }
+.bar-warn { background: $state-warn; } .bar-purple { background: var(--ax-brand-primary, #673ab7); }
+
+// --- ESTADOS VACÍOS ---
+.empty-state {
+  display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; color: $brand-gray; padding: 20px 0; flex: 1;
+  svg { width: 40px; height: 40px; stroke: #cbd5e1; margin-bottom: 12px; }
+  p { font-size: 13px; font-weight: 500; margin: 0; }
+  &--large { padding: 60px 0; svg { width: 64px; height: 64px; stroke: $state-ok; } h3 { color: $brand-dark; margin: 16px 0 8px; font-size: 18px; } p { font-size: 14px; } }
+}
+
+// --- TABLA Y UTILIDADES ---
+.panel { background: var(--ax-surface, white); border: 1px solid $border-light; border-radius: 20px; padding: 24px; overflow-x: auto; box-shadow: 0 10px 25px rgba(var(--ax-brand-primary-rgb, 103, 58, 183), 0.03); }
+.panel-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; h2 { font-size: 18px; font-weight: 800; margin: 0; } .panel-subtitle { font-size: 13px; color: $brand-gray; margin: 4px 0 0; } }
+table { width: 100%; border-collapse: collapse; }
+th, td { text-align: left; padding: 16px; border-bottom: 1px solid $border-light; font-size: 14px; white-space: nowrap; }
+th { color: $brand-gray; font-weight: 700; font-size: 12px; text-transform: uppercase; letter-spacing: 0.5px; background: var(--ax-surface-2, #f8fafc); }
+th:first-child { border-radius: 8px 0 0 8px; } th:last-child { border-radius: 0 8px 8px 0; }
+tbody tr { transition: background 0.2s; &:hover { background: var(--ax-surface-2, #f8fafc); } }
+.mono { font-family: 'JetBrains Mono', monospace; font-size: 13px; } .text-muted { color: $brand-gray; }
+.urgencia-celda { width: 120px; }
+.urgencia { display: flex; align-items: center; gap: 10px; .h-bar-track--sm { width: 80px; height: 6px; } &__dias { font-size: 12px; font-weight: 700; color: $brand-gray; } }
+.h-bar-track { width: 100%; background: $surface-bg; border-radius: 999px; overflow: hidden; }
+.h-bar-fill { height: 100%; border-radius: inherit; }
+.btn { display: inline-flex; align-items: center; padding: 8px 16px; border-radius: 8px; font-size: 13px; font-weight: 600; border: 1px solid $border-light; background: var(--ax-surface, white); color: $brand-dark; cursor: pointer; text-decoration: none; &:hover { background: $surface-bg; } }
+.status-pill { display: inline-flex; align-items: center; gap: 6px; padding: 4px 12px; border-radius: 999px; font-size: 12px; font-weight: 700; &::before { content: ''; width: 6px; height: 6px; border-radius: 50%; background: currentColor; } }
+::ng-deep .status-vigente { color: $state-ok; background: #d1fae5; }
+::ng-deep .status-por-vencer { color: $state-warn; background: #fef3c7; }
+::ng-deep .status-vencido { color: $state-danger; background: #fee2e2; }
+.h-bar-fill.status-vigente { background: $state-ok; } .h-bar-fill.status-por-vencer { background: $state-warn; } .h-bar-fill.status-vencido { background: $state-danger; }

@@ -1,0 +1,30 @@
+@use '../../repositorio/azure/azure-base' as *;
+@include base;
+
+.mono { font-family: 'JetBrains Mono', monospace; }
+.modal-origenes { max-width: 1100px; max-height: 94vh; overflow-y: auto; }
+.sub { margin: 4px 0 0; font-size: 13px; color: $brand-gray; line-height: 1.5; }
+.acciones-top { display: flex; justify-content: flex-end; margin-bottom: 12px; }
+.il-cab { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; .espacio { flex: 1; } }
+.il-sub { font-size: 12px; color: $brand-dark; &.gris { color: $brand-gray; } }
+.btn-peligro { color: $danger; border-color: rgba(239, 68, 68, 0.35); &:hover:not(:disabled) { background: rgba(239, 68, 68, 0.1); } }
+.titulo-form { margin: 0 0 4px; font-size: 15px; }
+.etiqueta { display: block; margin: 12px 0 5px; font-size: 12px; font-weight: 700; color: $brand-gray; }
+.entrada { width: 100%; font-family: inherit; font-size: 13px; padding: 9px 11px; border: 1px solid $border-light; border-radius: 8px; background: $surface-bg; color: $brand-dark; box-sizing: border-box; &:focus { outline: none; border-color: $brand; } }
+.fila-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 0 14px; @media (max-width: 560px) { grid-template-columns: 1fr; } }
+.fila-host { grid-template-columns: 2fr 1fr; @media (max-width: 560px) { grid-template-columns: 1fr; } }
+.ayuda { margin: 8px 0 0; font-size: 11.5px; line-height: 1.5; color: $brand-gray; }
+.check { display: flex; align-items: flex-start; gap: 8px; margin-top: 12px; font-size: 13px; cursor: pointer; input { margin-top: 3px; accent-color: var(--ax-brand-primary, #673ab7); } small { color: $brand-gray; } }
+.prueba-bloque { margin-top: 16px; display: flex; flex-direction: column; gap: 10px; align-items: flex-start; .aviso-ok, .error-state { align-self: stretch; margin: 0; } }
+.aviso-ok { background: rgba(16, 185, 129, 0.1); border: 1px solid rgba(16, 185, 129, 0.35); color: $brand-dark; border-radius: 10px; padding: 10px 14px; font-size: 13px; line-height: 1.5; }
+.pequeno { font-size: 11.5px; color: $brand-gray; margin-top: 4px; overflow-wrap: anywhere; }
+.pie-form { display: flex; justify-content: flex-end; gap: 10px; margin-top: 18px; padding-top: 12px; border-top: 1px solid $border-light; flex-wrap: wrap; }
+
+.acciones-top { gap: 8px; }
+.gris { color: $brand-gray; font-weight: 400; }
+.lista-masiva { resize: vertical; min-height: 110px; line-height: 1.5; }
+.resumen-masivo { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 14px; }
+.tabla-masiva { margin-top: 10px; border: 1px solid $border-light; border-radius: 10px; max-height: 280px; overflow-y: auto; }
+.fila-masiva { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 7px 12px; font-size: 12.5px; border-bottom: 1px solid $border-light; &:last-child { border-bottom: 0; } }
+.fm-texto { flex: 0 1 300px; min-width: 120px; }
+.fm-detalle { color: $brand-gray; font-size: 12px; overflow-wrap: anywhere; flex: 1 1 200px; &.fm-error { color: $danger; } }

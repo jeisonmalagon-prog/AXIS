@@ -1,0 +1,8 @@
+@use './azure-base' as *;
+@include base;
+.meta { display: flex; flex-wrap: wrap; gap: 6px 12px; align-items: center; margin-top: 6px; font-size: 12px; color: $brand-gray; }
+.amb { margin: 0 4px 2px 0; }
+.amb-card { border: 1px solid $border-light; border-radius: 12px; padding: 12px 14px; margin-bottom: 10px; background: $surface-bg; display: flex; flex-direction: column; gap: 8px;
+  .il-cab { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; } }
+.aprob { display: flex; flex-direction: column; gap: 4px; .il-sub { display: flex; gap: 6px 12px; flex-wrap: wrap; font-size: 12px; color: $brand-gray; align-items: center; } }
+.tareas { display: flex; flex-direction: column; gap: 4px; .tarea { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; font-size: 12.5px; } .prob { font-size: 11.5px; flex-basis: 100%; overflow-wrap: anywhere; } }

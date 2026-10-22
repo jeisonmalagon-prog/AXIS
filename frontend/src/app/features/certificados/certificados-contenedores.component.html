@@ -1,0 +1,574 @@
+<details class="como-funciona">
+  <summary>¿Cómo se leen y comparan los certificados de los contenedores?</summary>
+  <div class="como-funciona__cuerpo">
+    <p>
+      Con lo que Portainer ya conoce de cada servidor, el escaneo busca los certificados de dos formas que se complementan:
+    </p>
+    <ul>
+      <li><strong>Sondeo TLS:</strong> se conecta a cada puerto publicado por un contenedor en ejecución y lee el certificado que realmente está sirviendo.</li>
+      <li><strong>Archivos dentro del contenedor:</strong> trae por Portainer los <span class="mono">.pem .crt .cer .der .pfx .p12 .jks</span> de las rutas probables (variables de entorno, montajes con nombre de certificados, carpetas habituales) y los lee. Los PFX/JKS se abren con contraseña vacía o con las variables de entorno del mismo contenedor que parezcan contraseña.</li>
+    </ul>
+    <p>
+      Luego se compara <strong>en vivo</strong> con el inventario de Certificados (por huella, número de serie o ubicación). Es <strong>solo lectura</strong>:
+      no se extrae ninguna llave privada y las contraseñas que indiques se usan únicamente en memoria durante el escaneo (no se guardan ni se auditan).
+    </p>
+  </div>
+</details>
+
+<!-- Estado de Portainer -->
+<div class="aviso aviso--alerta" *ngIf="!configurado">
+  Portainer no está configurado en el backend (PORTAINER_URL / PORTAINER_USER / PORTAINER_PASS). Sin eso no se pueden leer los contenedores.
+</div>
+<div class="aviso aviso--error" *ngIf="error">{{ error }}</div>
+<div class="aviso aviso--alerta" *ngIf="avisoAccion">{{ avisoAccion }}</div>
+
+<!-- Barra de escaneo -->
+<section class="barra-escaneo">
+  <div class="barra-escaneo__estado">
+    <ng-container *ngIf="corriendo; else reposo">
+      <span class="punto punto--corriendo"></span>
+      <div>
+        <strong>Escaneando…</strong>
+        <span class="sub">{{ estado.progreso?.fase }}</span>
+      </div>
+    </ng-container>
+    <ng-template #reposo>
+      <ng-container *ngIf="resultado?.escaneo as esc; else nunca">
+        <span class="punto" [class.punto--aviso]="esc.estadoFinal !== 'terminado'"></span>
+        <div>
+          <strong>Último escaneo: {{ esc.fin | date: 'dd/MM/yyyy HH:mm' }}</strong>
+          <span class="sub">
+            {{ esc.estadoFinal === 'terminado' ? 'Completo' : 'Incompleto (cancelado)' }} · duró {{ ultimoEscaneoTexto }} ·
+            {{ esc.opciones.profundo ? 'búsqueda profunda' : 'búsqueda normal' }} ·
+            {{ esc.entornos.length }} servidor{{ esc.entornos.length === 1 ? '' : 'es' }}
+          </span>
+        </div>
+      </ng-container>
+      <ng-template #nunca>
+        <span class="punto punto--vacio"></span>
+        <div>
+          <strong>Todavía no hay resultados</strong>
+          <span class="sub">Pulsa «Escanear ahora» para leer los certificados de los contenedores y compararlos con el inventario.</span>
+        </div>
+      </ng-template>
+    </ng-template>
+  </div>
+
+  <div class="barra-escaneo__acciones">
+    <button class="btn" type="button" (click)="opcionesAbiertas = !opcionesAbiertas" [attr.aria-expanded]="opcionesAbiertas">
+      Opciones <span class="flecha" [class.flecha--abierta]="opcionesAbiertas">▾</span>
+    </button>
+    <button class="btn" type="button" (click)="exportarExcel()" [disabled]="!resultado" title="Exportar los hallazgos a Excel">Exportar Excel</button>
+    <button class="btn" type="button" (click)="cargarResultado()" [disabled]="!resultado || cargandoResultado" title="Vuelve a comparar con el inventario actual, sin volver a escanear">Actualizar conciliación</button>
+    <button *ngIf="puedeEditar && corriendo" class="btn btn-danger" type="button" (click)="cancelar()">Cancelar</button>
+    <button *ngIf="puedeEditar && !corriendo" class="btn btn-primary" type="button" (click)="escanear()" [disabled]="lanzando || !configurado">
+      {{ lanzando ? 'Iniciando…' : 'Escanear ahora' }}
+    </button>
+  </div>
+
+  <div class="progreso" *ngIf="corriendo" role="progressbar" [attr.aria-valuenow]="porcentaje" aria-valuemin="0" aria-valuemax="100">
+    <div class="progreso__barra" [style.width.%]="porcentaje"></div>
+    <span class="progreso__texto">
+      {{ porcentaje }}% · servidores {{ estado.progreso?.entornosHechos }}/{{ estado.progreso?.entornosTotal }} ·
+      contenedores {{ estado.progreso?.contenedoresHechos }}/{{ estado.progreso?.contenedoresTotal }}
+    </span>
+  </div>
+
+  <div class="opciones" *ngIf="opcionesAbiertas">
+    <div class="opciones__col">
+      <span class="opciones__titulo">Qué buscar</span>
+      <label class="check"><input type="checkbox" [(ngModel)]="opciones.sondeoTls" name="sondeoTls" /> Sondeo TLS de los puertos publicados</label>
+      <label class="check"><input type="checkbox" [(ngModel)]="opciones.archivos" name="archivos" /> Archivos de certificados dentro de los contenedores</label>
+      <label class="check"><input type="checkbox" [(ngModel)]="opciones.profundo" name="profundo" /> Búsqueda profunda (además de /app, los .jar y la configuración del contenedor, recorre /opt, /srv, /data y los montajes con límites mayores; más lenta)</label>
+      <label class="check"><input type="checkbox" [(ngModel)]="opciones.incluirDetenidos" name="incluirDetenidos" /> Incluir contenedores detenidos</label>
+      <span class="opciones__titulo opciones__titulo--sep">Rutas adicionales <small>(una por línea; opcional)</small></span>
+      <textarea class="entrada" rows="3" [(ngModel)]="opciones.rutas" name="rutas" placeholder="/opt/mi-app/certificados&#10;/etc/miapp/tls/servidor.pfx"></textarea>
+      <span class="opciones__titulo opciones__titulo--sep">Contraseñas de PFX / JKS <small>(una por línea; opcional)</small></span>
+      <textarea class="entrada entrada--secreta" rows="2" [(ngModel)]="opciones.claves" name="claves" autocomplete="off" spellcheck="false" placeholder="Solo se usan en memoria durante este escaneo; no se guardan."></textarea>
+    </div>
+    <div class="opciones__col">
+      <span class="opciones__titulo">Servidores — {{ alcanceTexto }}</span>
+      <div class="lista-entornos" *ngIf="entornos.length; else sinEntornos">
+        <label class="check" *ngFor="let e of entornos">
+          <input type="checkbox" [checked]="entornoMarcado(e.id)" (change)="alternarEntorno(e.id)" />
+          {{ e.nombre }}
+          <span class="mini-pill mini-pill--bajo" *ngIf="e.conexion === 'down'">desconectado</span>
+        </label>
+      </div>
+      <ng-template #sinEntornos><span class="sub">No se pudo leer la lista de servidores de Portainer.</span></ng-template>
+      <button type="button" class="btn btn-sm" *ngIf="opciones.entornoIds.length" (click)="opciones.entornoIds = []">Quitar la selección (todos)</button>
+    </div>
+  </div>
+</section>
+
+<!-- Resumen -->
+<ng-container *ngIf="resumen as r">
+  <div class="indicadores">
+    <div class="indicador"><span class="indicador__numero">{{ r.certificados }}</span><span class="indicador__etiqueta">Certificados detectados</span></div>
+    <button type="button" class="indicador indicador--ok indicador--btn" [class.indicador--sel]="filtroEstado === 'conciliado'" (click)="elegirEstado('conciliado')">
+      <span class="indicador__numero">{{ r.conciliado }}</span><span class="indicador__etiqueta">Conciliados</span>
+    </button>
+    <button type="button" class="indicador indicador--warn indicador--btn" [class.indicador--sel]="filtroEstado === 'fechas_distintas'" [class.indicador--alerta]="r.fechas_distintas > 0" (click)="elegirEstado('fechas_distintas')">
+      <span class="indicador__numero">{{ r.fechas_distintas }}</span><span class="indicador__etiqueta">Fechas distintas</span>
+    </button>
+    <button type="button" class="indicador indicador--warn indicador--btn" [class.indicador--sel]="filtroEstado === 'difiere'" [class.indicador--alerta]="r.difiere > 0" (click)="elegirEstado('difiere')">
+      <span class="indicador__numero">{{ r.difiere }}</span><span class="indicador__etiqueta">Certificado distinto</span>
+    </button>
+    <button type="button" class="indicador indicador--info indicador--btn" [class.indicador--sel]="filtroEstado === 'ubicacion_nueva'" (click)="elegirEstado('ubicacion_nueva')">
+      <span class="indicador__numero">{{ r.ubicacion_nueva }}</span><span class="indicador__etiqueta">Ubicación nueva</span>
+    </button>
+    <button type="button" class="indicador indicador--danger indicador--btn" [class.indicador--sel]="filtroEstado === 'no_inventariado'" [class.indicador--alerta]="r.no_inventariado > 0" (click)="elegirEstado('no_inventariado')">
+      <span class="indicador__numero">{{ r.no_inventariado }}</span><span class="indicador__etiqueta">No inventariados</span>
+    </button>
+    <button type="button" class="indicador indicador--danger indicador--btn" [class.indicador--sel]="filtroVigencia === 'vencido'" [class.indicador--alerta]="r.vencidos > 0" (click)="elegirVigencia('vencido')">
+      <span class="indicador__numero">{{ r.vencidos }}</span><span class="indicador__etiqueta">Vencidos</span>
+    </button>
+    <button type="button" class="indicador indicador--warn indicador--btn" [class.indicador--sel]="filtroVigencia === 'por_vencer'" [class.indicador--alerta]="r.porVencer > 0" (click)="elegirVigencia('por_vencer')">
+      <span class="indicador__numero">{{ r.porVencer }}</span><span class="indicador__etiqueta">Por vencer (30 d)</span>
+    </button>
+  </div>
+
+  <div class="vistas" role="tablist">
+    <button type="button" role="tab" [class.activa]="vista === 'hallazgos'" (click)="vista = 'hallazgos'">Certificados detectados <span class="cuenta">{{ filtrados.length }}</span></button>
+    <button type="button" role="tab" [class.activa]="vista === 'configuracion'" (click)="vista = 'configuracion'">Configuración (docker run) <span class="cuenta" [class.cuenta--aviso]="r.cfgSinArchivo > 0 || r.cfgProtegidos > 0">{{ r.cfgConReferencias }}</span></button>
+    <button type="button" role="tab" [class.activa]="vista === 'sinEvidencia'" (click)="vista = 'sinEvidencia'">Inventario sin evidencia <span class="cuenta" [class.cuenta--aviso]="r.sinEvidencia > 0">{{ r.sinEvidencia }}</span></button>
+    <button type="button" role="tab" [class.activa]="vista === 'noLegibles'" (click)="vista = 'noLegibles'">Archivos protegidos <span class="cuenta" [class.cuenta--aviso]="r.noLegibles > 0">{{ r.noLegibles }}</span></button>
+    <button type="button" role="tab" [class.activa]="vista === 'servidores'" (click)="vista = 'servidores'">Servidores escaneados <span class="cuenta" [class.cuenta--aviso]="entornosConProblema > 0">{{ listaEntornos.length }}</span></button>
+  </div>
+</ng-container>
+
+<!-- ========== Certificados detectados ========== -->
+<ng-container *ngIf="resultado && vista === 'hallazgos'">
+  <section class="filtros-fila">
+    <div class="search-box">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+      <input type="text" [(ngModel)]="busqueda" (ngModelChange)="aplicarFiltros()" name="busqueda" placeholder="Buscar por certificado, servidor, contenedor, ruta, serie…" />
+    </div>
+    <select class="entrada" [(ngModel)]="filtroServidor" (ngModelChange)="aplicarFiltros()" name="filtroServidor" aria-label="Servidor">
+      <option value="">Todos los servidores</option>
+      <option *ngFor="let s of servidoresEnResultado" [value]="s">{{ s }}</option>
+    </select>
+    <select class="entrada" [(ngModel)]="filtroEstado" (ngModelChange)="aplicarFiltros()" name="filtroEstado" aria-label="Conciliación">
+      <option value="todos">Toda conciliación</option>
+      <option value="no_inventariado">No inventariados</option>
+      <option value="difiere">Certificado distinto</option>
+      <option value="fechas_distintas">Fechas distintas</option>
+      <option value="ubicacion_nueva">Ubicación nueva</option>
+      <option value="conciliado">Conciliados</option>
+    </select>
+    <select class="entrada" [(ngModel)]="filtroVigencia" (ngModelChange)="aplicarFiltros()" name="filtroVigencia" aria-label="Vigencia">
+      <option value="todas">Toda vigencia</option>
+      <option value="vencido">Vencidos</option>
+      <option value="por_vencer">Por vencer</option>
+      <option value="vigente">Vigentes</option>
+    </select>
+    <label class="check check--inline" title="Certificados de autoridades (CA) que acompañan a los del servidor en una cadena">
+      <input type="checkbox" [(ngModel)]="verAutoridades" (ngModelChange)="aplicarFiltros()" name="verAutoridades" /> Mostrar autoridades (CA)
+    </label>
+    <button type="button" class="btn btn-sm" *ngIf="hayFiltros" (click)="limpiarFiltros()">Limpiar filtros</button>
+  </section>
+
+  <section class="panel">
+    <ng-container *ngIf="filtrados.length; else sinFilas">
+      <div class="tabla-wrap">
+        <table class="tabla tabla-apilada">
+          <thead>
+            <tr>
+              <th class="th-borde"></th>
+              <th>Conciliación</th>
+              <th>Certificado</th>
+              <th>Servidor</th>
+              <th>Dónde se encontró</th>
+              <th>Vence</th>
+              <th>En el inventario</th>
+              <th class="th-acciones"></th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr class="fila-clicable" *ngFor="let h of paginaItems" (click)="abrirDetalle(h)" title="Ver detalle">
+              <td class="celda-borde" [ngClass]="infoEstado(h.estado).clase + '-borde'"></td>
+              <td data-label="Conciliación">
+                <span class="est-pill" [ngClass]="infoEstado(h.estado).clase" [title]="infoEstado(h.estado).ayuda">{{ infoEstado(h.estado).etiqueta }}</span>
+              </td>
+              <td data-label="Certificado" class="td-cert">
+                <span class="nombre-comun" [title]="h.certificado.nombreComun || ''">{{ h.certificado.nombreComun || '(sin nombre común)' }}</span>
+                <span class="linea-sec">{{ h.certificado.emisor || 'Emisor no indicado' }}</span>
+                <span class="mini-pill" *ngIf="h.certificado.autofirmado">autofirmado</span>
+                <span class="mini-pill" *ngIf="h.certificado.esAutoridad">autoridad (CA)</span>
+              </td>
+              <td data-label="Servidor" class="td-srv">
+                <span class="nombre-comun">{{ nombreServidor(h) }}</span>
+                <span class="linea-sec" *ngIf="h.servidor.ip">{{ h.servidor.ip }}</span>
+                <span class="mini-pill mini-pill--bajo" *ngIf="!h.servidorInventariado" title="El servidor de Portainer no está en Inventario → Servidores">sin inventario</span>
+              </td>
+              <td data-label="Dónde se encontró" class="td-donde">
+                <ng-container *ngIf="donde(h) as d">
+                  <span class="chip" *ngFor="let c of d.contenedores">{{ c }}</span>
+                  <span class="chip chip--mas" *ngIf="d.extra" [title]="h.contenedores.join(', ')">+{{ d.extra }}</span>
+                  <span class="linea-sec">
+                    <ng-container *ngIf="d.puertos.length">TLS :{{ d.puertos.join(', :') }}</ng-container>
+                    <ng-container *ngIf="d.puertos.length && d.archivos"> · </ng-container>
+                    <ng-container *ngIf="d.archivos">{{ d.archivos }} archivo{{ d.archivos === 1 ? '' : 's' }}</ng-container>
+                  </span>
+                </ng-container>
+              </td>
+              <td data-label="Vence" class="td-vence">
+                <span class="mono">{{ h.certificado.hasta | date: 'dd/MM/yyyy' }}</span>
+                <span class="dias-chip" [ngClass]="infoVigencia(h.vigencia).clase">{{ h.dias < 0 ? 'vencido hace ' + (-h.dias) + ' d' : h.dias + ' d' }}</span>
+              </td>
+              <td data-label="En el inventario" class="td-inv">
+                <ng-container *ngIf="h.inventario as f; else sinFila">
+                  <span class="nombre-comun">{{ f.componente || '(sin sub-aplicativo)' }} · {{ f.hostname || '—' }}</span>
+                  <span class="linea-sec" *ngIf="h.diferencias.length">{{ h.diferencias[0] }}</span>
+                  <span class="linea-sec" *ngIf="!h.diferencias.length">vence {{ f.hasta | date: 'dd/MM/yyyy' }}</span>
+                </ng-container>
+                <ng-template #sinFila><span class="linea-sec">No está en el inventario</span></ng-template>
+              </td>
+              <td class="td-ver">
+                <button *ngIf="puedeEditar && h.accion && h.servidorInventariado" class="btn btn-sm btn-primary" type="button"
+                  (click)="$event.stopPropagation(); abrirAsistente(h)" [title]="infoEstado(h.estado).ayuda">{{ etiquetaAccion(h) }}</button>
+                <span class="linea-sec" *ngIf="h.accion && !h.servidorInventariado">Registra primero el servidor</span>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="paginacion">
+        <span class="paginacion__info">
+          Mostrando {{ rangoDesde }}–{{ rangoHasta }} de {{ filtrados.length }}
+          <span class="paginacion__separador">·</span>
+          <label class="paginacion__tamano">por página
+            <select [(ngModel)]="tamanoPagina" (ngModelChange)="paginaActual = 1" name="tamanoPagina">
+              <option *ngFor="let n of opcionesTamanoPagina" [ngValue]="n">{{ n }}</option>
+            </select>
+          </label>
+        </span>
+        <div class="paginacion__botones" *ngIf="totalPaginas > 1">
+          <button class="btn btn-sm" type="button" [disabled]="paginaValida === 1" (click)="irAPagina(paginaValida - 1)">‹ Anterior</button>
+          <span class="paginacion__pagina">Página {{ paginaValida }} de {{ totalPaginas }}</span>
+          <button class="btn btn-sm" type="button" [disabled]="paginaValida === totalPaginas" (click)="irAPagina(paginaValida + 1)">Siguiente ›</button>
+        </div>
+      </div>
+    </ng-container>
+    <ng-template #sinFilas>
+      <div class="empty">
+        <p *ngIf="!(resultado.hallazgos?.length); else sinCoincidencias">El escaneo no encontró certificados en los contenedores consultados.</p>
+        <ng-template #sinCoincidencias><p>Ningún certificado coincide con los filtros elegidos.</p></ng-template>
+      </div>
+    </ng-template>
+  </section>
+</ng-container>
+
+<!-- ========== Configuración (docker run) ========== -->
+<section class="panel" *ngIf="resultado && vista === 'configuracion'">
+  <p class="nota">
+    Se lee la configuración con la que se creó cada contenedor (el «docker run»: comando, variables de entorno, montajes y puertos) para ver qué certificado
+    o keystore dice usar —sin importar en qué ruta lo haya puesto cada servidor— y de ahí salen también las contraseñas con las que se abren los PFX/JKS. Además se busca
+    en <span class="mono">/app</span> y dentro de los .jar/.war. Todo es solo lectura: no se ejecuta nada dentro de los contenedores y las contraseñas nunca se muestran.
+  </p>
+  <div class="vistas" role="group" aria-label="Filtrar configuración">
+      <button type="button" [class.activa]="cfgFiltro === 'referencia'" (click)="elegirFiltroConfig('referencia')">Declaran un certificado <span class="cuenta">{{ cuentaConfig('referencia') }}</span></button>
+      <button type="button" [class.activa]="cfgFiltro === 'sin_archivo'" (click)="elegirFiltroConfig('sin_archivo')">Archivo no encontrado <span class="cuenta" [class.cuenta--aviso]="cuentaConfig('sin_archivo') > 0">{{ cuentaConfig('sin_archivo') }}</span></button>
+      <button type="button" [class.activa]="cfgFiltro === 'protegido'" (click)="elegirFiltroConfig('protegido')">Protegidos <span class="cuenta" [class.cuenta--aviso]="cuentaConfig('protegido') > 0">{{ cuentaConfig('protegido') }}</span></button>
+      <button type="button" [class.activa]="cfgFiltro === 'tls_sin_cert'" (click)="elegirFiltroConfig('tls_sin_cert')">Con TLS y sin certificado hallado <span class="cuenta" [class.cuenta--aviso]="cuentaConfig('tls_sin_cert') > 0">{{ cuentaConfig('tls_sin_cert') }}</span></button>
+      <button type="button" [class.activa]="cfgFiltro === 'todos'" (click)="elegirFiltroConfig('todos')">Todos <span class="cuenta">{{ listaConfiguraciones.length }}</span></button>
+  </div>
+  <div class="filtros-fila">
+    <div class="search-box">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+      <input type="text" [(ngModel)]="cfgBusqueda" (ngModelChange)="buscarConfig()" name="cfgBusqueda" placeholder="Buscar por contenedor, imagen, servidor o ruta…" autocomplete="off" />
+    </div>
+  </div>
+    <ng-container *ngIf="cfgFiltradas.length; else sinConfig">
+    <div class="tabla-wrap">
+      <table class="tabla tabla-apilada">
+        <thead><tr><th>Servidor</th><th>Contenedor</th><th>Certificados que declara</th><th>Contraseñas</th><th>Leídos</th><th class="th-acciones"></th></tr></thead>
+        <tbody>
+          <tr *ngFor="let c of cfgItems" class="fila-clicable" (click)="abrirConfig(c)">
+            <td data-label="Servidor">{{ nombreServidorCfg(c) }}</td>
+            <td data-label="Contenedor"><span class="chip">{{ c.contenedor }}</span><span class="sub sub--bloque">{{ c.imagen }}</span></td>
+            <td data-label="Declara">
+              <ng-container *ngIf="c.referencias.length; else sinRefs">
+                <div class="refs-lista">
+                  <div class="ref-item" *ngFor="let r of c.referencias | slice: 0 : 3">
+                    <span class="mono ref-ruta">{{ r.ruta }}</span>
+                    <span class="est-pill est-pill--mini" [ngClass]="infoReferencia(r.estado).clase">{{ infoReferencia(r.estado).etiqueta }}</span>
+                  </div>
+                  <span class="sub" *ngIf="c.referencias.length > 3">+{{ c.referencias.length - 3 }} más</span>
+                </div>
+              </ng-container>
+              <ng-template #sinRefs><span class="sub">{{ c.usaTls ? 'Configurado para TLS, sin ruta de certificado' : 'No declara certificados' }}</span></ng-template>
+            </td>
+            <td data-label="Contraseñas">
+              <span *ngIf="c.claves.length; else sinClaves">{{ c.claves.length }} <span class="sub">({{ c.claves[0].origen }}{{ c.claves.length > 1 ? ' …' : '' }})</span></span>
+              <ng-template #sinClaves><span class="sub">—</span></ng-template>
+            </td>
+            <td data-label="Leídos">
+              {{ c.certificados }} cert. <span class="sub" *ngIf="c.jars">· {{ c.jars }} .jar</span>
+              <span class="mini-pill mini-pill--bajo" *ngIf="c.lecturaParcial" title="Alguna carpeta era muy grande y se leyó parcialmente">parcial</span>
+            </td>
+            <td class="td-ver" data-label=""><button type="button" class="btn btn-sm" (click)="abrirConfig(c); $event.stopPropagation()">Ver docker run</button></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="paginacion">
+      <span>Mostrando {{ cfgRangoDesde }}–{{ cfgRangoHasta }} de {{ cfgFiltradas.length }}</span>
+      <div class="paginacion__botones" *ngIf="cfgTotalPaginas > 1">
+        <button type="button" class="btn btn-sm" (click)="cfgIrAPagina(cfgPaginaValida - 1)" [disabled]="cfgPaginaValida === 1">‹ Anterior</button>
+        <span>{{ cfgPaginaValida }} / {{ cfgTotalPaginas }}</span>
+        <button type="button" class="btn btn-sm" (click)="cfgIrAPagina(cfgPaginaValida + 1)" [disabled]="cfgPaginaValida === cfgTotalPaginas">Siguiente ›</button>
+      </div>
+    </div>
+  </ng-container>
+  <ng-template #sinConfig><div class="empty"><p>Ningún contenedor cumple ese filtro.</p></div></ng-template>
+</section>
+
+<!-- ========== Inventario sin evidencia ========== -->
+<section class="panel" *ngIf="resultado && vista === 'sinEvidencia'">
+  <p class="nota">
+    Certificados que el inventario ubica en un servidor escaneado (por el nombre del sub-aplicativo o su puerto) pero que el escaneo no encontró
+    en ningún contenedor. Puede que se hayan movido o cambiado; si el certificado está en una ruta poco habitual, prueba la búsqueda profunda o indica la ruta en Opciones.
+  </p>
+  <ng-container *ngIf="listaSinEvidencia.length; else todoConEvidencia">
+    <div class="tabla-wrap">
+      <table class="tabla tabla-apilada">
+        <thead><tr><th>Servidor</th><th>Sub-aplicativo</th><th>Contenedor probable</th><th>Certificado</th><th>Puerto</th><th>Vence</th><th>Responsable</th></tr></thead>
+        <tbody>
+          <tr *ngFor="let f of listaSinEvidencia">
+            <td data-label="Servidor">{{ f.hostname }}</td>
+            <td data-label="Sub-aplicativo">{{ f.componente || '—' }}</td>
+            <td data-label="Contenedor probable"><span class="chip">{{ f.contenedor }}</span></td>
+            <td data-label="Certificado">{{ f.nombreComun || '—' }}</td>
+            <td data-label="Puerto"><span class="mono">{{ f.puerto || '—' }}</span></td>
+            <td data-label="Vence">
+              <span class="mono">{{ f.hasta | date: 'dd/MM/yyyy' }}</span>
+              <span class="dias-chip" *ngIf="f.vigencia" [ngClass]="infoVigencia(f.vigencia).clase">{{ f.dias }} d</span>
+            </td>
+            <td data-label="Responsable">{{ f.responsable || '—' }}</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </ng-container>
+  <ng-template #todoConEvidencia><div class="empty"><p>Todo lo que el inventario ubica en contenedores tiene evidencia en el escaneo.</p></div></ng-template>
+</section>
+
+<!-- ========== Archivos protegidos ========== -->
+<section class="panel" *ngIf="resultado && vista === 'noLegibles'">
+  <p class="nota">
+    Archivos de certificados que se encontraron pero no se pudieron abrir (normalmente un PFX/P12/JKS con contraseña). Vuelve a escanear indicando la contraseña en
+    <strong>Opciones</strong>: se usa solo en memoria. Mientras tanto estos certificados no aparecen en la conciliación.
+  </p>
+  <ng-container *ngIf="listaNoLegibles.length; else todoLegible">
+    <div class="tabla-wrap">
+      <table class="tabla tabla-apilada">
+        <thead><tr><th>Servidor</th><th>Contenedor</th><th>Archivo</th><th>Formato</th><th>Motivo</th></tr></thead>
+        <tbody>
+          <tr *ngFor="let n of listaNoLegibles">
+            <td data-label="Servidor">{{ n.hostname || n.entornoNombre }}</td>
+            <td data-label="Contenedor"><span class="chip">{{ n.contenedor }}</span></td>
+            <td data-label="Archivo"><span class="mono">{{ n.ruta }}</span></td>
+            <td data-label="Formato">{{ n.formato }}</td>
+            <td data-label="Motivo">{{ n.motivo }}</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </ng-container>
+  <ng-template #todoLegible><div class="empty"><p>Todos los archivos encontrados se pudieron leer.</p></div></ng-template>
+</section>
+
+<!-- ========== Servidores escaneados ========== -->
+<section class="panel" *ngIf="resultado && vista === 'servidores'">
+  <p class="nota">Qué se consultó en cada servidor de Portainer. Un servidor «sin inventario» no se puede conciliar: regístralo en Inventario → Servidores para poder crear sus certificados.</p>
+  <div class="tabla-wrap">
+    <table class="tabla tabla-apilada">
+      <thead><tr><th>Servidor (Portainer)</th><th>En el inventario</th><th>Estado</th><th>Contenedores</th><th>Puertos sondeados / con TLS</th><th>Archivos leídos</th><th>Avisos</th></tr></thead>
+      <tbody>
+        <tr *ngFor="let e of listaEntornos">
+          <td data-label="Servidor (Portainer)"><span class="nombre-comun">{{ e.nombre }}</span><span class="linea-sec" *ngIf="e.ip">{{ e.ip }}</span></td>
+          <td data-label="En el inventario">
+            <ng-container *ngIf="e.hostname; else sinInv">{{ e.hostname }}</ng-container>
+            <ng-template #sinInv><span class="mini-pill mini-pill--bajo">sin inventario</span></ng-template>
+          </td>
+          <td data-label="Estado">
+            <span class="est-pill" [ngClass]="e.ok ? 'est-ok' : 'est-alerta'">{{ e.ok ? 'Consultado' : 'Sin datos' }}</span>
+            <span class="linea-sec" *ngIf="e.error">{{ e.error }}</span>
+          </td>
+          <td data-label="Contenedores">{{ e.escaneados }} de {{ e.contenedores }}</td>
+          <td data-label="Puertos sondeados / con TLS">{{ e.puertosSondeados }} / {{ e.puertosConTls }}</td>
+          <td data-label="Archivos leídos">
+            {{ e.archivosLeidos }}
+            <span class="linea-sec" *ngIf="e.rutasTruncadas">{{ e.rutasTruncadas }} carpeta(s) se cortaron por tamaño</span>
+          </td>
+          <td data-label="Avisos">
+            <span class="linea-sec" *ngFor="let a of e.avisos">{{ a }}</span>
+            <span class="linea-sec" *ngIf="!e.avisos.length">—</span>
+          </td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<section class="panel" *ngIf="!resultado && !corriendo">
+  <div class="empty">
+    <p *ngIf="cargandoResultado">Cargando…</p>
+    <p *ngIf="!cargandoResultado">Aquí verás los certificados que usan los contenedores y cómo cuadran con el inventario.<br />
+      <span *ngIf="puedeEditar">Pulsa «Escanear ahora» para empezar.</span>
+      <span *ngIf="!puedeEditar">Pide a un administrador del módulo que ejecute un escaneo.</span>
+    </p>
+  </div>
+</section>
+
+<!-- ASISTENTE con los datos precargados -->
+<app-certificado-asistente
+  *ngIf="asistenteAbierto"
+  [grupo]="asistenteGrupo"
+  [modo]="asistenteModo"
+  [catalogo]="catalogo"
+  [grupos]="grupos"
+  [precarga]="asistentePrecarga"
+  (cerrar)="cerrarAsistente()"
+  (guardado)="asistenteGuardado()"
+></app-certificado-asistente>
+
+<!-- DETALLE DE CONFIGURACIÓN (docker run) -->
+<div class="overlay" *ngIf="cfgDetalle as c" (click)="cerrarConfig()">
+  <div class="modal modal-detalle" (click)="$event.stopPropagation()" role="dialog" aria-modal="true">
+    <div class="modal-header">
+      <h2>{{ c.contenedor }}</h2>
+      <button class="btn-close" (click)="cerrarConfig()" type="button" aria-label="Cerrar">✕</button>
+    </div>
+    <div class="detalle-top">
+      <span class="chip">{{ nombreServidorCfg(c) }}</span>
+      <span class="sub">{{ c.imagen }}<ng-container *ngIf="c.stack"> · stack {{ c.stack }}</ng-container> · {{ c.estado }}</span>
+    </div>
+
+    <span class="section-label">Certificados que declara ({{ c.referencias.length }})</span>
+    <ul class="evidencias" *ngIf="c.referencias.length; else sinDeclarar">
+      <li *ngFor="let r of c.referencias">
+        <div class="evidencia__cab">
+          <span class="est-pill est-pill--mini" [ngClass]="infoReferencia(r.estado).clase">{{ infoReferencia(r.estado).etiqueta }}</span>
+          <span class="mono">{{ r.ruta }}</span>
+        </div>
+        <div class="linea-sec">Declarado en {{ r.origen }} · {{ r.detalle }}</div>
+      </li>
+    </ul>
+    <ng-template #sinDeclarar><p class="nota nota--sola">{{ c.usaTls ? 'Tiene variables de TLS pero ninguna ruta de certificado.' : 'La configuración no menciona certificados.' }} Se buscó igual en /app{{ c.workdir && c.workdir !== '/app' ? ', ' + c.workdir : '' }} y en las carpetas habituales: {{ c.archivos }} archivo(s) de certificados leído(s).</p></ng-template>
+
+    <span class="section-label">Contraseñas probadas ({{ c.claves.length }})</span>
+    <p class="nota nota--sola" *ngIf="!c.claves.length">No se encontró ninguna contraseña en la configuración; solo se probó la vacía y las que se indicaron al escanear.</p>
+    <ul class="evidencias" *ngIf="c.claves.length">
+      <li *ngFor="let k of c.claves">
+        <div class="evidencia__cab">
+          <span class="mini-pill" [class.mini-pill--info]="k.abrio">{{ k.abrio ? 'Abrió un archivo' : 'No abrió nada' }}</span>
+          <span class="linea-origen">{{ k.origen }}</span>
+        </div>
+      </li>
+    </ul>
+    <p class="nota nota--sola">Las contraseñas no se muestran ni se guardan: solo se indica de dónde salieron.</p>
+
+    <span class="section-label">«docker run» reconstruido <small>(secretos ocultos)</small></span>
+    <pre class="comando">{{ c.comando }}</pre>
+
+    <span class="section-label" *ngIf="c.montajes.length">Montajes ({{ c.montajes.length }})</span>
+    <ul class="evidencias" *ngIf="c.montajes.length">
+      <li *ngFor="let m of c.montajes"><span class="mono">{{ m.origen }} → {{ m.destino }}</span> <span class="mini-pill">{{ m.tipo }}</span></li>
+    </ul>
+
+    <p class="nota nota--sola" *ngIf="c.lecturaParcial">Alguna carpeta era demasiado grande y se leyó solo en parte: puede haber archivos sin revisar (prueba la búsqueda profunda o indica la ruta en Opciones).</p>
+    <p class="nota nota--sola" *ngIf="c.jarsOmitidos">{{ c.jarsOmitidos }} archivo(s) .jar/.war no se abrieron por su tamaño.</p>
+
+    <div class="modal-actions">
+      <button class="btn" type="button" (click)="copiarComando(c)">Copiar comando</button>
+      <button class="btn" type="button" (click)="cerrarConfig()">Cerrar</button>
+    </div>
+  </div>
+</div>
+
+<!-- DETALLE -->
+<div class="overlay" *ngIf="detalle as h" (click)="cerrarDetalle()">
+  <div class="modal modal-detalle" (click)="$event.stopPropagation()" role="dialog" aria-modal="true">
+    <div class="modal-header">
+      <h2>{{ h.certificado.nombreComun || 'Sin nombre común' }}</h2>
+      <button class="btn-close" (click)="cerrarDetalle()" type="button" aria-label="Cerrar">✕</button>
+    </div>
+
+    <div class="detalle-top">
+      <span class="est-pill" [ngClass]="infoEstado(h.estado).clase">{{ infoEstado(h.estado).etiqueta }}</span>
+      <span class="vig-pill" [ngClass]="infoVigencia(h.vigencia).clase">{{ infoVigencia(h.vigencia).etiqueta }}</span>
+      <span class="sub">{{ h.dias < 0 ? 'Venció hace ' + (-h.dias) + ' día(s)' : h.dias + ' día(s) restante(s)' }}</span>
+    </div>
+    <p class="nota nota--sola">{{ infoEstado(h.estado).ayuda }}</p>
+    <ul class="diferencias" *ngIf="h.diferencias.length">
+      <li *ngFor="let d of h.diferencias">{{ d }}</li>
+    </ul>
+
+    <span class="section-label">Dónde se encontró ({{ h.evidencias.length }})</span>
+    <ul class="evidencias">
+      <li *ngFor="let e of h.evidencias">
+        <div class="evidencia__cab">
+          <span class="chip">{{ e.contenedor }}</span>
+          <span class="mini-pill" [class.mini-pill--info]="e.origen === 'puerto'">{{ e.origen === 'puerto' ? 'Sondeo TLS' : 'Archivo' }}</span>
+          <span class="mono" *ngIf="e.puerto">puerto {{ e.puerto }}</span>
+          <span class="mono" *ngIf="e.ruta">{{ e.ruta }}</span>
+        </div>
+        <div class="linea-sec" *ngIf="e.config || e.claveOrigen">
+          <ng-container *ngIf="e.config">Declarado en la configuración del contenedor ({{ e.config }})</ng-container>
+          <ng-container *ngIf="e.config && e.claveOrigen"> · </ng-container>
+          <ng-container *ngIf="e.claveOrigen">Se abrió con {{ e.claveOrigen === 'sin contraseña' ? 'contraseña vacía' : 'la contraseña de ' + e.claveOrigen }}</ng-container>
+        </div>
+        <div class="linea-sec">
+          {{ e.imagen }}<ng-container *ngIf="e.stack"> · stack {{ e.stack }}</ng-container>
+          <ng-container *ngIf="e.tieneLlave"> · el archivo incluye también la llave privada (no se leyó ni se guarda)</ng-container>
+        </div>
+      </li>
+    </ul>
+
+    <span class="section-label">Servidor</span>
+    <div class="detalle-grid">
+      <div><span class="detalle-label">Servidor</span><span>{{ nombreServidor(h) }}</span></div>
+      <div><span class="detalle-label">IP</span><span class="mono">{{ h.servidor.ip || '—' }}</span></div>
+      <div><span class="detalle-label">Entorno en Portainer</span><span>{{ h.servidor.entornoNombre }}</span></div>
+      <div><span class="detalle-label">En el inventario</span><span>{{ h.servidorInventariado ? 'Sí' : 'No' }}</span></div>
+    </div>
+
+    <span class="section-label">Certificado</span>
+    <div class="detalle-grid">
+      <div><span class="detalle-label">Entidad emisora</span><span>{{ h.certificado.emisor || '—' }}</span></div>
+      <div><span class="detalle-label">Algoritmo</span><span>{{ h.certificado.algoritmo || '—' }}</span></div>
+      <div><span class="detalle-label">Válido desde</span><span class="mono">{{ h.certificado.desde | date: 'dd/MM/yyyy' }}</span></div>
+      <div><span class="detalle-label">Vence el</span><span class="mono">{{ h.certificado.hasta | date: 'dd/MM/yyyy' }}</span></div>
+    </div>
+    <div class="detalle-campo-largo"><span class="detalle-label">Número de serie</span><span class="mono">{{ h.certificado.serie }}</span></div>
+    <div class="detalle-campo-largo"><span class="detalle-label">Thumbprint (SHA-1)</span><span class="mono">{{ h.certificado.thumbprint }}</span></div>
+    <div class="detalle-campo-largo"><span class="detalle-label">SHA-256</span><span class="mono">{{ h.certificado.sha256 }}</span></div>
+    <div class="detalle-campo-largo"><span class="detalle-label">Sujeto</span><span class="mono">{{ h.certificado.sujeto || '—' }}</span></div>
+    <div class="detalle-campo-largo" *ngIf="h.certificado.san.length">
+      <span class="detalle-label">Nombres alternativos (SAN)</span>
+      <span class="chips"><span class="chip" *ngFor="let s of h.certificado.san">{{ s }}</span></span>
+    </div>
+
+    <ng-container *ngIf="h.inventario as f">
+      <span class="section-label">Lo que dice el inventario</span>
+      <div class="detalle-grid">
+        <div><span class="detalle-label">Ubicación</span><span>{{ f.componente || '—' }} · {{ f.hostname || '—' }}</span></div>
+        <div><span class="detalle-label">Nombre común</span><span>{{ f.nombreComun || '—' }}</span></div>
+        <div><span class="detalle-label">Válido desde</span><span class="mono">{{ f.desde | date: 'dd/MM/yyyy' }}</span></div>
+        <div><span class="detalle-label">Vence el</span><span class="mono">{{ f.hasta | date: 'dd/MM/yyyy' }}</span></div>
+        <div><span class="detalle-label">Responsable</span><span>{{ f.responsable || '—' }}</span></div>
+        <div><span class="detalle-label">Puerto</span><span class="mono">{{ f.puerto || '—' }}</span></div>
+      </div>
+      <div class="detalle-campo-largo"><span class="detalle-label">Número de serie</span><span class="mono">{{ f.serie || '—' }}</span></div>
+      <div class="detalle-campo-largo"><span class="detalle-label">Thumbprint</span><span class="mono">{{ f.thumbprint || '—' }}</span></div>
+    </ng-container>
+
+    <div class="modal-actions">
+      <button *ngIf="puedeEditar && h.accion" class="btn btn-primary" type="button" (click)="abrirAsistente(h)">{{ etiquetaAccion(h) }}</button>
+      <button class="btn" type="button" (click)="cerrarDetalle()">Cerrar</button>
+    </div>
+  </div>
+</div>

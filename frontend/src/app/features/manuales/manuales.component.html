@@ -1,0 +1,437 @@
+<div class="man" [class.ver-pagina]="vistaMovil === 'pagina'">
+
+  <header class="cab">
+    <div>
+      <h1>Manuales</h1>
+      <p class="sub">Procedimientos, comandos y guías paso a paso del equipo, en un solo lugar y con búsqueda.</p>
+    </div>
+    @if (libretas.length) {
+      <div class="cab-acciones">
+        <div class="buscar" role="search">
+          <svg class="ico" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg>
+          <input #campoBusqueda type="search" name="q" [(ngModel)]="q" (ngModelChange)="alEscribirBusqueda()" placeholder="Buscar en los manuales…  ( / )" autocomplete="off" aria-label="Buscar en los manuales" />
+        </div>
+        @if (puedeEditar) {
+          <button type="button" class="btn btn-ghost" (click)="abrirImportar()">Importar Word / PDF</button>
+        }
+      </div>
+    }
+  </header>
+
+  @for (s of solicitudes; track s.id) {
+    <section class="solicitud" role="alert">
+      <div>
+        <strong>{{ s.propietario }} quiere compartirte el manual «{{ s.libreta }}»</strong>
+        <span>Con permiso de {{ s.permiso === 'EDICION' ? 'edición' : 'solo lectura' }}. Solo aparecerá en tu cuenta si lo aceptas.</span>
+      </div>
+      <div class="solicitud-acc">
+        <button type="button" class="btn btn-purple btn-sm" [disabled]="respondiendoSolicitud === s.id" (click)="responderSolicitud(s, true)">Aceptar</button>
+        <button type="button" class="btn btn-ghost btn-sm" [disabled]="respondiendoSolicitud === s.id" (click)="responderSolicitud(s, false)">Rechazar</button>
+      </div>
+    </section>
+  }
+
+  @if (aviso) {
+    <div class="toast" [class.toast-mal]="avisoError" role="status" aria-live="polite">{{ aviso }}</div>
+  }
+  @if (exportando) {
+    <div class="toast toast-info" role="status"><span class="spinner chico"></span> {{ exportando }}</div>
+  }
+
+  @if (cargandoArbol) {
+    <div class="cargando"><div class="spinner"></div><span>Cargando manuales…</span></div>
+  } @else if (errorArbol) {
+    <div class="error-state">{{ errorArbol }}</div>
+  } @else if (!libretas.length) {
+    <section class="bienvenida tarjeta">
+      <div class="bien-ico"><svg class="ico-grande" viewBox="0 0 24 24" width="44" height="44" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg></div>
+      <h2>Todavía no hay manuales</h2>
+      @if (puedeEditar) {
+        <p>Cada manual es tuyo y de nadie más, a menos que decidas compartirlo (y la otra persona lo acepte). Puedes traer tus notas desde OneNote (exportadas a Word o PDF) o empezar desde cero con una libreta vacía.</p>
+        <div class="bien-acciones">
+          <button type="button" class="btn btn-purple" (click)="abrirImportar()">Importar desde Word o PDF</button>
+          <button type="button" class="btn btn-ghost" (click)="nuevaLibreta()">Crear una libreta vacía</button>
+        </div>
+      } @else {
+        <p>Aquí aparecerán tus manuales y los que otras personas decidan compartir contigo.</p>
+      }
+    </section>
+  } @else {
+
+    <div class="libreta-barra">
+      <div class="libreta-sel">
+        <label for="libretaSel" class="sr">Libreta</label>
+        <svg class="ico" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
+        <select id="libretaSel" [ngModel]="libretaId" (ngModelChange)="elegirLibreta($event)" name="libretaSel">
+          @for (l of libretas; track l.id) { <option [ngValue]="l.id">{{ l.nombre }}{{ l.miNivel !== 'PROPIETARIO' && l.propietario ? ' · de ' + l.propietario : '' }}</option> }
+        </select>
+      </div>
+      @if (esMia && puedeEditarRol) {
+        <button type="button" class="btn-mini" (click)="abrirCompartir()" title="Compartir este manual con otras personas (ellas deben aceptar)">Compartir</button>
+      }
+      @if (puedeEditarRol) {
+        <div class="menu-wrap">
+          <button type="button" class="btn-mini" aria-haspopup="menu" [attr.aria-expanded]="menu === 'libreta'" (click)="menu = menu === 'libreta' ? '' : 'libreta'">Libreta ▾</button>
+          @if (menu === 'libreta') {
+            <div class="menu" role="menu">
+              <button type="button" role="menuitem" (click)="nuevaLibreta()">Nueva libreta</button>
+              @if (esMia) {
+                <button type="button" role="menuitem" (click)="editarLibreta()">Cambiar nombre</button>
+                <button type="button" role="menuitem" (click)="abrirCompartir()">Compartir con otras personas…</button>
+                <button type="button" role="menuitem" class="peligro" (click)="pedirEliminar('libreta')">Eliminar libreta</button>
+              }
+              @if (esCompartidaConmigo && libreta?.miComparticionId) {
+                <button type="button" role="menuitem" class="peligro" (click)="dejarDeUsar()">Dejar de usar este manual</button>
+              }
+            </div>
+          }
+        </div>
+      }
+      @if (esMia) {
+        <span class="etq-manual etq-mia" [title]="libreta?.compartidaCon ? 'Lo compartiste con ' + libreta?.compartidaCon + ' persona(s)' : 'Solo tú ves este manual'">
+          {{ libreta?.compartidaCon ? 'Tuyo · compartido con ' + libreta?.compartidaCon : 'Tuyo · privado' }}@if (libreta?.pendientes) { <small> · {{ libreta?.pendientes }} por aceptar</small> }
+        </span>
+      } @else if (esCompartidaConmigo) {
+        <span class="etq-manual etq-comp">De {{ libreta?.propietario }} · {{ libreta?.miNivel === 'EDICION' ? 'puedes editar' : 'solo lectura' }}</span>
+      }
+      @if (libreta?.descripcion) { <span class="gris peq desc">{{ libreta?.descripcion }}</span> }
+    </div>
+
+    <nav class="secciones" aria-label="Secciones de la libreta">
+      <div class="tabs" role="tablist">
+        @for (s of seccionesColoreadas; track s.id) {
+          <button type="button" role="tab" class="tab" [class.activa]="s.id === seccionId" [attr.aria-selected]="s.id === seccionId" [style.--col]="s.color || 'var(--ax-brand-primary, #673ab7)'" (click)="elegirSeccion(s.id)">
+            <span class="tab-punto"></span>{{ s.nombre }}<small>{{ s.totalPaginas }}</small>
+          </button>
+        }
+        @if (puedeEditar) {
+          <button type="button" class="tab tab-nueva" (click)="nuevaSeccion()" title="Crear una sección nueva">+ Sección</button>
+        }
+      </div>
+      @if (seccion) {
+        <div class="menu-wrap">
+          <button type="button" class="btn-mini" aria-haspopup="menu" [attr.aria-expanded]="menu === 'seccion'" (click)="menu = menu === 'seccion' ? '' : 'seccion'">Sección ▾</button>
+          @if (menu === 'seccion') {
+            <div class="menu menu-der" role="menu">
+              @if (puedeEditar) {
+                <button type="button" role="menuitem" (click)="editarSeccion()">Cambiar nombre o color</button>
+              }
+              <button type="button" role="menuitem" (click)="exportarSeccionPdf()">Exportar toda la sección a PDF</button>
+              <button type="button" role="menuitem" (click)="exportarSeccionWord()">Exportar toda la sección a Word</button>
+              @if (puedeEditar) {
+                <button type="button" role="menuitem" class="peligro" (click)="pedirEliminar('seccion')">Eliminar sección</button>
+              }
+            </div>
+          }
+        </div>
+      }
+    </nav>
+
+    @if (!libreta?.secciones?.length) {
+      <section class="bienvenida tarjeta">
+        <h2>Esta libreta no tiene secciones</h2>
+        @if (puedeEditar) {
+          <p>Las secciones agrupan las páginas por tema (por ejemplo «Soporte N1» o «Kafka»).</p>
+          <div class="bien-acciones">
+            <button type="button" class="btn btn-purple" (click)="nuevaSeccion()">Crear la primera sección</button>
+            <button type="button" class="btn btn-ghost" (click)="abrirImportar()">Importar desde Word o PDF</button>
+          </div>
+        }
+      </section>
+    } @else {
+      <div class="cuerpo">
+
+        <!-- ============ columna izquierda: páginas o resultados ============ -->
+        <aside class="col-lista" aria-label="Páginas">
+          @if (resultados !== null || buscando || errorBusqueda) {
+            <div class="lista-cab">
+              <strong>
+                @if (buscando) { Buscando… } @else { {{ resultados?.length || 0 }} resultado{{ resultados?.length === 1 ? '' : 's' }} }
+              </strong>
+              <button type="button" class="btn-mini" (click)="limpiarBusqueda()">Cerrar búsqueda</button>
+            </div>
+            <label class="solo-libreta"><input type="checkbox" name="soloLibreta" [(ngModel)]="soloLibreta" (ngModelChange)="alCambiarAlcance()" /> Solo en «{{ libreta?.nombre }}»</label>
+            @if (errorBusqueda) { <div class="error-state">{{ errorBusqueda }}</div> }
+            @if (resultados && !resultados.length && !buscando && !errorBusqueda) {
+              <p class="vacio">No se encontró nada con «{{ q }}». Prueba con otra palabra o con menos palabras.</p>
+            }
+            <ul class="paginas resultados">
+              @for (x of resultados || []; track x.r.id) {
+                <li>
+                  <button type="button" class="pag-item" [class.activa]="x.r.id === pagina?.id" (click)="abrirResultado(x.r)">
+                    <span class="pag-tit">{{ x.r.titulo }} @if (x.r.tipo === 'PDF') { <span class="chip">PDF</span> }</span>
+                    <span class="ruta" [style.--col]="x.r.seccionColor || 'var(--ax-brand-primary, #673ab7)'"><i></i>{{ x.r.libretaNombre }} › {{ x.r.seccionNombre }}</span>
+                    <span class="frag">@for (p of x.partes; track $index) { @if (p.hit) { <mark>{{ p.t }}</mark> } @else { {{ p.t }} } }</span>
+                  </button>
+                </li>
+              }
+            </ul>
+          } @else {
+            <div class="lista-cab">
+              <strong>{{ seccion?.nombre }}</strong>
+              @if (puedeEditar) { <button type="button" class="btn btn-purple btn-sm" (click)="nuevaPagina()">+ Nueva página</button> }
+            </div>
+            @if (cargandoPaginas) {
+              <div class="cargando chico-v"><div class="spinner"></div></div>
+            } @else if (!paginas.length) {
+              <p class="vacio">Esta sección todavía no tiene páginas.@if (puedeEditar) { <br />Crea la primera con «Nueva página» o importa un documento. }</p>
+            } @else {
+              <ul class="paginas">
+                @for (p of paginas; track p.id; let i = $index) {
+                  <li [class.arrastre]="arrastrando === i" [attr.draggable]="puedeEditar ? 'true' : null" (dragstart)="iniciarArrastre(i, $event)" (dragover)="$event.preventDefault()" (drop)="soltarEn(i, $event)" (dragend)="arrastrando = null">
+                    <button type="button" class="pag-item" [class.activa]="p.id === pagina?.id" (click)="abrirPagina(p)">
+                      <span class="pag-tit">{{ p.titulo }} @if (p.tipo === 'PDF') { <span class="chip">PDF</span> }</span>
+                      <span class="pag-fecha gris">{{ corta(p.fechaOrigen || p.fechaActualizacion) }}@if (!p.fechaOrigen && p.actualizadoPor) { · {{ p.actualizadoPor }} }</span>
+                    </button>
+                  </li>
+                }
+              </ul>
+              @if (puedeEditar && paginas.length > 1) { <p class="pista gris peq">Arrastra las páginas para cambiar su orden.</p> }
+            }
+          }
+        </aside>
+
+        <!-- ============ columna derecha: página ============ -->
+        <section class="col-pagina" aria-label="Contenido de la página">
+          <button type="button" class="volver" (click)="volverALista()">&#8592; Volver a las páginas</button>
+
+          @if (cargandoPagina) {
+            <div class="cargando"><div class="spinner"></div><span>Abriendo la página…</span></div>
+          } @else if (errorPagina) {
+            <div class="error-state">{{ errorPagina }}</div>
+          } @else if (!pagina) {
+            <div class="sin-pagina">
+              <div class="bien-ico"><svg class="ico-grande" viewBox="0 0 24 24" width="44" height="44" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6M8 13h8M8 17h5"/></svg></div>
+              <p>Elige una página de la lista@if (puedeEditar) { <span> o crea una nueva</span> }.</p>
+            </div>
+          } @else {
+            <article class="pagina tarjeta">
+              <div class="pag-cab">
+                <div class="pag-cab-txt">
+                  @if (editando) {
+                    <input #campoTitulo class="titulo-input" type="text" name="titulo" [(ngModel)]="tituloEdicion" (ngModelChange)="alCambiarTitulo()" maxlength="255" placeholder="Título de la página" aria-label="Título de la página" />
+                  } @else {
+                    <h2 class="titulo">{{ pagina.titulo }}</h2>
+                  }
+                  <div class="meta gris">
+                    <span class="ruta" [style.--col]="pagina.seccionColor || 'var(--ax-brand-primary, #673ab7)'"><i></i>{{ pagina.libretaNombre }} › {{ pagina.seccionNombre }}</span>
+                    @if (pagina.fechaOrigen) { <span>Creada el {{ larga(pagina.fechaOrigen) }}</span> }
+                    <span>Editada {{ corta(pagina.fechaActualizacion, true) }}@if (pagina.actualizadoPor) { por {{ pagina.actualizadoPor }} }</span>
+                  </div>
+                </div>
+
+                <div class="pag-acciones">
+                  @if (editando) {
+                    <span class="estado-guardado" [class.mal]="estadoGuardado === 'error'" [class.ok]="estadoGuardado === 'guardado'" aria-live="polite">
+                      @if (estadoGuardado === 'guardando') { <span class="spinner chico"></span> }
+                      {{ textoGuardado }}
+                    </span>
+                    <button type="button" class="btn btn-purple" (click)="terminarEdicion()">Listo</button>
+                  } @else {
+                    @if (puedeEditar) {
+                      <button type="button" class="btn btn-purple" (click)="editarPagina()">{{ pagina.tipo === 'PDF' ? 'Cambiar título' : 'Editar' }}</button>
+                    }
+                    <div class="menu-wrap">
+                      <button type="button" class="btn btn-ghost" aria-haspopup="menu" [attr.aria-expanded]="menu === 'exportar'" (click)="menu = menu === 'exportar' ? '' : 'exportar'">Exportar ▾</button>
+                      @if (menu === 'exportar') {
+                        <div class="menu menu-der" role="menu">
+                          <button type="button" role="menuitem" (click)="exportarPdf()">{{ pagina.tipo === 'PDF' ? 'Descargar el PDF' : 'PDF (guardar o imprimir)' }}</button>
+                          @if (pagina.tipo === 'RICO') { <button type="button" role="menuitem" (click)="exportarWord()">Word (.docx)</button> }
+                        </div>
+                      }
+                    </div>
+                    @if (pagina.tipo === 'RICO') { <button type="button" class="btn btn-ghost" (click)="abrirHistorial()">Historial</button> }
+                    <div class="menu-wrap">
+                      <button type="button" class="btn btn-ghost btn-icono" aria-label="Más acciones" aria-haspopup="menu" [attr.aria-expanded]="menu === 'mas'" (click)="menu = menu === 'mas' ? '' : 'mas'">&#8943;</button>
+                      @if (menu === 'mas') {
+                        <div class="menu menu-der" role="menu">
+                          <button type="button" role="menuitem" (click)="copiarEnlace(); menu = ''">Copiar enlace a esta página</button>
+                          @if (puedeEditar) {
+                            @if (seccionesParaMover.length) { <button type="button" role="menuitem" (click)="moverPagina()">Mover a otra sección</button> }
+                            <button type="button" role="menuitem" class="peligro" (click)="pedirEliminar('pagina')">Eliminar página</button>
+                          }
+                        </div>
+                      }
+                    </div>
+                  }
+                </div>
+              </div>
+
+              @if (editando && estadoGuardado === 'error') {
+                <div class="aviso-guardado" [class.conflicto]="!!conflicto" role="alert">
+                  @if (conflicto) {
+                    <div>
+                      <strong>{{ nombreUsuarioConflicto }} guardó cambios en esta página mientras la editabas.</strong>
+                      <div class="peq">Elige qué versión conservar: la suya (se pierden tus últimos cambios) o la tuya (se reemplaza lo que guardó). La versión reemplazada queda en el historial.</div>
+                    </div>
+                    <div class="aviso-botones">
+                      <button type="button" class="btn btn-ghost btn-sm" (click)="descartarMisCambios()">Ver la versión de {{ nombreUsuarioConflicto }}</button>
+                      <button type="button" class="btn btn-purple btn-sm" (click)="guardarLosMios()">Guardar la mía</button>
+                    </div>
+                  } @else {
+                    <div><strong>No se pudo guardar.</strong> <span class="peq">{{ errorGuardado }}</span></div>
+                    <div class="aviso-botones">
+                      <button type="button" class="btn btn-purple btn-sm" (click)="reintentarGuardado()">Reintentar</button>
+                    </div>
+                  }
+                </div>
+              }
+
+              @if (pagina.tipo === 'PDF') {
+                <div class="pdf-barra gris peq">Documento PDF: {{ pagina.archivoNombre }} ({{ tamano(pagina.archivoTamano) }})
+                </div>
+                @if (pdfUrl) {
+                  <iframe class="pdf" [src]="pdfUrl" title="Vista del PDF"></iframe>
+                } @else {
+                  <div class="cargando"><div class="spinner"></div><span>Cargando el PDF…</span></div>
+                }
+              } @else if (editando) {
+                @for (k of [claveEditor]; track k) {
+                  <app-manual-editor [html]="pagina.html" [enfocar]="editorEnfocar" (cambio)="alCambiarContenido($event)" (aviso)="avisoEditor($event)"></app-manual-editor>
+                }
+              } @else {
+                <div #lectura class="man-contenido lectura" [innerHTML]="htmlLectura" (click)="alClicLectura($event)"></div>
+                @if (!pagina.html) { <p class="vacio">Esta página está vacía.@if (puedeEditar) { Pulsa «Editar» para escribir. }</p> }
+              }
+            </article>
+          }
+        </section>
+      </div>
+    }
+  }
+
+  <!-- ============ diálogos ============ -->
+
+  @if (dlg === 'libreta' || dlg === 'seccion') {
+    <div class="modal-overlay" (click)="cerrarDlg()" role="presentation">
+      <form class="modal-card dlg" role="dialog" aria-modal="true" (click)="$event.stopPropagation()" (submit)="$event.preventDefault(); confirmarDlg()">
+        <div class="modal-header"><h2>{{ dlg === 'libreta' ? (dlgId ? 'Cambiar nombre de la libreta' : 'Nueva libreta') : (dlgId ? 'Editar sección' : 'Nueva sección') }}</h2>
+          <button type="button" class="close-btn" aria-label="Cerrar" (click)="cerrarDlg()">&#10005;</button></div>
+        <label class="campo-v">Nombre
+          <input type="text" name="dlgNombre" [(ngModel)]="dlgNombre" maxlength="150" autofocus placeholder="{{ dlg === 'libreta' ? 'Ej.: Soporte aplicaciones' : 'Ej.: Kafka' }}" />
+        </label>
+        @if (dlg === 'libreta') {
+          <label class="campo-v">Descripción (opcional)
+            <input type="text" name="dlgDesc" [(ngModel)]="dlgDescripcion" maxlength="500" />
+          </label>
+        } @else {
+          <div class="campo-v">Color
+            <div class="colores" role="radiogroup" aria-label="Color de la sección">
+              @for (c of colores; track c) {
+                <button type="button" role="radio" class="color-op" [class.sel]="dlgColor === c" [attr.aria-checked]="dlgColor === c" [style.background]="c" (click)="dlgColor = c" [attr.aria-label]="c"></button>
+              }
+            </div>
+          </div>
+        }
+        @if (dlgError) { <div class="error-state mt">{{ dlgError }}</div> }
+        <div class="pie">
+          <button type="button" class="btn btn-ghost" [disabled]="dlgOcupado" (click)="cerrarDlg()">Cancelar</button>
+          <button type="submit" class="btn btn-purple" [disabled]="dlgOcupado">{{ dlgOcupado ? 'Guardando…' : 'Guardar' }}</button>
+        </div>
+      </form>
+    </div>
+  }
+
+  @if (dlg === 'compartir') {
+    <div class="modal-overlay" (click)="cerrarDlg()" role="presentation">
+      <form class="modal-card dlg dlg-ancho" role="dialog" aria-modal="true" (click)="$event.stopPropagation()" (submit)="$event.preventDefault(); enviarComparticion()">
+        <div class="modal-header"><h2>Compartir «{{ libreta?.nombre }}»</h2>
+          <button type="button" class="close-btn" aria-label="Cerrar" (click)="cerrarDlg()">&#10005;</button></div>
+        <p class="gris peq">El manual es solo tuyo. Si lo compartes, la otra persona recibe una notificación y <strong>debe aceptarla</strong>: hasta entonces no lo ve.</p>
+        <label class="campo-v">Compartir con
+          <select name="cmpUsuario" [(ngModel)]="cmpUsuarioId">
+            <option [ngValue]="null" disabled>Elige una persona…</option>
+            @for (u of candidatos; track u.id) { <option [ngValue]="u.id">{{ u.nombre_completo }} ({{ u.username }})</option> }
+          </select>
+        </label>
+        <div class="campo-v">Permiso
+          <div class="permisos" role="radiogroup" aria-label="Permiso">
+            <label><input type="radio" name="cmpPermiso" value="LECTURA" [(ngModel)]="cmpPermiso" /> Solo lectura <small>(puede ver, buscar y exportar)</small></label>
+            <label><input type="radio" name="cmpPermiso" value="EDICION" [(ngModel)]="cmpPermiso" /> Puede editar <small>(crear y modificar secciones y páginas)</small></label>
+          </div>
+        </div>
+        @if (dlgError) { <div class="error-state mt">{{ dlgError }}</div> }
+        <div class="pie pie-inline">
+          <button type="submit" class="btn btn-purple" [disabled]="dlgOcupado || !cmpUsuarioId">{{ dlgOcupado ? 'Enviando…' : 'Enviar solicitud' }}</button>
+        </div>
+
+        <h3 class="sub-dlg">Con quién está compartido</h3>
+        @if (cargandoCmp) { <p class="gris peq">Cargando…</p> }
+        @else if (!comparticiones.length) { <p class="gris peq">Todavía no lo compartes con nadie.</p> }
+        @else {
+          <ul class="lista-cmp">
+            @for (c of comparticiones; track c.id) {
+              <li>
+                <span class="cmp-nombre">{{ c.nombre }}</span>
+                <span class="chip-cmp" [class.ok]="c.estado === 'ACEPTADA'" [class.pend]="c.estado === 'PENDIENTE'" [class.no]="c.estado === 'RECHAZADA'">
+                  {{ c.estado === 'ACEPTADA' ? 'Aceptó' : c.estado === 'PENDIENTE' ? 'Esperando respuesta' : 'Rechazó' }}
+                </span>
+                <span class="gris peq">{{ etiquetaPermiso(c.permiso) }}</span>
+                @if (c.estado !== 'RECHAZADA') {
+                  <button type="button" class="btn-mini peligro" (click)="quitarComparticion(c)">{{ c.estado === 'ACEPTADA' ? 'Quitar acceso' : 'Cancelar' }}</button>
+                }
+              </li>
+            }
+          </ul>
+        }
+        <div class="pie">
+          <button type="button" class="btn btn-ghost" (click)="cerrarDlg()">Cerrar</button>
+        </div>
+      </form>
+    </div>
+  }
+
+  @if (dlg === 'mover') {
+    <div class="modal-overlay" (click)="cerrarDlg()" role="presentation">
+      <form class="modal-card dlg" role="dialog" aria-modal="true" (click)="$event.stopPropagation()" (submit)="$event.preventDefault(); confirmarDlg()">
+        <div class="modal-header"><h2>Mover «{{ pagina?.titulo }}»</h2>
+          <button type="button" class="close-btn" aria-label="Cerrar" (click)="cerrarDlg()">&#10005;</button></div>
+        <label class="campo-v">Sección de destino (en esta libreta)
+          <select name="dlgDestino" [(ngModel)]="dlgDestino">
+            <option [ngValue]="null" disabled>Elige una sección…</option>
+            @for (s of seccionesParaMover; track s.id) { <option [ngValue]="s.id">{{ s.nombre }}</option> }
+          </select>
+        </label>
+        @if (dlgError) { <div class="error-state mt">{{ dlgError }}</div> }
+        <div class="pie">
+          <button type="button" class="btn btn-ghost" [disabled]="dlgOcupado" (click)="cerrarDlg()">Cancelar</button>
+          <button type="submit" class="btn btn-purple" [disabled]="dlgOcupado">{{ dlgOcupado ? 'Moviendo…' : 'Mover' }}</button>
+        </div>
+      </form>
+    </div>
+  }
+
+  @if (dlg === 'eliminar') {
+    <div class="modal-overlay" (click)="cerrarDlg()" role="presentation">
+      <div class="modal-card dlg" role="alertdialog" aria-modal="true" (click)="$event.stopPropagation()">
+        <div class="modal-header"><h2>¿Eliminar {{ dlgQue === 'libreta' ? 'la libreta' : dlgQue === 'seccion' ? 'la sección' : 'la página' }}?</h2>
+          <button type="button" class="close-btn" aria-label="Cerrar" (click)="cerrarDlg()">&#10005;</button></div>
+        <p class="conf-txt"><strong>{{ dlgNombre }}</strong>
+          @if (dlgQue === 'libreta') { <br />Dejará de verse junto con todas sus secciones y páginas. }
+          @if (dlgQue === 'seccion') { <br />Dejará de verse junto con todas sus páginas. }
+        </p>
+        <p class="gris peq">No se borra definitivamente: el equipo de base de datos puede recuperarla si fue un error.</p>
+        @if (dlgError) { <div class="error-state mt">{{ dlgError }}</div> }
+        <div class="pie">
+          <button type="button" class="btn btn-ghost" [disabled]="dlgOcupado" (click)="cerrarDlg()">Cancelar</button>
+          <button type="button" class="btn btn-peligro" [disabled]="dlgOcupado" (click)="confirmarDlg()">{{ dlgOcupado ? 'Eliminando…' : 'Sí, eliminar' }}</button>
+        </div>
+      </div>
+    </div>
+  }
+
+  @if (mostrarImportar) {
+    <app-manual-importar [libretas]="libretas" [libretaActualId]="libretaId" [seccionActualId]="seccionId" (cerrar)="mostrarImportar = false" (terminada)="alImportar($event)"></app-manual-importar>
+  }
+
+  @if (mostrarHistorial && pagina) {
+    <app-manual-historial [paginaId]="pagina.id" [tituloPagina]="pagina.titulo" [puedeEditar]="puedeEditar" (cerrar)="mostrarHistorial = false" (restaurada)="alRestaurar()"></app-manual-historial>
+  }
+
+  @if (imagenAmpliada) {
+    <div class="lightbox" (click)="imagenAmpliada = null" role="dialog" aria-label="Imagen ampliada">
+      <img [src]="imagenAmpliada" alt="Imagen ampliada" />
+      <button type="button" class="lb-cerrar" aria-label="Cerrar imagen">&#10005;</button>
+    </div>
+  }
+</div>

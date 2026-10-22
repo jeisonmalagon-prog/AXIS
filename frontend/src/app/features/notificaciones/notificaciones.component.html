@@ -1,0 +1,64 @@
+<header class="cab">
+  <div>
+    <h1>Notificaciones</h1>
+    <p class="sub">Vencimiento de tareas, pasos a producción próximos o sin cerrar, solicitudes para compartir manuales y otros avisos importantes. Cada persona ve solo los suyos.</p>
+  </div>
+  <div class="cab-acciones">
+    <button type="button" class="btn-sec" (click)="cargar(true)" [disabled]="cargando">Actualizar</button>
+    <button type="button" class="btn-sec" (click)="marcarTodas()" [disabled]="!noLeidas">Marcar todas como leídas</button>
+  </div>
+</header>
+
+<div class="filtros" role="group" aria-label="Filtro">
+  <button type="button" class="chip" [class.activo]="filtro === 'todas'" (click)="cambiarFiltro('todas')">Todas</button>
+  <button type="button" class="chip" [class.activo]="filtro === 'sinLeer'" (click)="cambiarFiltro('sinLeer')">Sin leer <span class="num" *ngIf="noLeidas">{{ noLeidas }}</span></button>
+</div>
+
+<div class="aviso" *ngIf="noDisponible">{{ noDisponible }}</div>
+<div class="error" *ngIf="error">{{ error }}</div>
+<div class="cargando" *ngIf="cargando && !items.length">Cargando…</div>
+
+<div class="vacio" *ngIf="!cargando && !items.length && !noDisponible && !error">
+  <strong>No tienes notificaciones{{ filtro === 'sinLeer' ? ' sin leer' : '' }}.</strong>
+  <span>Aquí aparecerán los avisos de tus tareas, pasos a producción y manuales compartidos.</span>
+</div>
+
+<ul class="lista" *ngIf="items.length">
+  <li *ngFor="let n of items; trackBy: trackId" class="item" [class.sin-leer]="!n.leida" [ngClass]="'sev-' + n.severidad.toLowerCase()">
+    <span class="marca" aria-hidden="true"></span>
+    <div class="cuerpo" (click)="abrir(n)" (keydown.enter)="abrir(n)" tabindex="0" [class.clic]="!!n.enlace">
+      <div class="linea1">
+        <span class="etq">{{ etiqueta(n) }}</span>
+        <strong>{{ n.titulo }}</strong>
+        <span class="fecha">{{ n.fecha | date: 'dd/MM/yyyy HH:mm' }}</span>
+      </div>
+      <p *ngIf="n.mensaje">{{ n.mensaje }}</p>
+      <div class="acciones-solicitud" *ngIf="n.tipo === 'MANUAL_COMPARTIR' && n.accion === 'PENDIENTE'" (click)="$event.stopPropagation()">
+        <button type="button" class="btn-ok" [disabled]="respondiendo === n.id" (click)="responder(n, true)">Aceptar</button>
+        <button type="button" class="btn-no" [disabled]="respondiendo === n.id" (click)="responder(n, false)">Rechazar</button>
+        <span class="gris">Si no aceptas, el manual no aparece en tu cuenta.</span>
+      </div>
+      <div class="acciones-solicitud" *ngIf="n.tipo === 'BITACORA_COMPARTIR' && n.accion === 'PENDIENTE'" (click)="$event.stopPropagation()">
+        <button type="button" class="btn-ok" [disabled]="respondiendo === n.id" (click)="responder(n, true)">Aceptar</button>
+        <button type="button" class="btn-no" [disabled]="respondiendo === n.id" (click)="responder(n, false)">Rechazar</button>
+        <span class="gris">Si no aceptas, ese contenido no aparece en tu bitácora.</span>
+      </div>
+      <div class="acciones-solicitud" *ngIf="n.tipo === 'BITACORA_SOLICITUD' && n.accion === 'PENDIENTE'" (click)="$event.stopPropagation()">
+        <button type="button" class="btn-ok" [disabled]="respondiendo === n.id" (click)="responder(n, true, 'LECTURA')">Aprobar lectura</button>
+        <button type="button" class="btn-ok" [disabled]="respondiendo === n.id" (click)="responder(n, true, 'EDICION')">Aprobar edición</button>
+        <button type="button" class="btn-no" [disabled]="respondiendo === n.id" (click)="responder(n, false)">Rechazar</button>
+        <span class="gris">Tú decides si la otra persona solo ve o también edita.</span>
+      </div>
+      <span class="resuelta" *ngIf="(n.tipo === 'BITACORA_COMPARTIR' || n.tipo === 'BITACORA_SOLICITUD') && n.accion && n.accion !== 'PENDIENTE'">
+        {{ n.accion === 'ACEPTADA' ? (n.tipo === 'BITACORA_SOLICITUD' ? 'La aprobaste' : 'Lo aceptaste') : n.accion === 'RECHAZADA' ? (n.tipo === 'BITACORA_SOLICITUD' ? 'La rechazaste' : 'Lo rechazaste') : 'Ya no está vigente' }}
+      </span>
+      <span class="resuelta" *ngIf="n.tipo === 'MANUAL_COMPARTIR' && n.accion && n.accion !== 'PENDIENTE'">
+        {{ n.accion === 'ACEPTADA' ? 'Lo aceptaste' : n.accion === 'RECHAZADA' ? 'Lo rechazaste' : 'La solicitud ya no está vigente' }}
+      </span>
+    </div>
+    <div class="lado">
+      <button type="button" class="mini" *ngIf="!n.leida && n.accion !== 'PENDIENTE'" (click)="marcarLeida(n)" title="Marcar como leída">Leída</button>
+      <button type="button" class="mini" *ngIf="n.accion !== 'PENDIENTE'" (click)="descartar(n)" title="Quitar de la lista">Quitar</button>
+    </div>
+  </li>
+</ul>

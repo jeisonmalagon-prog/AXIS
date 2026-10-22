@@ -1,0 +1,18 @@
+@use '../../repositorio/azure/azure-base' as *;
+@include base;
+
+.mono { font-family: 'JetBrains Mono', monospace; }
+.modal-cred { max-width: 760px; max-height: 94vh; overflow-y: auto; }
+.sub { margin: 4px 0 0; font-size: 13px; color: $brand-gray; line-height: 1.5; }
+.tarjeta-cred { margin-top: 14px; padding: 14px 16px; border: 1px solid $border-light; border-radius: 12px; background: $surface-bg; }
+.cred-cab { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; h3 { margin: 0; font-size: 14px; } }
+.etiqueta { display: block; margin: 12px 0 5px; font-size: 12px; font-weight: 700; color: $brand-gray; }
+.entrada { width: 100%; font-family: inherit; font-size: 13px; padding: 9px 11px; border: 1px solid $border-light; border-radius: 8px; background: $surface-bg; color: $brand-dark; box-sizing: border-box; &:focus { outline: none; border-color: $brand; } }
+.fila-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 0 14px; @media (max-width: 560px) { grid-template-columns: 1fr; } }
+.ayuda { margin: 8px 0 0; font-size: 11.5px; line-height: 1.5; color: $brand-gray; }
+.pequeno { font-size: 11.5px; color: $brand-gray; overflow-wrap: anywhere; }
+.aviso-ok { margin-top: 10px; background: rgba(16, 185, 129, 0.1); border: 1px solid rgba(16, 185, 129, 0.35); color: $brand-dark; border-radius: 10px; padding: 10px 14px; font-size: 13px; line-height: 1.5; }
+.error-state { margin-top: 10px; }
+.pie-cred { display: flex; justify-content: flex-end; gap: 10px; margin-top: 12px; flex-wrap: wrap; }
+.btn-peligro { color: $danger; border-color: rgba(239, 68, 68, 0.35); &:hover:not(:disabled) { background: rgba(239, 68, 68, 0.1); } }
+.pie-form { display: flex; justify-content: flex-end; gap: 10px; margin-top: 18px; padding-top: 12px; border-top: 1px solid $border-light; flex-wrap: wrap; }

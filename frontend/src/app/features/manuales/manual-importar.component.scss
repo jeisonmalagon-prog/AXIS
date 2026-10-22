@@ -1,0 +1,33 @@
+@use '../../repositorio/azure/azure-base' as *;
+@include base;
+
+.modal-card.imp { max-width: 760px; }
+.sub { margin: 2px 0 0; font-size: 13px; }
+.peq { font-size: 12px; }
+.mt { margin-top: 12px; }
+.zona { display: flex; flex-direction: column; align-items: center; gap: 10px; text-align: center; padding: 26px 16px; border: 2px dashed rgba($brand-rgb, 0.4); border-radius: 14px; background: rgba($brand-rgb, 0.04); transition: 0.15s;
+  &.arrastrando { background: rgba($brand-rgb, 0.12); border-color: $brand; } }
+.zona-ico { font-size: 30px; color: $brand; line-height: 1; }
+.ayuda-btn { margin: 12px 0 0; font-size: 13px; }
+.ayuda { margin: 8px 0 0; padding: 12px 16px 12px 32px; font-size: 13px; line-height: 1.6; background: $surface-bg; border: 1px solid $border-light; border-radius: 10px; li { margin: 3px 0; } }
+.paso { margin: 20px 0 8px; font-size: 14px; font-weight: 800; }
+.archivos { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px;
+  li { display: flex; align-items: center; gap: 12px; padding: 10px 12px; border: 1px solid $border-light; border-radius: 10px; background: $surface-bg; &.ok { border-color: rgba(16, 185, 129, 0.5); } &.mal { border-color: rgba(239, 68, 68, 0.5); } } }
+.arch-datos { flex: 1; min-width: 0; }
+.arch-nombre { font-size: 13.5px; font-weight: 700; overflow-wrap: anywhere; }
+.arch-sec { display: flex; align-items: center; gap: 8px; margin-top: 6px; font-size: 12px; font-weight: 600; color: $brand-gray; flex-wrap: wrap;
+  input { flex: 1 1 200px; min-width: 0; font-family: inherit; font-size: 13px; padding: 6px 9px; border: 1px solid $border-light; border-radius: 8px; background: $surface; color: $brand-dark; } }
+.estado { width: 24px; text-align: center; font-weight: 800; font-size: 16px; flex: none; }
+.ok .estado { color: $ok; } .mal .estado { color: $danger; }
+.opciones { display: grid; gap: 8px; }
+.opcion { display: flex; align-items: flex-start; gap: 10px; padding: 10px 12px; border: 1px solid $border-light; border-radius: 10px; cursor: pointer; background: $surface;
+  input { margin-top: 3px; accent-color: $brand; }
+  span { display: flex; flex-direction: column; gap: 2px; min-width: 0; font-size: 13.5px; }
+  small { font-size: 12px; color: $brand-gray; line-height: 1.45; }
+  &.sel { border-color: $brand; background: rgba($brand-rgb, 0.07); }
+  &:focus-within { outline: 2px solid $brand; outline-offset: 1px; } }
+.campo-v { display: flex; flex-direction: column; gap: 4px; margin-top: 12px; font-size: 12.5px; font-weight: 700; color: $brand-gray; flex: 1; min-width: 0;
+  input, select { font-family: inherit; font-size: 14px; padding: 8px 10px; border: 1px solid $border-light; border-radius: 8px; background: $surface; color: $brand-dark; width: 100%; } }
+.fila-selects { display: flex; gap: 12px; flex-wrap: wrap; }
+.nota { margin: 14px 0 0; }
+.pie { display: flex; justify-content: flex-end; gap: 10px; flex-wrap: wrap; margin-top: 22px; padding-top: 14px; border-top: 1px solid $border-light; }

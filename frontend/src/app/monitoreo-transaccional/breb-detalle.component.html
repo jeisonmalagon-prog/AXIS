@@ -1,0 +1,135 @@
+<div class="velo" (click)="cerrar.emit()">
+  <aside class="panel-lateral" role="dialog" aria-modal="true" [attr.aria-label]="modo === 'trx' ? 'Detalle de la transacción' : 'Detalle del registro de log'" (click)="$event.stopPropagation()">
+    <header class="cab">
+      <div class="cab__tit">
+        <span class="sobre">{{ modo === 'trx' ? 'Transacción' : 'Registro de log' }}</span>
+        <h2 class="mono">{{ id }}</h2>
+        <div class="cab__tags">
+          @if (trx; as t) {
+            @if (t.estado) { <span class="etq" [class]="'etq etq--' + claseEstadoTrx()">{{ t.estado.clase }}{{ t.estado.codigo ? ' · ' + t.estado.codigo : '' }}</span> }
+            @if (t.direccion) { <span class="etq">{{ t.direccion }}</span> }
+            @if (monto) { <span class="etq etq--marca">{{ monto }}</span> }
+            @if (!t.enBd) { <span class="etq etq--pend">No está en trx.Redeban</span> }
+          }
+          @if (log; as l) {
+            <span class="etq" [class.etq--mal]="l.nivel === 'Error'">{{ l.nivel }}</span>
+            <span class="etq">{{ l.etapa }}</span>
+          }
+        </div>
+      </div>
+      <div class="cab__acc">
+        <button type="button" class="btn btn--mini" (click)="copiar(id)" [disabled]="!id">{{ copiado ? '✓ Copiado' : 'Copiar' }}</button>
+        <button type="button" class="cerrar" (click)="cerrar.emit()" aria-label="Cerrar">✕</button>
+      </div>
+    </header>
+
+    <div class="cuerpo">
+      @if (error) { <div class="error-banner" role="alert">{{ error }}</div> }
+      @if (cargando) { <div class="esq"><span></span><span></span><span></span></div> }
+
+      <!-- =================== TRANSACCIÓN =================== -->
+      @if (trx; as t) {
+        <section class="hallazgos" aria-label="Hallazgos">
+          @for (h of t.hallazgos; track $index) {
+            <div class="hallazgo" [class]="'hallazgo h-' + h.nivel"><span class="hallazgo__tag">{{ nivelTexto(h.nivel) }}</span><span>{{ h.texto }}</span></div>
+          }
+        </section>
+
+        @if (t.flujo; as f) {
+          <section class="tarjeta">
+            <header><h3>Recorrido de la transacción</h3><p>Qué pasos dejaron huella en los logs{{ f.tipoFlujo ? ' · ' + f.tipoFlujo : '' }}. {{ f.total }} registros, {{ f.errores }} con error.</p></header>
+            <ol class="pasos">
+              @for (p of f.pasos; track p.id) {
+                <li class="paso" [class]="'paso paso--' + p.estado">
+                  <span class="paso__marca" aria-hidden="true">{{ p.estado === 'ok' ? '✓' : p.estado === 'error' ? '!' : p.estado === 'falta' ? '?' : '–' }}</span>
+                  <div class="paso__txt">
+                    <strong>{{ p.nombre }}</strong>
+                    <span class="suave">{{ estadoPaso(p) }}{{ p.cantidad ? ' · ' + p.cantidad + (p.cantidad === 1 ? ' registro' : ' registros') : '' }}{{ p.primera ? ' · ' + p.primera.slice(11, 23) : '' }}</span>
+                    @if (p.detalle) { <span class="paso__det">{{ p.detalle }}</span> }
+                  </div>
+                </li>
+              }
+            </ol>
+          </section>
+        }
+
+        @if (t.latencias; as l) {
+          <section class="tarjeta">
+            <header><h3>Tiempos de extremo a extremo</h3><p>De la primera a la última marca de tiempo del reporte (T110…T540): {{ duracion(l.totalMs) }}.{{ l.mayorTramo && l.mayorTramo.ms >= 1000 ? ' Tramo más lento: ' + l.mayorTramo.de + ' → ' + l.mayorTramo.a + ' (' + duracion(l.mayorTramo.ms) + ').' : '' }}</p></header>
+            <ul class="tiempos">
+              @for (p of tramos(l); track p.codigo) {
+                <li [class.tiempos--lento]="p.lento">
+                  <span class="tiempos__cod mono">{{ p.codigo }}</span>
+                  <span class="tiempos__hora">{{ p.hora }}</span>
+                  <span class="tiempos__barra" aria-hidden="true"><i [style.left.%]="p.inicio" [style.width.%]="p.ancho"></i></span>
+                  <span class="tiempos__ms">{{ p.desdeInicioMs === 0 ? 'inicio' : '+' + duracion(p.pasoMs) }}</span>
+                </li>
+              }
+            </ul>
+          </section>
+        }
+
+        <div class="secciones">
+          @for (s of t.secciones; track s.titulo) {
+            <section class="tarjeta">
+              <header><h3>{{ s.titulo }}</h3></header>
+              <dl class="campos">
+                @for (c of s.campos; track c.etiqueta) { <div><dt>{{ c.etiqueta }}</dt><dd [class.mono]="c.etiqueta.startsWith('CUS') || c.etiqueta.startsWith('Id ')">{{ c.valor }}</dd></div> }
+              </dl>
+            </section>
+          }
+        </div>
+        @if (t.enBd === false && !t.secciones.length) { <p class="suave">No hay datos de trx.Redeban para este CUS.</p> }
+
+        @if (t.bloques['det_llaves']; as b) { <app-prospeccion-bloque [bloque]="b" titulo="Llave en el directorio local"></app-prospeccion-bloque> }
+        @if (t.bloques['logs']; as b) { <app-prospeccion-bloque [bloque]="b" titulo="Registros en los logs" (fila)="verLog.emit($event)" etiquetaClic="Ver Rq/Rs" vacio="No hay registros de esta transacción en los logs."></app-prospeccion-bloque> }
+      }
+
+      <!-- =================== REGISTRO DE LOG =================== -->
+      @if (log; as l) {
+        <section class="tarjeta">
+          <dl class="campos">
+            <div><dt>Fecha</dt><dd>{{ l.fecha }}</dd></div>
+            <div><dt>Componente</dt><dd>{{ l.clase || '—' }}</dd></div>
+            <div><dt>Método</dt><dd>{{ l.metodo || '—' }}</dd></div>
+            <div class="ancho"><dt>Descripción</dt><dd>{{ l.descripcion || '—' }}</dd></div>
+            <div><dt>Documento</dt><dd class="mono">{{ l.documento || '—' }}</dd></div>
+            <div><dt>IP</dt><dd class="mono">{{ l.ip || '—' }}</dd></div>
+            <div><dt>Canal · Funcionalidad · Tipo · Proceso</dt><dd>{{ l.canal ?? '—' }} · {{ l.funcionalidad ?? '—' }} · {{ l.tipo ?? '—' }} · {{ l.proceso ?? '—' }}</dd></div>
+            @if (l.cus) {
+              <div><dt>CUS</dt><dd><button type="button" class="enlace mono" (click)="verTransaccion.emit(l.cus)" title="Abrir la transacción completa">{{ l.cus }}</button></dd></div>
+            }
+          </dl>
+        </section>
+
+        @if (l.latencias; as lat) {
+          <section class="tarjeta">
+            <header><h3>Tiempos (T110…T540)</h3><p>Total {{ duracion(lat.totalMs) }}.</p></header>
+            <ul class="tiempos">
+              @for (p of tramos(lat); track p.codigo) {
+                <li [class.tiempos--lento]="p.lento">
+                  <span class="tiempos__cod mono">{{ p.codigo }}</span><span class="tiempos__hora">{{ p.hora }}</span>
+                  <span class="tiempos__barra" aria-hidden="true"><i [style.left.%]="p.inicio" [style.width.%]="p.ancho"></i></span>
+                  <span class="tiempos__ms">{{ p.desdeInicioMs === 0 ? 'inicio' : '+' + duracion(p.pasoMs) }}</span>
+                </li>
+              }
+            </ul>
+          </section>
+        }
+
+        @for (x of [{ t: 'Enviado (Rq)', p: l.rq }, { t: 'Recibido (Rs)', p: l.rs }, { t: 'Adicional', p: l.adicional }]; track x.t) {
+          @if (x.p; as p) {
+            <section class="tarjeta">
+              <header class="con-acc">
+                <div><h3>{{ x.t }}</h3><p>{{ p.tipo.toUpperCase() }} · {{ p.bytes.toLocaleString('es-CO') }} caracteres{{ p.truncado ? ' (recortado)' : '' }}</p></div>
+                <button type="button" class="btn btn--mini" (click)="copiar(p.texto)">Copiar</button>
+              </header>
+              <pre class="payload">{{ p.texto }}</pre>
+            </section>
+          }
+        }
+        <p class="suave nota-priv">Por privacidad, documentos, cuentas, nombres, correos, celulares, claves y firmas aparecen ocultos o abreviados.</p>
+      }
+    </div>
+  </aside>
+</div>

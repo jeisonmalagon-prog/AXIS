@@ -1,0 +1,44 @@
+<div class="overlay" (click)="cerrar.emit()">
+  <div class="modal" (click)="$event.stopPropagation()">
+    <div class="modal-header">
+      <h2>Equipos</h2>
+      <p>Sirven para filtrar la bitácora por uno o varios equipos, compartir con todo un equipo o pedirle acceso. Pertenecer a un equipo no da acceso a la bitácora de nadie por sí solo.</p>
+    </div>
+    <div class="modal-body">
+      <div class="error-banner" *ngIf="error">{{ error }}</div>
+      <div class="info-banner" *ngIf="info">{{ info }}</div>
+      <div class="carga-inicial" *ngIf="cargando">Cargando…</div>
+
+      <ng-container *ngIf="!editando">
+        <div class="gris" *ngIf="!cargando && !equipos.length">Todavía no hay equipos.{{ esAdmin ? ' Crea el primero (por ejemplo «Aplicaciones», «BUS» o «Desarrollo»).' : ' Un administrador debe crearlos.' }}</div>
+        <div class="fila-acceso" *ngFor="let e of equipos">
+          <div class="quien">
+            <strong>{{ e.nombre }} <span class="etq" *ngIf="e.soyMiembro">Soy parte</span></strong>
+            <small *ngIf="e.descripcion">{{ e.descripcion }}</small>
+            <small>{{ e.miembros.length }} integrante(s): {{ nombres(e) }}</small>
+          </div>
+          <button type="button" class="btn btn-sm" *ngIf="esAdmin" (click)="editar(e)">Editar</button>
+          <button type="button" class="btn btn-sm btn-peligro" *ngIf="esAdmin" (click)="eliminar(e)">Eliminar</button>
+        </div>
+      </ng-container>
+
+      <ng-container *ngIf="editando">
+        <label class="campo">Nombre del equipo<input type="text" [(ngModel)]="nombre" name="eq-nombre" maxlength="80" placeholder="Ej.: Aplicaciones, BUS, Desarrollo" /></label>
+        <label class="campo">Descripción (opcional)<input type="text" [(ngModel)]="descripcion" name="eq-desc" maxlength="255" /></label>
+        <div class="campo"><span>Integrantes</span>
+          <app-selector-personas [personas]="personas" [(seleccion)]="integrantes" placeholder="Buscar persona para agregar…"></app-selector-personas>
+        </div>
+      </ng-container>
+    </div>
+    <div class="modal-footer">
+      <ng-container *ngIf="!editando">
+        <button type="button" class="btn btn-primary" *ngIf="esAdmin" (click)="nuevo()">+ Nuevo equipo</button>
+        <button type="button" class="btn" (click)="cerrar.emit()">Cerrar</button>
+      </ng-container>
+      <ng-container *ngIf="editando">
+        <button type="button" class="btn" (click)="cancelar()">Cancelar</button>
+        <button type="button" class="btn btn-primary" [disabled]="guardando" (click)="guardar()">{{ guardando ? 'Guardando…' : 'Guardar' }}</button>
+      </ng-container>
+    </div>
+  </div>
+</div>

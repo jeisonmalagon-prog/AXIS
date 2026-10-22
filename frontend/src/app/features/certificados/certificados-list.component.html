@@ -1,0 +1,271 @@
+<header class="page-header">
+  <div>
+    <h1>Certificados</h1>
+    <p class="subtitle">Cada certificado, dónde está instalado y qué aplicaciones de negocio dependen de él</p>
+  </div>
+
+  <!-- Contenedor con el buscador y el botón -->
+  <div class="header-actions" *ngIf="vista === 'inventario'">
+    <div class="search-box">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <circle cx="11" cy="11" r="8"></circle>
+        <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+      </svg>
+      <input
+        type="text"
+        [(ngModel)]="terminoBusqueda"
+        (input)="paginaActual = 1"
+        placeholder="Buscar por certificado, servidor, sub-aplicativo o aplicación..."
+      />
+    </div>
+    <button *ngIf="puedeEditar" class="btn btn-primary" (click)="nuevoCertificado()">+ Nuevo certificado</button>
+  </div>
+</header>
+
+<!-- Dos vistas del módulo: el inventario de certificados y lo que realmente usan los contenedores (Portainer). -->
+<nav class="pestanas-modulo" role="tablist" aria-label="Vista de certificados">
+  <button type="button" role="tab" [class.activa]="vista === 'inventario'" [attr.aria-selected]="vista === 'inventario'" (click)="cambiarVista('inventario')">Inventario</button>
+  <button type="button" role="tab" [class.activa]="vista === 'contenedores'" [attr.aria-selected]="vista === 'contenedores'" (click)="cambiarVista('contenedores')">Contenedores (Portainer)</button>
+</nav>
+
+<app-certificados-contenedores
+  *ngIf="vista === 'contenedores'"
+  [puedeEditar]="puedeEditar"
+  [grupos]="grupos"
+  [catalogo]="catalogo"
+  (inventarioCambio)="refrescarInventario()"
+></app-certificados-contenedores>
+
+<ng-container *ngIf="vista === 'inventario'">
+
+<details class="como-funciona">
+  <summary>¿Cómo se relacionan los certificados, los servidores y las aplicaciones?</summary>
+  <div class="como-funciona__cadena">
+    <div class="paso"><span class="paso__titulo">Certificado</span><span class="paso__desc">El documento digital con su fecha de vencimiento.</span></div>
+    <span class="flecha">→ se instala en →</span>
+    <div class="paso"><span class="paso__titulo">Ubicación</span><span class="paso__desc">Un <strong>servidor</strong> y el <strong>sub-aplicativo</strong> donde está (sitio, servicio, API o contenedor).</span></div>
+    <span class="flecha">→ lo usan →</span>
+    <div class="paso"><span class="paso__titulo">Aplicaciones de negocio</span><span class="paso__desc">Se deducen solas del sub-aplicativo; son las que se afectan si vence.</span></div>
+  </div>
+  <p class="como-funciona__nota">
+    Un mismo certificado puede estar instalado en varias ubicaciones y se ve como <strong>un solo renglón</strong>.
+    Los servidores, sub-aplicativos y aplicaciones de negocio se administran en
+    <a routerLink="/servidores">Inventario</a>.
+  </p>
+</details>
+
+<div class="indicadores">
+  <div class="indicador indicador--ok">
+    <span class="indicador__numero">{{ contarPorEstado('Vigente') }}</span>
+    <span class="indicador__etiqueta">Vigentes</span>
+  </div>
+  <div class="indicador indicador--warn" [class.indicador--alerta]="contarPorEstado('Por vencer') > 0">
+    <span class="indicador__numero">{{ contarPorEstado('Por vencer') }}</span>
+    <span class="indicador__etiqueta">Por vencer</span>
+  </div>
+  <div class="indicador indicador--danger" [class.indicador--alerta]="contarPorEstado('Vencido') > 0">
+    <span class="indicador__numero">{{ contarPorEstado('Vencido') }}</span>
+    <span class="indicador__etiqueta">Vencidos</span>
+  </div>
+  <div class="indicador">
+    <span class="indicador__numero">{{ grupos.length }}</span>
+    <span class="indicador__etiqueta">Certificados</span>
+  </div>
+  <div class="indicador">
+    <span class="indicador__numero">{{ certificados.length }}</span>
+    <span class="indicador__etiqueta">Ubicaciones</span>
+  </div>
+</div>
+
+<section class="filtros">
+  <button
+    class="btn"
+    [class.active]="filtro === f"
+    *ngFor="let f of opcionesFiltro"
+    (click)="elegirFiltro(f)"
+  >
+    {{ f }}
+  </button>
+</section>
+
+<section class="panel">
+  <ng-container *ngIf="filtrados().length; else vacio">
+
+    <div class="tabla-wrap">
+      <table class="tabla-certificados">
+        <thead>
+          <tr>
+            <th class="th-borde"></th>
+            <th class="th-ordenable" [class.th-activa]="ordenCampo === 'nombre'" (click)="ordenarPor('nombre')">
+              Certificado
+              <span class="th-flecha" *ngIf="ordenCampo === 'nombre'">{{ ordenDireccion === 1 ? '↑' : '↓' }}</span>
+            </th>
+            <th class="th-ordenable" [class.th-activa]="ordenCampo === 'servidor'" (click)="ordenarPor('servidor')">
+              Instalado en
+              <span class="th-flecha" *ngIf="ordenCampo === 'servidor'">{{ ordenDireccion === 1 ? '↑' : '↓' }}</span>
+            </th>
+            <th>Aplicaciones de negocio</th>
+            <th class="th-ordenable" [class.th-activa]="ordenCampo === 'vence'" (click)="ordenarPor('vence')">
+              Vence
+              <span class="th-flecha" *ngIf="ordenCampo === 'vence'">{{ ordenDireccion === 1 ? '↑' : '↓' }}</span>
+            </th>
+            <th class="th-ordenable" [class.th-activa]="ordenCampo === 'estado'" (click)="ordenarPor('estado')">
+              Estado
+              <span class="th-flecha" *ngIf="ordenCampo === 'estado'">{{ ordenDireccion === 1 ? '↑' : '↓' }}</span>
+            </th>
+            <th *ngIf="puedeEditar" class="th-acciones">Acciones</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr class="fila-clicable" *ngFor="let g of paginaItems" (click)="abrirDetalle(g)" title="Ver detalle">
+            <td class="celda-borde" [ngClass]="bordeClase(g.estado)"></td>
+            <td class="celda-certificado">
+              <span class="nombre-comun" [title]="g.nombreComun || ''">{{ g.nombreComun || '(sin nombre común)' }}</span>
+              <span class="aplicacion-linea">{{ g.entidadEmisora || 'Emisor no indicado' }}</span>
+            </td>
+            <td class="celda-ubicaciones">
+              <span class="ubic-principal" [title]="ubicacionResumen(g)">{{ ubicacionResumen(g) }}</span>
+              <span class="ubic-extra" *ngIf="g.filas.length > 1">+ {{ g.filas.length - 1 }} ubicación(es) más</span>
+            </td>
+            <td class="celda-apps">
+              <ng-container *ngIf="g.apps.length; else sinApps">
+                <span class="chip-app" *ngFor="let a of appsResumen(g).visibles">{{ a }}</span>
+                <span class="chip-app chip-app--mas" *ngIf="appsResumen(g).extra" [title]="g.apps.join(', ')">+{{ appsResumen(g).extra }}</span>
+              </ng-container>
+              <ng-template #sinApps><span class="sin-apps">Sin aplicación asociada</span></ng-template>
+            </td>
+            <td class="celda-vence">
+              <span class="mono">{{ g.fechaFin | date: 'dd/MM/yyyy' }}</span>
+              <span class="dias-chip" [ngClass]="estadoClase(g.estado)">{{ g.diasRestantes }} día(s)</span>
+            </td>
+            <td><span class="status-pill" [ngClass]="estadoClase(g.estado)">{{ g.estado }}</span></td>
+            <td *ngIf="puedeEditar" class="celda-acciones">
+              <button class="btn-icono" (click)="$event.stopPropagation(); renovarCertificado(g)" title="Renovar (nuevas fechas)">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
+              </button>
+              <button class="btn-icono" (click)="$event.stopPropagation(); editarCertificado(g)" title="Editar">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>
+              </button>
+              <button class="btn-icono btn-icono-danger" [disabled]="eliminando" (click)="$event.stopPropagation(); eliminarCertificado(g)" title="Eliminar">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+              </button>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="paginacion">
+      <span class="paginacion__info">
+        Mostrando {{ rangoDesde }}–{{ rangoHasta }} de {{ totalFiltrados }}
+        <span class="paginacion__separador">·</span>
+        <label class="paginacion__tamano">
+          por página
+          <select [(ngModel)]="tamanoPagina" (ngModelChange)="paginaActual = 1">
+            <option *ngFor="let n of opcionesTamanoPagina" [ngValue]="n">{{ n }}</option>
+          </select>
+        </label>
+      </span>
+      <div class="paginacion__botones" *ngIf="totalPaginas > 1">
+        <button class="btn btn-sm" [disabled]="paginaActualValida === 1" (click)="irAPagina(paginaActualValida - 1)">‹ Anterior</button>
+        <span class="paginacion__pagina">Página {{ paginaActualValida }} de {{ totalPaginas }}</span>
+        <button class="btn btn-sm" [disabled]="paginaActualValida === totalPaginas" (click)="irAPagina(paginaActualValida + 1)">Siguiente ›</button>
+      </div>
+    </div>
+
+  </ng-container>
+
+  <ng-template #vacio>
+    <div class="empty">
+      <p *ngIf="certificados.length === 0; else noResultados">No hay certificados registrados todavía.</p>
+      <ng-template #noResultados>
+        <p>No se encontraron certificados en "<strong>{{ filtro }}</strong>" que coincidan con "<strong>{{ terminoBusqueda }}</strong>".</p>
+      </ng-template>
+    </div>
+  </ng-template>
+</section>
+
+<!-- ASISTENTE: crear, editar o renovar un certificado paso a paso -->
+<app-certificado-asistente
+  *ngIf="asistenteAbierto"
+  [grupo]="asistenteGrupo"
+  [modo]="asistenteModo"
+  [catalogo]="catalogo"
+  [grupos]="grupos"
+  (cerrar)="cerrarAsistente()"
+  (guardado)="asistenteGuardado()"
+></app-certificado-asistente>
+
+<!-- DETALLE (solo lectura) -->
+<div class="overlay" *ngIf="detalle as cert" (click)="cerrarDetalle()">
+  <div class="modal detalle-modal" (click)="$event.stopPropagation()">
+    <div class="modal-header">
+      <h2>{{ cert.nombreComun || 'Sin nombre común' }}</h2>
+      <button class="btn-close" (click)="cerrarDetalle()" type="button">✕</button>
+    </div>
+
+    <div class="detalle-cert-top">
+      <span class="status-pill" [ngClass]="estadoClase(cert.estado)">{{ cert.estado }}</span>
+      <span class="dias-restantes">{{ cert.diasRestantes }} día(s) restante(s)</span>
+    </div>
+
+    <span class="section-label">Dónde está instalado ({{ ubicacionesDetalle.length }})</span>
+    <ul class="ubic-lista">
+      <li *ngFor="let u of ubicacionesDetalle" [class.ubic--sin-definir]="u.sinDefinir">
+        <ng-container *ngIf="!u.sinDefinir; else sinDef">
+          <div class="ubic-lista__cab">
+            <strong>{{ u.componente }}</strong>
+            <span class="mono">{{ u.servidor }} · {{ u.ip }}</span>
+            <span class="mono" *ngIf="u.puerto">puerto {{ u.puerto }}</span>
+          </div>
+        </ng-container>
+        <ng-template #sinDef>
+          <div class="ubic-lista__cab">
+            <strong>Sin ubicación definida</strong>
+            <span>antes: {{ u.antes || '—' }}. Usa "Editar" para indicar el servidor y el sub-aplicativo.</span>
+          </div>
+        </ng-template>
+        <div class="ubic-lista__apps" *ngIf="!u.sinDefinir">
+          <span class="chip-app" *ngFor="let a of u.apps">{{ a }}</span>
+          <span class="sin-apps" *ngIf="!u.apps.length">Sin aplicación de negocio asociada</span>
+        </div>
+      </li>
+    </ul>
+
+    <div class="tambien-en" *ngIf="cert.apps.length">
+      <span class="detalle-label">Si este certificado vence se afectan {{ cert.apps.length }} aplicación(es) de negocio</span>
+      <div class="ubic-lista__apps">
+        <span class="chip-app" *ngFor="let a of cert.apps">{{ a }}</span>
+      </div>
+    </div>
+
+    <span class="section-label">Identificación del certificado</span>
+    <div class="detalle-grid">
+      <div><span class="detalle-label">Entidad emisora</span><span>{{ cert.entidadEmisora || '—' }}</span></div>
+      <div><span class="detalle-label">Responsable</span><span>{{ cert.responsable || '—' }}</span></div>
+    </div>
+    <div class="detalle-campo-largo">
+      <span class="detalle-label">Número de serie</span>
+      <span class="mono">{{ cert.numeroSerie || '—' }}</span>
+    </div>
+    <div class="detalle-campo-largo">
+      <span class="detalle-label">Thumbprint</span>
+      <span class="mono">{{ cert.thumbprint || '—' }}</span>
+    </div>
+
+    <span class="section-label">Vigencia</span>
+    <div class="detalle-grid">
+      <div><span class="detalle-label">Válido desde</span><span class="mono">{{ cert.fechaInicio | date: 'dd/MM/yyyy' }}</span></div>
+      <div><span class="detalle-label">Vence el</span><span class="mono">{{ cert.fechaFin | date: 'dd/MM/yyyy' }}</span></div>
+    </div>
+    <p class="detalle-observaciones" *ngIf="cert.observaciones">{{ cert.observaciones }}</p>
+
+    <div class="modal-actions">
+      <button *ngIf="puedeEditar" class="btn" (click)="renovarCertificado(cert)">Renovar</button>
+      <button *ngIf="puedeEditar" class="btn" (click)="editarCertificado(cert)">Editar</button>
+      <button class="btn btn-primary" (click)="cerrarDetalle()">Cerrar</button>
+    </div>
+  </div>
+</div>
+
+</ng-container>

@@ -1,0 +1,258 @@
+// Variables refinadas
+$brand-blue:    #0284c7;
+$brand-orange:  #ea580c;
+$brand-green:   #10b981;
+$brand-dark:    var(--ax-text, #0f172a); 
+$brand-gray:    var(--ax-text-muted, #64748b); 
+$brand-light:   var(--ax-surface-2, #f8fafc);
+
+:host {
+  display: flex;
+  width: 100%;
+  height: 100vh;
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+  background-color: var(--ax-surface-2, #f1f5f9);
+}
+
+/* Contenedor Principal */
+.modern-hero-wrapper {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  padding: 24px;
+  overflow: hidden;
+}
+
+/* Fondo de Ondas Fluido */
+.wave-background {
+  position: absolute;
+  inset: 0;
+  z-index: 1; 
+  pointer-events: none;
+  overflow: hidden;
+
+  .bg-waves { 
+    width: 100%; 
+    height: 100%; 
+    object-fit: cover; 
+    filter: blur(2px);
+  }
+}
+
+/* Tarjeta Central Glassmorphism */
+.glass-card {
+  position: relative;
+  z-index: 2;
+  background: var(--ax-glass-bg, rgba(255, 255, 255, 0.92)); 
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid var(--ax-glass-border, rgba(255, 255, 255, 0.8));
+  border-radius: 24px;
+  box-shadow: 
+    0 20px 40px -15px rgba(var(--ax-brand-primary-rgb, 103, 58, 183), 0.12),
+    0 0 0 1px rgba(226, 232, 240, 0.6); 
+  width: 100%;
+  max-width: 980px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  transition: all 0.3s ease;
+}
+
+/* Cabecera del Logo */
+.card-header {
+  padding: 32px 40px 12px 40px;
+  display: flex;
+  align-items: center;
+
+  .brand-logo {
+    height: 48px; 
+    width: auto;
+    object-fit: contain;
+    filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.05));
+  }
+
+  @media (max-width: 768px) {
+    padding: 24px 24px 8px 24px;
+    justify-content: center;
+    .brand-logo { height: 38px; }
+  }
+}
+
+/* Contenido Principal */
+.card-main-content {
+  display: flex;
+  padding: 8px 40px 36px 40px; 
+  align-items: center;
+  gap: 36px;
+
+  @media (max-width: 900px) {
+    flex-direction: column-reverse;
+    padding: 12px 24px 28px 24px;
+    gap: 20px;
+  }
+}
+
+/* Sección de Textos */
+.text-section {
+  flex: 1.2;
+  width: 100%;
+
+  .tagline {
+    font-size: 11px;
+    color: var(--ax-brand-primary, #673ab7);
+    text-transform: uppercase;
+    letter-spacing: 1.5px;
+    font-weight: 700;
+    margin-bottom: 6px;
+    display: block;
+
+    @media (max-width: 900px) { text-align: center; }
+  }
+
+  .title {
+    font-size: clamp(24px, 3.5vw, 36px);
+    font-weight: 800;
+    color: $brand-dark;
+    line-height: 1.15;
+    letter-spacing: -0.5px;
+    margin: 0 0 10px 0;
+
+    @media (max-width: 900px) { text-align: center; }
+  }
+
+  .description {
+    font-size: 14px;
+    color: $brand-gray;
+    line-height: 1.5;
+    margin-bottom: 24px;
+
+    @media (max-width: 900px) { text-align: center; margin-bottom: 20px; }
+  }
+}
+
+/* Grilla de Módulos */
+.modules-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 14px;
+
+  @media (max-width: 600px) {
+    grid-template-columns: 1fr;
+    gap: 10px;
+  }
+}
+
+/* Tarjetas de Módulo */
+.module-card {
+  background: var(--ax-surface, #ffffff);
+  border: 1px solid var(--ax-border, #e2e8f0);
+  border-radius: 16px;
+  padding: 16px;
+  position: relative;
+  cursor: pointer;
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.02);
+
+  &:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 12px 20px -5px rgba(0, 0, 0, 0.08);
+    border-color: var(--ax-border-2, #cbd5e1);
+  }
+
+  &.featured {
+    border-color: rgba(var(--ax-brand-primary-rgb, 103, 58, 183), 0.3);
+    background: linear-gradient(135deg, var(--ax-surface, #ffffff) 0%, var(--ax-surface-2, #faf5ff) 100%);
+  }
+
+  .card-badge {
+    position: absolute;
+    top: 12px; 
+    right: 12px;
+    background: var(--ax-brand-soft, #f3ebf8);
+    color: var(--ax-brand-primary, #673ab7);
+    font-size: 9px;
+    font-weight: 700;
+    padding: 3px 8px;
+    border-radius: 999px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+
+  .card-icon {
+    width: 40px; 
+    height: 40px;
+    border-radius: 12px;
+    display: flex; 
+    align-items: center; 
+    justify-content: center;
+    flex-shrink: 0;
+
+    svg { width: 20px; height: 20px; }
+
+    &.magenta { background: rgba(var(--ax-brand-secondary-rgb, 216, 27, 96), 0.12); svg { stroke: var(--ax-brand-secondary, #d81b60); } }
+    &.purple  { background: var(--ax-brand-soft, #f3ebf8); svg { stroke: var(--ax-brand-primary, #673ab7); } }
+    &.blue    { background: #e0f2fe; svg { stroke: $brand-blue; } }
+    &.orange  { background: #ffedd5; svg { stroke: $brand-orange; } }
+  }
+
+  .card-content {
+    flex: 1;
+    padding-top: 2px;
+
+    h2 { 
+      font-size: 14px; 
+      font-weight: 700; 
+      color: $brand-dark; 
+      margin: 0 0 3px 0; 
+      line-height: 1.2;
+    }
+
+    p { 
+      font-size: 12px; 
+      color: $brand-gray; 
+      line-height: 1.35; 
+      margin: 0; 
+    }
+  }
+}
+
+/* Sección Visual Escudo */
+.visual-section {
+  flex: 0.8;
+  display: flex; 
+  justify-content: center; 
+  align-items: center;
+
+  .floating-shield {
+    width: 140px; 
+    height: 140px;
+    animation: float-anim 4s ease-in-out infinite;
+
+    @media (max-width: 900px) { 
+      width: 90px; 
+      height: 90px; 
+    }
+
+    svg { 
+      width: 100%; 
+      height: 100%; 
+      filter: drop-shadow(0 16px 24px rgba(var(--ax-brand-primary-rgb, 103, 58, 183), 0.22)); 
+    }
+  }
+}
+
+@keyframes float-anim {
+  0% { transform: translateY(0px); }
+  50% { transform: translateY(-8px); }
+  100% { transform: translateY(0px); }
+}

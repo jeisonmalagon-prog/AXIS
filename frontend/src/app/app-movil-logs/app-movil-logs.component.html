@@ -1,0 +1,386 @@
+<header class="page-header">
+  <div class="header-content">
+    <h1>Consulta de Logs — App Móvil</h1>
+    <p class="subtitle">Busca la actividad registrada de un cliente o servicio, sin necesidad de escribir SQL</p>
+  </div>
+</header>
+
+<!-- PESTAÑAS -->
+<div class="pestanas" role="tablist" aria-label="Vistas de logs de App Móvil">
+  <button *ngFor="let p of pestanasVista" type="button" role="tab" class="pestana" [class.activa]="vista === p.valor" [attr.aria-selected]="vista === p.valor" (click)="cambiarVista(p.valor)">{{ p.etiqueta }}</button>
+</div>
+
+<app-flujo-cliente *ngIf="vista === 'cliente'" [documentoInicial]="documentoRecorrido"></app-flujo-cliente>
+<app-carga-productos *ngIf="vista === 'carga'" [documentoInicial]="documentoCarga"></app-carga-productos>
+<app-operaciones-cliente *ngIf="vista === 'operaciones'" [documentoInicial]="documentoOperaciones"></app-operaciones-cliente>
+<app-flujo-global *ngIf="vista === 'global'"></app-flujo-global>
+<app-salud-global *ngIf="vista === 'salud'" [subInicial]="subSalud" [alertaInicial]="alertaInicial"></app-salud-global>
+<app-versiones-adopcion *ngIf="vista === 'versiones'"></app-versiones-adopcion>
+
+<ng-container *ngIf="vista === 'logs'">
+<!-- FORMULARIO DE BÚSQUEDA -->
+<div class="filtros-panel">
+  <div class="filtros-grid">
+    <div class="campo">
+      <label for="fDocumento">Cliente (CC)</label>
+      <input id="fDocumento" type="text" placeholder="Número de documento…" [(ngModel)]="filtroDocumento" (keyup.enter)="buscar()">
+    </div>
+
+    <div class="campo">
+      <label for="fServicio">Servicio</label>
+      <select id="fServicio" [(ngModel)]="filtroMetodo">
+        <option value="">Todos los servicios</option>
+        <option *ngFor="let s of catalogoServicios" [value]="s.metodo">{{ s.etiqueta }}</option>
+      </select>
+    </div>
+
+    <div class="campo">
+      <label for="fFuncionalidad">Funcionalidad (código)</label>
+      <input id="fFuncionalidad" type="text" inputmode="numeric" placeholder="Ej. 62" [(ngModel)]="filtroFuncionalidad" (keyup.enter)="buscar()">
+    </div>
+
+    <div class="campo campo--texto">
+      <label for="fTexto">Buscar texto libre</label>
+      <input id="fTexto" type="text" placeholder="Nombre de servicio, clase o detalle…" [(ngModel)]="filtroTexto" (keyup.enter)="buscar()">
+    </div>
+
+    <div class="campo">
+      <label for="fTipo">Tipo (código)</label>
+      <input id="fTipo" type="text" inputmode="numeric" [(ngModel)]="filtroTipo" (keyup.enter)="buscar()">
+    </div>
+
+    <div class="campo">
+      <label for="fProceso">Proceso (código)</label>
+      <input id="fProceso" type="text" inputmode="numeric" [(ngModel)]="filtroProceso" (keyup.enter)="buscar()">
+    </div>
+
+    <div class="campo">
+      <label for="fNodo">Nodo</label>
+      <select id="fNodo" [(ngModel)]="filtroNodo">
+        <option value="">Todos los nodos</option>
+        <option *ngFor="let n of nodosDisponibles" [value]="n">Nodo {{ n }}</option>
+      </select>
+    </div>
+
+    <div class="campo campo--checks">
+      <label class="check-label">
+        <input type="checkbox" [(ngModel)]="filtroSoloErrores">
+        Solo mostrar errores
+      </label>
+      <label class="check-label">
+        <input type="checkbox" [(ngModel)]="filtroIncluirLogout">
+        Incluir cierre de sesión
+      </label>
+    </div>
+  </div>
+
+  <!-- RANGO DE FECHAS -->
+  <div class="rango-fila">
+    <span class="rango-fila__label">Rango de fechas</span>
+    <div class="rango-selector" role="group" aria-label="Rango de días">
+      <button
+        *ngFor="let dias of rangosDisponibles"
+        type="button"
+        class="rango-boton"
+        [class.activo]="modoRango === 'preset' && diasSeleccionados === dias"
+        (click)="cambiarRango(dias)">
+        {{ dias === 1 ? 'Hoy' : dias + 'd' }}
+      </button>
+      <button
+        type="button"
+        class="rango-boton rango-boton--personalizado"
+        [class.activo]="modoRango === 'personalizado'"
+        (click)="abrirSelectorFechas()">
+        Personalizado
+      </button>
+    </div>
+    <span class="rango-activo-info" *ngIf="modoRango === 'personalizado' && fechaInicioResultado && fechaFinResultado">
+      Rango aplicado: {{ fechaInicioResultado }} a {{ fechaFinResultado }}
+    </span>
+  </div>
+
+  <div class="fechas-panel" *ngIf="mostrandoSelectorFechas">
+    <div class="fechas-panel__campo">
+      <label for="fechaInicio">Desde</label>
+      <input id="fechaInicio" type="date" [(ngModel)]="fechaInicioInput" [max]="fechaFinInput">
+    </div>
+    <div class="fechas-panel__campo">
+      <label for="fechaFin">Hasta</label>
+      <input id="fechaFin" type="date" [(ngModel)]="fechaFinInput" [min]="fechaInicioInput">
+    </div>
+    <div class="fechas-panel__acciones">
+      <button type="button" class="btn-secundario" (click)="cancelarSelectorFechas()">Cancelar</button>
+      <button type="button" class="btn-primario" (click)="aplicarRangoPersonalizado()">Aplicar</button>
+    </div>
+    <p class="fechas-panel__error" *ngIf="errorRangoPersonalizado">{{ errorRangoPersonalizado }}</p>
+    <p class="fechas-panel__ayuda">Máximo {{ rangoDiasMaximo }} días por consulta.</p>
+  </div>
+
+  <div class="filtros-panel__acciones">
+    <button type="button" class="btn-secundario" [disabled]="!hayFiltrosEnFormulario" (click)="limpiarFiltros()">Limpiar filtros</button>
+    <button type="button" class="btn-primario btn-buscar" [disabled]="cargando" (click)="buscar()">
+      {{ cargando ? 'Buscando…' : 'Buscar' }}
+    </button>
+  </div>
+</div>
+
+<p class="detalle-aviso">
+  Cada fila es un registro del log. Una misma operación deja varias filas (inicio, llamadas a otros sistemas, respuesta), y que una fila no traiga petición, respuesta o datos
+  <strong>no significa que el servicio no haya respondido</strong>. Toca <strong>Ver detalle</strong> para leer el contenido traducido a lenguaje normal. Cada consulta queda auditada.
+</p>
+
+<div class="error-banner" *ngIf="error">{{ error }}</div>
+
+<!-- CHIPS DE FILTROS APLICADOS -->
+<div class="chips-fila" *ngIf="buscoAlMenosUnaVez && filtrosAplicados.length">
+  <span class="chip" *ngFor="let c of filtrosAplicados">
+    <strong>{{ c.etiqueta }}:</strong> {{ c.valor }}
+  </span>
+</div>
+
+<!-- ESTADOS DE CARGA / VACÍO -->
+<div class="carga-inicial" *ngIf="cargando">Buscando en los registros…</div>
+
+<div class="empty-state empty-state--inicial" *ngIf="!cargando && !buscoAlMenosUnaVez && !error">
+  <p>Escribe uno o varios filtros arriba (por ejemplo, un número de documento) y presiona <strong>Buscar</strong>.</p>
+</div>
+
+<div class="empty-state" *ngIf="!cargando && buscoAlMenosUnaVez && !error && !resultados.length">
+  <p>No se encontraron registros con esos filtros en el rango seleccionado.</p>
+</div>
+
+<!-- VERSIÓN DE LA APP DEL CLIENTE (fija mientras se desplaza) -->
+<div class="version-bar" *ngIf="!error && buscoAlMenosUnaVez && (documentoAplicado || versionesEnPagina.length)"
+     [class.version-bar--cambio]="!!versiones?.cambioVersion" [class.version-bar--sin]="!!documentoAplicado && !cargandoVersiones && !versionActual">
+  <div class="version-bar__fila">
+    <span class="version-bar__etq">Versión de la app</span>
+
+    <ng-container *ngIf="documentoAplicado; else sinCliente">
+      <span class="version-bar__cliente mono">CC {{ documentoAplicado }}</span>
+
+      <span class="version-bar__estado" *ngIf="cargandoVersiones">Buscando versión en toda la consulta…</span>
+      <span class="version-bar__estado version-bar__estado--error" *ngIf="errorVersiones">{{ errorVersiones }}</span>
+
+      <ng-container *ngIf="!cargandoVersiones && versiones as v">
+        <ng-container *ngIf="v.actual; else versionNoEncontrada">
+          <span class="version-badge" title="Última versión vista de este cliente">{{ v.actual }}</span>
+          <span class="version-bar__detalle">
+            en uso desde <strong>{{ v.actualDesde }}</strong> · última actividad <strong>{{ v.actualVistaUltimaVez }}</strong>
+          </span>
+
+          <span class="version-alerta" *ngIf="ultimoCambio as c">
+            <span class="version-alerta__nuevo" *ngIf="cambioReciente">NUEVO</span>
+            Actualizó de <strong>{{ c.de }}</strong> a <strong>{{ c.a }}</strong> · {{ c.fecha }}
+          </span>
+          <span class="version-ok" *ngIf="!v.cambioVersion">Sin cambios de versión en el rango</span>
+          <span class="version-alerta version-alerta--info" *ngIf="v.convivencia" title="Se vieron dos versiones en las mismas fechas: normalmente el cliente usa dos equipos">
+            Usó varias versiones a la vez
+          </span>
+
+          <button type="button" class="btn-link" *ngIf="v.equipos && v.equipos.cantidad" (click)="alternarEquipos()" title="Celulares que usó este cliente en el rango">
+            {{ v.equipos.cantidad }} equipo{{ v.equipos.cantidad === 1 ? '' : 's' }}{{ equiposAbiertos ? ' ▴' : ' ▾' }}
+          </button>
+          <button type="button" class="btn-link" (click)="alternarVersiones()">
+            {{ versionesAbiertas ? 'Ocultar historial' : 'Ver historial (' + v.versiones.length + ')' }}
+          </button>
+        </ng-container>
+
+        <ng-template #versionNoEncontrada>
+          <span class="version-badge version-badge--vacia">No detectada</span>
+          <span class="version-bar__detalle">El log de este cliente no trae la versión en un campo conocido.</span>
+          <button type="button" class="btn-link" *ngIf="v.muestraSesion" (click)="alternarMuestraSesion()">
+            {{ muestraSesionAbierta ? 'Ocultar muestra' : 'Ver muestra de Sesion' }}
+          </button>
+        </ng-template>
+      </ng-container>
+    </ng-container>
+
+    <ng-template #sinCliente>
+      <span class="version-bar__detalle">Filtra por cliente (CC) para ver su versión en toda la consulta. En esta página:</span>
+      <span class="version-badge version-badge--pagina" *ngFor="let v of versionesEnPagina">{{ v }}</span>
+    </ng-template>
+  </div>
+
+  <!-- Historial / línea de tiempo -->
+  <div class="version-historial" *ngIf="versionesAbiertas && lineaVersiones.length">
+    <div class="version-historial__item" *ngFor="let v of lineaVersiones; let primero = first">
+      <span class="version-historial__punto" [class.version-historial__punto--actual]="primero"></span>
+      <span class="version-badge version-badge--chica">{{ v.version }}</span>
+      <span class="version-historial__rango">{{ v.desde }} → {{ v.hasta }}</span>
+      <span class="version-historial__meta">{{ v.registros | number }} registro(s)</span>
+      <span class="version-historial__meta" *ngIf="v.dispositivos.length">{{ v.dispositivos.join(', ') }}</span>
+      <span class="version-historial__actual" *ngIf="primero">actual</span>
+    </div>
+    <p class="version-historial__nota" *ngIf="versiones && versiones.registrosSinVersion">
+      {{ versiones.registrosSinVersion | number }} registro(s) del rango no traen versión (no se cuentan arriba).
+    </p>
+  </div>
+
+  <!-- Equipos del cliente -->
+  <div class="equipos-cliente" *ngIf="equiposAbiertos && versiones?.equipos as eq">
+    <div class="equipo" *ngFor="let e of eq.equipos">
+      <div class="equipo__cabecera">
+        <strong>{{ e.equipo || 'Equipo sin identificar' }}</strong>
+        <span class="version-badge version-badge--chica">{{ etiquetaPlataforma(e.plataforma) }}</span>
+        <span class="equipo__rango">{{ e.desde }} → {{ e.hasta }} · {{ e.registros | number }} registro(s)</span>
+      </div>
+      <div class="equipo__linea" *ngIf="e.versiones.length">
+        <span class="equipo__etq">Versiones</span>
+        <span class="version-badge version-badge--chica" *ngFor="let ve of e.versiones" [title]="ve.desde + ' → ' + ve.hasta">{{ ve.version }}</span>
+      </div>
+      <div class="equipo__linea" *ngIf="e.instalaciones.length">
+        <span class="equipo__etq">{{ e.instalaciones.length === 1 ? 'Instalación' : e.instalaciones.length + ' instalaciones' }}</span>
+        <code *ngFor="let i of e.instalaciones" [title]="i.desde + ' → ' + i.hasta">{{ i.instalacion }}</code>
+      </div>
+    </div>
+    <p class="version-historial__nota" *ngIf="eq.registrosSinEquipo">{{ eq.registrosSinEquipo | number }} registro(s) del rango no traen datos del equipo.</p>
+  </div>
+
+  <div class="version-muestra" *ngIf="muestraSesionAbierta && versiones?.muestraSesion">
+    <p>Campo <code>Sesion</code> de un registro de este cliente (para ubicar dónde viaja la versión):</p>
+    <pre>{{ versiones?.muestraSesion }}</pre>
+  </div>
+</div>
+
+<!-- RESULTADOS -->
+<div class="panel resultados-panel" *ngIf="!cargando && !error && resultados.length">
+  <div class="panel-header">
+    <div class="panel-header__titulo">
+      <h2>{{ total | number }} registro(s) encontrado(s)</h2>
+      <div class="resumen-pagina" aria-label="Resumen de esta página">
+        <span class="resumen-pagina__txt">En esta página:</span>
+        <span class="mini-pill mini-pill--ok" *ngIf="resumenPagina.exito">✓ {{ resumenPagina.exito }} exitosas</span>
+        <button type="button" class="mini-pill mini-pill--error mini-pill--btn" *ngIf="resumenPagina.error || filtroSoloErrores" (click)="soloErroresRapido()"
+                [title]="filtroSoloErrores ? 'Quitar filtro de errores' : 'Ver solo errores'">
+          ✕ {{ resumenPagina.error }} con error{{ filtroSoloErrores ? ' (filtrado)' : '' }}
+        </button>
+        <span class="mini-pill mini-pill--aviso" *ngIf="resumenPagina.aviso">! {{ resumenPagina.aviso }} con aviso</span>
+        <span class="mini-pill" *ngIf="resumenPagina.otros">· {{ resumenPagina.otros }} otras</span>
+      </div>
+    </div>
+    <div class="panel-header__acciones">
+      <div class="densidad" role="group" aria-label="Densidad de la tabla">
+        <button type="button" [class.activo]="densidad === 'comoda'" (click)="densidad !== 'comoda' && alternarDensidad()">Cómoda</button>
+        <button type="button" [class.activo]="densidad === 'compacta'" (click)="densidad !== 'compacta' && alternarDensidad()">Compacta</button>
+      </div>
+      <button type="button" class="btn-exportar" *ngIf="filtroDocumento.trim()" (click)="verRecorridoDelCliente()" title="Ver el diagrama de flujo de este cliente">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="5" cy="6" r="2.2"/><circle cx="19" cy="6" r="2.2"/><circle cx="12" cy="18" r="2.2"/><path stroke-linecap="round" stroke-linejoin="round" d="M7 6h10M6.5 8l4.5 8M17.5 8L13 16"/></svg>
+        <span>Ver recorrido</span>
+      </button>
+      <button type="button" class="btn-exportar" *ngIf="filtroDocumento.trim()" (click)="verCargaProductos()" title="Validar si los productos del cliente se cargaron bien y en cuánto tiempo">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="5" width="18" height="14" rx="2"/><path stroke-linecap="round" stroke-linejoin="round" d="M3 10h18M7 15h4"/></svg>
+        <span>Validar carga de productos</span>
+      </button>
+      <button type="button" class="btn-exportar" *ngIf="filtroDocumento.trim()" (click)="verOperacionesDelCliente()" title="Ver las filas del log agrupadas en operaciones completas, con su duración">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M4 6h16M4 12h16M4 18h10"/></svg>
+        <span>Ver operaciones</span>
+      </button>
+      <button type="button" class="btn-exportar" (click)="exportar()" [disabled]="exportando || !total" title="Exportar a CSV">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2M7 10l5 5 5-5M12 15V3" /></svg>
+        <span>{{ exportando ? 'Exportando…' : 'Exportar CSV' }}</span>
+      </button>
+    </div>
+  </div>
+  <p class="detalle-aviso detalle-aviso--exportacion" *ngIf="avisoExportacion">{{ avisoExportacion }}</p>
+
+  <div class="tabla-scroll">
+    <table [class.tabla--compacta]="densidad === 'compacta'">
+      <thead>
+        <tr>
+          <th class="col-hora">Hora</th>
+          <th>Estado</th>
+          <th>Servicio</th>
+          <th>Cliente (CC)</th>
+          <th>Func.</th>
+          <th>Dispositivo</th>
+          <th>Versión app</th>
+          <th>IP / Nodo</th>
+          <th>Qué pasó</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        <ng-container *ngFor="let f of filasVista">
+          <tr class="fila-dia" *ngIf="f.dia">
+            <td colspan="10"><span class="fila-dia__txt">{{ f.dia }}</span><span class="fila-dia__n">{{ f.diaTotal }} en esta página</span></td>
+          </tr>
+          <tr class="fila-version" *ngIf="f.cambioVersion as cv">
+            <td colspan="10">
+              <span class="fila-version__txt">⟳ Cambio de versión de la app: <strong>{{ cv.de }}</strong> → <strong>{{ cv.a }}</strong>
+                <em>(los registros de arriba ya usan {{ cv.a }})</em></span>
+            </td>
+          </tr>
+          <tr class="fila-log"
+              [class.fila-log--error]="f.r.estado === 'error'"
+              [class.fila-log--aviso]="f.r.estado === 'aviso'"
+              [class.fila-log--exito]="f.r.estado === 'exito'"
+              (click)="verDetalle(f.r)">
+            <td class="mono col-hora"><strong>{{ f.hora || (f.r.fecha | date:'HH:mm:ss') }}</strong></td>
+            <td>
+              <span class="status-pill"
+                    [class.status-exito]="f.r.estado === 'exito'"
+                    [class.status-error]="f.r.estado === 'error'"
+                    [class.status-aviso]="f.r.estado === 'aviso'"
+                    [class.status-inicio]="f.r.estado === 'inicio'"
+                    [class.status-neutro]="f.r.estado === 'paso' || f.r.estado === 'info'">
+                <span class="status-pill__icono">{{ iconoEstado(f.r.estado) }}</span>{{ etiquetaEstado(f.r.estado) }}
+              </span>
+            </td>
+            <td>
+              <button type="button" class="servicio-nombre servicio-nombre--link" (click)="filtrarPorServicio(f.r.metodo, $event)" title="Ver solo este servicio">{{ f.r.servicio }}</button>
+              <div class="servicio-tipo">{{ f.r.tipoTexto }}</div>
+              <div class="servicio-tecnico mono">{{ f.r.clase }}.{{ f.r.metodo }}</div>
+            </td>
+            <td class="mono">
+              <span class="copiable" *ngIf="f.r.documento; else sinValor">
+                <button type="button" class="valor-link" (click)="filtrarPorCliente(f.r.documento, $event)" title="Ver solo este cliente">{{ f.r.documento }}</button>
+                <button type="button" class="btn-copiar" (click)="copiar(f.r.documento, $event)" [title]="copiado === f.r.documento ? 'Copiado' : 'Copiar'">{{ copiado === f.r.documento ? '✓' : '⧉' }}</button>
+              </span>
+            </td>
+            <td class="mono">{{ f.r.funcionalidadCodigo ?? '—' }}</td>
+            <td>
+              <div>{{ f.r.equipo || f.r.dispositivo }}</div>
+              <div class="servicio-tecnico" *ngIf="f.r.equipo">{{ f.r.dispositivo }}</div>
+            </td>
+            <td>
+              <span class="version-chip" *ngIf="f.r.version; else sinValor"
+                    [class.version-chip--anterior]="f.versionAnterior"
+                    [title]="f.versionAnterior ? 'Versión distinta a la actual del cliente (' + versionActual + ')' : 'Versión de la app'">
+                {{ f.r.version }}<small *ngIf="f.versionAnterior"> anterior</small>
+              </span>
+            </td>
+            <td class="mono">
+              <span class="copiable" *ngIf="f.r.ip; else sinValor">
+                {{ f.r.ip }}
+                <button type="button" class="btn-copiar" (click)="copiar(f.r.ip, $event)" [title]="copiado === f.r.ip ? 'Copiado' : 'Copiar'">{{ copiado === f.r.ip ? '✓' : '⧉' }}</button>
+              </span>
+              <div *ngIf="f.r.nodo"><button type="button" class="nodo-chip" (click)="filtrarPorNodo(f.r.nodo, $event)" title="Ver solo este nodo">Nodo {{ f.r.nodo }}</button></div>
+            </td>
+            <td class="detalle-mensaje">
+              <div class="detalle-mensaje__estado">{{ f.r.estadoTexto }}</div>
+              <div class="detalle-mensaje__desc" *ngIf="f.r.descripcion" [title]="f.r.descripcion">{{ f.r.descripcion }}</div>
+            </td>
+            <td><button type="button" class="btn-ver" (click)="verDetalle(f.r); $event.stopPropagation()">Ver detalle</button></td>
+          </tr>
+        </ng-container>
+      </tbody>
+    </table>
+    <ng-template #sinValor><span class="sin-valor">—</span></ng-template>
+  </div>
+
+  <div class="paginacion">
+    <label class="paginacion__tamano">Filas por página
+      <select [ngModel]="limit" (ngModelChange)="cambiarTamanoPagina($event)">
+        <option *ngFor="let n of tamanosPagina" [ngValue]="n">{{ n }}</option>
+      </select>
+    </label>
+    <ng-container *ngIf="total > limit">
+      <button type="button" (click)="anteriorPagina()" [disabled]="offset === 0">Anterior</button>
+      <span>Página {{ paginaActual }} de {{ totalPaginas }}</span>
+      <button type="button" (click)="siguientePagina()" [disabled]="offset + limit >= total">Siguiente</button>
+    </ng-container>
+  </div>
+</div>
+</ng-container>
+
+<app-log-detalle *ngIf="detalleCodigo !== null" [codigo]="detalleCodigo" [fecha]="detalleFecha" (cerrar)="cerrarDetalle()"></app-log-detalle>

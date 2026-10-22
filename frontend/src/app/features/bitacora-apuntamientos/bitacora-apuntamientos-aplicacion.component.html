@@ -1,0 +1,372 @@
+<header class="page-header">
+  <div>
+    <button type="button" class="btn-volver" (click)="volver()">← Bitácora de Apuntamientos</button>
+    <h1>{{ aplicacionNombre || ('Aplicación #' + aplicacionId) }}</h1>
+    <p class="subtitle">
+      {{ apuntamientosDeAplicacion.length }} {{ apuntamientosDeAplicacion.length === 1 ? 'apuntamiento' : 'apuntamientos' }}
+      en {{ nodos.length }} {{ nodos.length === 1 ? 'nodo' : 'nodos' }}
+    </p>
+  </div>
+
+  <div class="header-actions">
+    <div class="search-box">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <circle cx="11" cy="11" r="8"></circle>
+        <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+      </svg>
+      <input type="text" [(ngModel)]="terminoBusqueda" placeholder="Buscar componente o servicio..." />
+    </div>
+    <button *ngIf="puedeEditar" type="button" class="btn btn-primary" (click)="abrirFormulario()">+ Nuevo apuntamiento</button>
+  </div>
+</header>
+
+<div class="empty" *ngIf="cargando">Cargando apuntamientos…</div>
+
+<ng-container *ngIf="!cargando">
+  <!-- Botones de nodo: cada servidor de la aplicación se ve por separado
+       (pueden apuntar a servicios distintos). "Comparar nodos" pone todos
+       los nodos lado a lado para ver en qué se diferencian. -->
+  <div class="nodos-tabs" *ngIf="nodos.length">
+    <button
+      type="button"
+      class="nodo-tab"
+      *ngFor="let n of nodos; trackBy: trackNodo"
+      [class.nodo-tab--activo]="nodoSeleccionado === n.id"
+      (click)="seleccionarNodo(n.id)"
+    >{{ n.etiqueta }} <span class="nodo-tab-count">{{ n.cantidad }}</span></button>
+    <button
+      type="button"
+      class="nodo-tab nodo-tab--comparar"
+      *ngIf="nodos.length > 1"
+      [class.nodo-tab--activo]="comparando"
+      (click)="seleccionarNodo('comparar')"
+      title="Ver todos los nodos lado a lado y resaltar las diferencias"
+    >
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14">
+        <path d="M16 3h5v5"></path><path d="M21 3l-7 7"></path><path d="M8 21H3v-5"></path><path d="M3 21l7-7"></path>
+      </svg>
+      Comparar nodos
+    </button>
+  </div>
+
+  <!-- VISTA "COMPARAR NODOS": una fila por servicio, una columna por nodo. -->
+  <ng-container *ngIf="comparando">
+    <div class="comparar-resumen">
+      <span class="comparar-chip comparar-chip--ok">{{ comparacion.totalIguales }} {{ comparacion.totalIguales === 1 ? 'servicio igual' : 'servicios iguales' }} en todos</span>
+      <span class="comparar-chip comparar-chip--dif">{{ comparacion.totalDiferentes }} {{ comparacion.totalDiferentes === 1 ? 'servicio con diferencias' : 'servicios con diferencias' }}</span>
+      <label class="comparar-toggle">
+        <input type="checkbox" [(ngModel)]="soloDiferencias" /> Mostrar solo diferencias
+      </label>
+    </div>
+
+    <div class="comparar-scroll" *ngIf="filasComparacionVisibles.length; else sinDiferencias">
+      <table class="comparar-tabla">
+        <thead>
+          <tr>
+            <th class="col-servicio">Servicio</th>
+            <th *ngFor="let c of comparacion.columnas" class="col-nodo">
+              <span class="mono">{{ c.etiqueta }}</span>
+              <span class="nodo-tab-count">{{ c.cantidad }}</span>
+            </th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr *ngFor="let f of filasComparacionVisibles" [class.fila-dif]="!f.igual">
+            <td class="col-servicio">
+              <span class="mono">{{ f.codigo ? (f.codigo + ' — ') : '' }}{{ f.nombre }}</span>
+              <span class="servicio-pod" *ngIf="f.pod">{{ f.pod }}</span>
+              <span class="badge-dif" *ngIf="!f.igual">
+                {{ f.presentesEn < comparacion.columnas.length ? 'Falta en ' + (comparacion.columnas.length - f.presentesEn) + ' de ' + comparacion.columnas.length : 'Distinta categoría' }}
+              </span>
+            </td>
+            <td
+              *ngFor="let c of f.celdas; let i = index"
+              class="col-nodo"
+              [class.celda-ausente]="c.ausente"
+              [class.celda-dif]="f.diferentes[i] && !c.ausente"
+            >
+              <ng-container *ngIf="!c.ausente">
+                <span class="tag-chip tag-sin" *ngIf="c.sinApuntamiento">Sin apuntamiento</span>
+                <span
+                  class="tag-chip"
+                  *ngFor="let cat of c.categorias"
+                  [ngClass]="cat === 'ACE' ? 'tag-ace' : 'tag-bus'"
+                >{{ etiquetaCategoria(cat) }}</span>
+              </ng-container>
+              <span class="celda-vacia" *ngIf="c.ausente">No apunta</span>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <ng-template #sinDiferencias>
+      <div class="empty">
+        {{ terminoBusqueda ? 'No hay servicios que coincidan con tu búsqueda.' : 'Todos los nodos tienen los mismos apuntamientos.' }}
+      </div>
+    </ng-template>
+  </ng-container>
+
+  <div class="tabla-wrapper" *ngIf="!comparando && apuntamientosFiltrados.length; else sinRegistros">
+    <div
+      class="fila fila--header"
+      [class.fila--conAcciones]="puedeEditar"
+    >
+      <span>Componente</span>
+      <span>Apuntamiento</span>
+      <span>Servicio</span>
+      <span>Pod</span>
+      <span>Última actualización</span>
+      <span *ngIf="puedeEditar">Acciones</span>
+    </div>
+
+    <div
+      class="fila"
+      [class.fila--conAcciones]="puedeEditar"
+      [class.fila--sinApuntamiento]="a.SinApuntamiento"
+      *ngFor="let a of apuntamientosFiltrados"
+    >
+      <span>{{ a.Componente || '—' }}</span>
+      <span>
+        <span
+          class="tag-chip"
+          [ngClass]="a.SinApuntamiento ? 'tag-sin' : (a.Categoria === 'ACE' ? 'tag-ace' : 'tag-bus')"
+        >
+          {{ a.SinApuntamiento ? 'Sin apuntamiento' : etiquetaCategoria(a.Categoria) }}
+        </span>
+      </span>
+      <span class="mono">
+        <span
+          *ngIf="!a.SinApuntamiento"
+          class="servicio-link"
+          title="Ver historial de cambios de este apuntamiento"
+          (click)="verHistorico(a)"
+        >{{ a.ServicioCodigo }} — {{ a.ServicioNombre }}</span>
+        <ng-container *ngIf="a.SinApuntamiento">—</ng-container>
+      </span>
+      <span>{{ a.SinApuntamiento ? '—' : (a.ServicioPod || '—') }}</span>
+      <span class="fecha-celda">{{ formatearFecha(a.FechaActualizacion) }}</span>
+      <span class="fila-acciones" *ngIf="puedeEditar">
+        <button type="button" class="icon-btn" title="Histórico de cambios" (click)="verHistorico(a)">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="12" cy="12" r="9"></circle>
+            <polyline points="12 7 12 12 16 14"></polyline>
+          </svg>
+        </button>
+        <button
+          type="button"
+          class="icon-btn"
+          [class.icon-btn--deshabilitado]="a.SinApuntamiento"
+          [title]="a.SinApuntamiento ? 'Quita primero la marca \'sin apuntamiento a servicios\' (Editar apuntamiento)' : 'Registrar cambio (ajuste, mantenimiento o mejora)'"
+          (click)="abrirFormularioCambio(a)"
+        >
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <polyline points="23 4 23 10 17 10"></polyline>
+            <polyline points="1 20 1 14 7 14"></polyline>
+            <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path>
+          </svg>
+        </button>
+        <button type="button" class="icon-btn" title="Editar apuntamiento" (click)="editar(a)">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+            <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+          </svg>
+        </button>
+        <button type="button" class="icon-btn icon-btn--danger" title="Eliminar" (click)="eliminar(a)">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <polyline points="3 6 5 6 21 6"></polyline>
+            <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"></path>
+            <path d="M10 11v6"></path>
+            <path d="M14 11v6"></path>
+            <path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"></path>
+          </svg>
+        </button>
+      </span>
+    </div>
+  </div>
+
+  <ng-template #sinRegistros>
+    <div class="empty" *ngIf="!comparando">
+      No se encontraron apuntamientos que coincidan con tu búsqueda o con el nodo elegido.
+    </div>
+  </ng-template>
+</ng-container>
+
+<!-- FORMULARIO DE ALTA / EDICIÓN (Acción 1: "Editar apuntamiento") — el
+     overlay NO cierra al hacer clic afuera: es fácil perder sin querer lo
+     que ya se llenó. Solo se cierra con la X, "Cancelar" o al guardar. -->
+<div class="overlay" *ngIf="mostrarForm">
+  <div class="modal form-modal">
+    <div class="modal-header">
+      <h2>{{ editando ? 'Editar apuntamiento' : 'Nuevo apuntamiento' }}</h2>
+      <button class="btn-close" type="button" (click)="cerrarFormulario()">✕</button>
+    </div>
+
+    <div class="modal-body">
+      <label class="form-label">Aplicación *</label>
+      <select class="form-input" [(ngModel)]="form.AplicacionId" (ngModelChange)="onCambioAplicacion()">
+        <option [ngValue]="null">Selecciona una aplicación...</option>
+        <option *ngFor="let app of aplicaciones" [ngValue]="app.id || app.Id">{{ app.nombre || app.Nombre }}</option>
+      </select>
+
+      <label class="form-label">Servidor</label>
+      <select class="form-input" [(ngModel)]="form.ServidorId" (ngModelChange)="onCambioServidor()">
+        <option [ngValue]="null">(sin servidor específico / toda la aplicación)</option>
+        <option
+          *ngIf="form.ServidorId && !servidorEstaRegistrado(form.ServidorId)"
+          [ngValue]="form.ServidorId"
+        >{{ editandoServidorLabel || ('Servidor #' + form.ServidorId) }} (no asociado a esta aplicación)</option>
+        <option *ngFor="let sv of servidoresDisponiblesForm" [ngValue]="sv.id || sv.Id">
+          {{ sv.hostname || sv.Hostname }} ({{ sv.ip || sv.IP }})
+        </option>
+      </select>
+      <p class="ayuda" *ngIf="form.AplicacionId && !servidoresDisponiblesForm.length">
+        Esta aplicación todavía no tiene servidores registrados en el módulo Aplicaciones.
+      </p>
+
+      <label class="form-label">Componente (sub aplicación)</label>
+      <select class="form-input" [(ngModel)]="form.Componente">
+        <option value="">(sin componente específico)</option>
+        <option
+          *ngIf="form.Componente && !componentesDisponiblesForm.includes(form.Componente)"
+          [value]="form.Componente"
+        >{{ form.Componente }} (no registrado en Aplicaciones)</option>
+        <option *ngFor="let c of componentesDisponiblesForm" [value]="c">{{ c }}</option>
+      </select>
+      <p class="ayuda" *ngIf="form.AplicacionId && !componentesDisponiblesForm.length">
+        {{ form.ServidorId ? 'Ese servidor todavía no tiene componentes/roles registrados.' : 'Esta aplicación todavía no tiene componentes registrados en el módulo Aplicaciones.' }}
+      </p>
+
+      <div class="checkbox-row">
+        <label><input type="checkbox" [(ngModel)]="form.SinApuntamiento" /> No tiene apuntamientos a servicios</label>
+      </div>
+
+      <!-- Categoría/Servicio/Observaciones/Fecha SOLO al crear. Al editar un
+           apuntamiento existente esto se maneja con "Registrar cambio" (ver
+           nota en el componente) — no se muestra aquí para no confundir
+           cuál acción deja constancia en el histórico. -->
+      <ng-container *ngIf="!editando">
+        <ng-container *ngIf="!form.SinApuntamiento">
+          <label class="form-label">Categoría *</label>
+          <select class="form-input" [(ngModel)]="form.Categoria">
+            <option value="">Selecciona la categoría...</option>
+            <option value="ACE">ACE</option>
+            <option value="BUS_INTEGRACION_10">Bus de Integración 10</option>
+          </select>
+
+          <label class="form-label">Servicio *</label>
+          <select class="form-input" [(ngModel)]="form.ServicioInventarioId">
+            <option [ngValue]="null">Selecciona el servicio...</option>
+            <option *ngFor="let s of serviciosInventario" [ngValue]="s.Id">{{ s.Codigo }} — {{ s.NombreServicio }}{{ s.Tipo === 'REST' ? ' (REST)' : '' }}</option>
+          </select>
+        </ng-container>
+
+        <label class="form-label">Observaciones</label>
+        <textarea class="form-input form-textarea" [(ngModel)]="form.Observaciones" rows="3"></textarea>
+
+        <label class="form-label">Fecha de última actualización</label>
+        <input type="datetime-local" class="form-input" [(ngModel)]="form.FechaActualizacion" />
+        <p class="ayuda">
+          Déjalo en blanco para usar la fecha y hora actuales al guardar. Cámbialo solo si necesitas reflejar cuándo ocurrió realmente el cambio (por ejemplo, datos cargados por script).
+        </p>
+      </ng-container>
+
+      <p class="ayuda ayuda--destacada" *ngIf="editando">
+        Para cambiar la categoría, el servicio, agregar observaciones o evidencia de un ajuste, usa
+        <strong>"Registrar cambio"</strong> — eso sí queda en el histórico.
+      </p>
+    </div>
+
+    <div class="modal-footer">
+      <button
+        class="btn btn-historico"
+        type="button"
+        *ngIf="editando"
+        (click)="verHistorico(editando)"
+      >Ver histórico</button>
+      <button
+        class="btn btn-cambio"
+        type="button"
+        *ngIf="editando && !editando.SinApuntamiento"
+        (click)="abrirFormularioCambio(editando)"
+      >Registrar cambio</button>
+      <button class="btn" type="button" (click)="cerrarFormulario()">Cancelar</button>
+      <button class="btn btn-primary" type="button" [disabled]="guardando" (click)="guardar()">
+        {{ guardando ? 'Guardando…' : 'Guardar' }}
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- FORMULARIO DE "REGISTRAR CAMBIO" (Acción 2: ajuste, mantenimiento o mejora)
+     — mismo criterio: no se cierra con clic afuera, solo con la X, "Cancelar"
+     o al guardar. TRANDID, Error e Imagen son evidencia OPCIONAL: se puede
+     registrar el cambio sin ninguno de los tres. -->
+<div class="overlay" *ngIf="mostrarFormCambio">
+  <div class="modal form-modal">
+    <div class="modal-header">
+      <h2>Registrar cambio</h2>
+      <button class="btn-close" type="button" (click)="cerrarFormularioCambio()">✕</button>
+    </div>
+
+    <div class="modal-body" *ngIf="apuntamientoCambio as ac">
+      <p class="ayuda ayuda--destacada" style="margin-top: 0;">
+        {{ ac.AplicacionNombre }}<ng-container *ngIf="ac.Componente"> / {{ ac.Componente }}</ng-container> — este cambio quedará registrado en el histórico.
+      </p>
+
+      <label class="form-label">Categoría *</label>
+      <select class="form-input" [(ngModel)]="formCambio.Categoria">
+        <option value="">Selecciona la categoría...</option>
+        <option value="ACE">ACE</option>
+        <option value="BUS_INTEGRACION_10">Bus de Integración 10</option>
+      </select>
+
+      <label class="form-label">Servicio *</label>
+      <select class="form-input" [(ngModel)]="formCambio.ServicioInventarioId">
+        <option [ngValue]="null">Selecciona el servicio...</option>
+        <option *ngFor="let s of serviciosInventario" [ngValue]="s.Id">{{ s.Codigo }} — {{ s.NombreServicio }}{{ s.Tipo === 'REST' ? ' (REST)' : '' }}</option>
+      </select>
+
+      <label class="form-label">Observaciones</label>
+      <textarea class="form-input form-textarea" [(ngModel)]="formCambio.Observaciones" rows="3"></textarea>
+
+      <label class="form-label">TRANDID <span class="form-label-opcional">(opcional)</span></label>
+      <input type="text" class="form-input" [(ngModel)]="formCambio.TrandId" placeholder="Ej. 000123456789" />
+
+      <label class="form-label">Error <span class="form-label-opcional">(opcional)</span></label>
+      <textarea class="form-input form-textarea" [(ngModel)]="formCambio.Error" rows="3" placeholder="Descripción del error, si aplica"></textarea>
+
+      <label class="form-label">Imagen <span class="form-label-opcional">(opcional)</span> — captura del error o del cambio</label>
+      <input
+        #inputImagen
+        type="file"
+        class="form-input"
+        accept="image/png,image/jpeg,image/gif,image/webp"
+        (change)="onArchivoImagenSeleccionado($event)"
+      />
+      <p class="ayuda" *ngIf="!imagenErrorCliente">Formatos permitidos: PNG, JPG, GIF o WEBP — máximo ~2 MB.</p>
+      <p class="ayuda ayuda--error" *ngIf="imagenErrorCliente">{{ imagenErrorCliente }}</p>
+
+      <div class="imagen-preview" *ngIf="formCambio.Imagen">
+        <img [src]="formCambio.Imagen" alt="Vista previa de la imagen adjunta" />
+        <div class="imagen-preview-info">
+          <span>{{ imagenNombreArchivo }}</span>
+          <button type="button" class="btn btn-quitar-imagen" (click)="quitarImagen(inputImagen)">Quitar imagen</button>
+        </div>
+      </div>
+
+      <label class="form-label">Fecha declarada del cambio</label>
+      <input type="datetime-local" class="form-input" [(ngModel)]="formCambio.FechaActualizacion" />
+      <p class="ayuda">
+        Déjalo en blanco para usar la fecha y hora actuales al guardar. Cámbialo solo si necesitas reflejar cuándo ocurrió realmente el cambio.
+      </p>
+    </div>
+
+    <div class="modal-footer">
+      <button class="btn" type="button" (click)="cerrarFormularioCambio()">Cancelar</button>
+      <button class="btn btn-primary" type="button" [disabled]="guardandoCambio" (click)="guardarCambio()">
+        {{ guardandoCambio ? 'Guardando…' : 'Registrar cambio' }}
+      </button>
+    </div>
+  </div>
+</div>

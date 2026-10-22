@@ -1,0 +1,461 @@
+<div class="servidores-container">
+  <div class="header-section">
+    <div>
+      <h2 class="titulo-vista">Servidores</h2>
+      <p>Las máquinas físicas y virtuales de la infraestructura (son las mismas que usan los certificados). Lo que corre en cada una se gestiona en <strong>Sub-aplicativos</strong>.</p>
+    </div>
+
+    <div class="header-actions">
+      <div class="search-box">
+        <input type="text" [(ngModel)]="terminoBusqueda" placeholder="Buscar por servidor, IP, S.O. o sub-aplicativo..." />
+      </div>
+      <!-- BOTÓN OCULTO PARA BASIC -->
+      <button
+        *ngIf="puedeEditar"
+        class="btn-primary"
+        (click)="abrirModalNuevo()"
+        title="Solo para la máquina física/virtual completa. Un contenedor, tópico Kafka, sitio IIS o API puntual se registra en la pestaña Sub-aplicativos."
+      >+ Registrar Servidor</button>
+    </div>
+  </div>
+
+  <!-- Resumen del inventario: cada cifra es también un filtro de un clic -->
+  <div class="resumen-strip" *ngIf="servidores.length">
+    <button type="button" class="resumen-chip" [class.resumen-chip--activo]="!filtroSO" (click)="filtroSO = ''" title="Ver todos los sistemas operativos">
+      <span class="resumen-num">{{ servidores.length }}</span><span class="resumen-label">Servidores</span>
+    </button>
+    <button type="button" class="resumen-chip resumen-chip--linux" *ngIf="totalLinux" [class.resumen-chip--activo]="filtroSO === 'linux'" (click)="seleccionarSO('linux')">
+      <span class="resumen-num">{{ totalLinux }}</span><span class="resumen-label">Linux</span>
+    </button>
+    <button type="button" class="resumen-chip resumen-chip--windows" *ngIf="totalWindows" [class.resumen-chip--activo]="filtroSO === 'windows'" (click)="seleccionarSO('windows')">
+      <span class="resumen-num">{{ totalWindows }}</span><span class="resumen-label">Windows</span>
+    </button>
+    <button type="button" class="resumen-chip" *ngIf="totalOtroSO" [class.resumen-chip--activo]="filtroSO === 'otro'" (click)="seleccionarSO('otro')">
+      <span class="resumen-num">{{ totalOtroSO }}</span><span class="resumen-label">Otro S.O.</span>
+    </button>
+    <span class="resumen-sep" aria-hidden="true"></span>
+    <span class="resumen-chip resumen-chip--info" title="Servidores que tienen al menos un certificado registrado en el módulo Certificados">
+      <span class="resumen-num">{{ totalConCertificados }}</span><span class="resumen-label">Con certificados</span>
+    </span>
+    <span class="resumen-chip resumen-chip--alerta" *ngIf="totalCertificadosVencidos" title="Servidores con al menos un certificado vencido">
+      <span class="resumen-num">{{ totalCertificadosVencidos }}</span><span class="resumen-label">Con certificado vencido</span>
+    </span>
+  </div>
+
+  <!-- Filtro rápido por ambiente -->
+  <div class="chips-ambiente" *ngIf="chipsAmbiente.length > 1">
+    <button type="button" class="chip-filtro" [class.chip-filtro--activo]="!filtroAmbiente" (click)="filtroAmbiente = ''">Todos ({{ servidores.length }})</button>
+    <button type="button" class="chip-filtro" *ngFor="let c of chipsAmbiente" [ngClass]="claseAmbiente(c.valor)" [class.chip-filtro--activo]="filtroAmbiente === c.valor" (click)="seleccionarAmbiente(c.valor)">{{ c.valor }} ({{ c.total }})</button>
+    <button type="button" class="chip-limpiar" *ngIf="hayFiltros" (click)="limpiarFiltros()">Limpiar filtros</button>
+  </div>
+
+  <div *ngIf="!loading; else spinner">
+    <div class="servidores-grid" *ngIf="servidoresFiltrados.length; else sinServidores">
+      <div class="servidor-card" *ngFor="let s of servidoresFiltrados" (click)="verDetalle(s)">
+        <div class="servidor-card-header">
+          <div class="servidor-card-titulo">
+            <h3>{{ s.hostname }}</h3>
+            <code>{{ s.ip_address }}</code>
+          </div>
+
+          <!-- BOTONES OCULTOS PARA BASIC -->
+          <div class="acciones" *ngIf="puedeEditar" (click)="$event.stopPropagation()">
+            <button class="btn-icon edit" (click)="abrirModalEditar(s, $event)" title="Editar servidor">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="icon-svg"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>
+            </button>
+            <button class="btn-icon delete" (click)="eliminarServidor(s.id, $event)" title="Eliminar servidor">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="icon-svg"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
+            </button>
+          </div>
+        </div>
+
+        <div class="servidor-card-badges">
+          <span class="badge" [ngClass]="(s.estado || '').toLowerCase()">{{ s.estado }}</span>
+          <span class="badge badge-amb" [ngClass]="claseAmbiente(normalizarAmbiente(s.ambiente))">{{ normalizarAmbiente(s.ambiente) }}</span>
+          <span class="badge" [ngClass]="'criticidad-' + criticidadServidor(s).toLowerCase()">{{ criticidadServidor(s) }}</span>
+          <span class="badge badge-plataforma" *ngIf="s.plataforma">{{ s.plataforma }}</span>
+          <span class="badge badge-so" [ngClass]="'so-' + tipoSO(s)">{{ nombreSO(s) }}</span>
+          <span class="badge badge-pendiente" *ngIf="s.sin_ficha" title="Este servidor existe en Certificados pero aún no tiene los datos del inventario (plataforma, criticidad, responsable). Edítalo para completarlos.">Datos por completar</span>
+        </div>
+
+        <div class="servidor-card-cert" *ngIf="textoCertificados(s)" [ngClass]="claseCertificados(s)" [title]="s.certificados_dias_proximo !== null && s.certificados_dias_proximo !== undefined ? 'El próximo vence en ' + s.certificados_dias_proximo + ' día(s)' : ''">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="icon-svg"><rect x="3" y="11" width="18" height="11" rx="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>
+          {{ textoCertificados(s) }}
+        </div>
+
+        <div class="chips-subs" *ngIf="totalSubs(s)">
+          <span class="chip-sub" *ngFor="let x of subsDe(s).slice(0, 4)" (click)="irAFicha(s, x, $event)" [title]="'Abrir ficha de ' + x.nombre">
+            {{ x.nombre }}<ng-container *ngIf="x.puerto"> :{{ x.puerto }}</ng-container>
+          </span>
+          <span class="chip-sub chip-mas" *ngIf="totalSubs(s) > 4" (click)="irASubaplicativos(s, $event)">+{{ totalSubs(s) - 4 }} más</span>
+        </div>
+        <p class="servidor-card-sin-apps" *ngIf="!totalSubs(s)">Sin sub-aplicativos registrados.</p>
+
+        <div class="servidor-card-footer">
+          <button class="link-subs" (click)="irASubaplicativos(s, $event)" [disabled]="!totalSubs(s)">
+            {{ totalSubs(s) }} sub-aplicativo(s) →
+          </button>
+          <span class="ver-mas">Ver detalle →</span>
+        </div>
+      </div>
+    </div>
+
+    <ng-template #sinServidores>
+      <div class="empty-state text-center py-4">
+        <ng-container *ngIf="hayFiltros">No se encontraron servidores con esos filtros. <button type="button" class="chip-limpiar" (click)="limpiarFiltros()">Limpiar filtros</button></ng-container>
+        <ng-container *ngIf="!hayFiltros">No hay servidores registrados en el inventario.</ng-container>
+      </div>
+    </ng-template>
+  </div>
+
+  <ng-template #spinner>
+    <div class="loading-state text-center py-4">Cargando servidores...</div>
+  </ng-template>
+</div>
+
+<!-- MODAL DETALLE DE SERVIDOR -->
+<div class="modal-overlay" *ngIf="servidorSeleccionado" (click)="cerrarDetalle()">
+  <div class="modal-content modal-lg" (click)="$event.stopPropagation()">
+    <header class="detail-header">
+      <div>
+        <span class="badge badge-amb" [ngClass]="claseAmbiente(normalizarAmbiente(servidorSeleccionado.ambiente))">{{ normalizarAmbiente(servidorSeleccionado.ambiente) }}</span>
+        <span class="badge badge-plataforma" style="margin-left: 6px;">{{ servidorSeleccionado.plataforma || '—' }}</span>
+        <h2>{{ servidorSeleccionado.hostname }}</h2>
+        <p class="ip-subtitle"><code>{{ servidorSeleccionado.ip_address }}</code> | S.O: {{ servidorSeleccionado.sistema_operativo || 'Linux' }}</p>
+      </div>
+      <button class="btn-close" (click)="cerrarDetalle()">✕</button>
+    </header>
+
+    <!-- SUB-APLICATIVOS DESPLEGADOS EN ESTE SERVIDOR -->
+    <div class="detail-section">
+      <div class="form-row" style="align-items: center; justify-content: space-between; margin-bottom: 8px;">
+        <h3 class="section-title" style="margin-bottom: 0;">Sub-aplicativos desplegados ({{ totalSubs(servidorSeleccionado) }})</h3>
+        <button class="btn-secondary btn-sm" *ngIf="totalSubs(servidorSeleccionado)" (click)="irASubaplicativos(servidorSeleccionado)">Ver en el inventario →</button>
+      </div>
+      <div class="chips-subs" *ngIf="totalSubs(servidorSeleccionado); else sinSubsDetalle">
+        <span class="chip-sub" *ngFor="let x of subsDe(servidorSeleccionado)" (click)="irAFicha(servidorSeleccionado, x)" [title]="'Abrir ficha de ' + x.nombre">
+          {{ x.nombre }}<ng-container *ngIf="x.puerto"> :{{ x.puerto }}</ng-container>
+        </span>
+      </div>
+      <ng-template #sinSubsDetalle>
+        <p class="text-gray" style="font-size: 13px; margin: 4px 0 0 0;">Este servidor todavía no tiene sub-aplicativos registrados. Se agregan desde la pestaña "Sub-aplicativos".</p>
+      </ng-template>
+    </div>
+
+      <div class="servidor-card-cert servidor-card-cert--detalle" *ngIf="textoCertificados(servidorSeleccionado)" [ngClass]="claseCertificados(servidorSeleccionado)">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="icon-svg"><rect x="3" y="11" width="18" height="11" rx="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>
+        Certificados de este servidor: {{ textoCertificados(servidorSeleccionado) }}<ng-container *ngIf="servidorSeleccionado.certificados_dias_proximo !== null && servidorSeleccionado.certificados_dias_proximo !== undefined"> · el más próximo vence en {{ servidorSeleccionado.certificados_dias_proximo }} día(s)</ng-container>.
+        Se administran en el módulo Certificados.
+      </div>
+
+      <h3 class="section-title">Información General</h3>
+      <div class="grid-3">
+        <div class="info-card">
+          <label>Propietario / Responsable</label>
+          <p>{{ servidorSeleccionado.propietario || 'No asignado' }}</p>
+        </div>
+        <div class="info-card">
+          <label>Dev</label>
+          <p>{{ servidorSeleccionado.dev || 'No asignado' }}</p>
+        </div>
+        <div class="info-card">
+          <label>Puerto</label>
+          <p>{{ servidorSeleccionado.puerto || 'No definido' }}</p>
+        </div>
+      </div>
+
+      <h3 class="section-title">Seguridad y Despliegue</h3>
+      <div class="grid-3">
+        <div class="info-card">
+          <label>Criticidad</label>
+          <p>{{ servidorSeleccionado.criticidad || criticidadServidor(servidorSeleccionado) }}</p>
+        </div>
+        <div class="info-card">
+          <label>Info. Seguridad</label>
+          <p>{{ servidorSeleccionado.info_seguridad || 'No definido' }}</p>
+        </div>
+        <div class="info-card">
+          <label>Últ. despliegue (servidor)</label>
+          <p>{{ (servidorSeleccionado.fecha_ultimo_despliegue | date:'dd/MM/yyyy') || 'No registrado' }}</p>
+        </div>
+      </div>
+
+      <h3 class="section-title">Descripción</h3>
+      <div class="info-card" style="margin-bottom: 16px;">
+        <p>{{ servidorSeleccionado.descripcion || 'Sin descripción' }}</p>
+      </div>
+
+      <h3 class="section-title">Integración y Dependencias (servidor)</h3>
+      <div style="margin-bottom: 12px;" *ngIf="servidorSeleccionado.puntos_integracion">
+        <label class="code-label">Puntos de Integración (texto libre, histórico)</label>
+        <div class="code-box">{{ servidorSeleccionado.puntos_integracion }}</div>
+      </div>
+
+      <div style="margin-bottom: 16px;">
+        <label class="code-label">Integraciones registradas</label>
+        <div *ngIf="integracionesDetalle.length; else sinIntegracionesDetalle">
+          <div *ngFor="let ig of integracionesDetalle" style="padding: 6px 0; border-bottom: 1px solid #e2e8f0; font-size: 14px;">
+            <span class="badge badge-plataforma" style="margin-right: 8px;">{{ ig.tipo_destino }}</span>
+            <strong>{{ ig.nombre_destino }}</strong>
+            <span *ngIf="ig.descripcion" class="text-gray"> — {{ ig.descripcion }}</span>
+          </div>
+        </div>
+        <ng-template #sinIntegracionesDetalle>
+          <p class="text-gray" style="font-size: 13px; margin: 4px 0 0 0;">Sin integraciones registradas.</p>
+        </ng-template>
+      </div>
+
+      <div style="margin-bottom: 16px;">
+        <label class="code-label">Comandos</label>
+        <p *ngIf="!servidorSeleccionado.comandos" class="text-gray" style="margin: 4px 0 0 0; font-size: 13px;">No registrado</p>
+        <button *ngIf="servidorSeleccionado.comandos" class="btn-ver-codigo" (click)="abrirVisorCodigo('Comandos', servidorSeleccionado.comandos)">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="icon-svg"><polyline points="16 18 22 12 16 6"></polyline><polyline points="8 6 2 12 8 18"></polyline></svg>
+          Ver Comandos
+        </button>
+      </div>
+
+      <div style="margin-bottom: 16px;">
+        <label class="code-label">Configuración</label>
+        <p *ngIf="!servidorSeleccionado.configuracion" class="text-gray" style="margin: 4px 0 0 0; font-size: 13px;">No registrado</p>
+        <button *ngIf="servidorSeleccionado.configuracion" class="btn-ver-codigo" (click)="abrirVisorCodigo('Configuración', servidorSeleccionado.configuracion)">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="icon-svg"><polyline points="16 18 22 12 16 6"></polyline><polyline points="8 6 2 12 8 18"></polyline></svg>
+          Ver Configuración
+        </button>
+      </div>
+
+    <div class="modal-actions">
+      <button class="btn-secondary" (click)="cerrarDetalle()">Cerrar</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL CREAR / EDITAR SERVIDOR
+     Lo básico (hostname, IP, sistema operativo, ambiente) es un formulario corto y limpio.
+     La ficha técnica (plataforma, responsables, comandos, integraciones...) es opcional y
+     se despliega solo si se necesita. -->
+<div class="modal-overlay" *ngIf="mostrarModalForm" (click)="cerrarModalForm()">
+  <div class="modal-content modal-flex-footer modal-form" [class.modal-form--ancho]="fichaAbierta" (click)="$event.stopPropagation()">
+    <header class="form-cabecera">
+      <h2>{{ modoEdicion ? 'Editar servidor' : 'Nuevo servidor' }}</h2>
+      <button class="btn-close" (click)="cerrarModalForm()" aria-label="Cerrar">✕</button>
+    </header>
+    <div class="modal-scroll-body">
+
+    <p class="hint-registro" *ngIf="!modoEdicion">
+      Registra la <strong>máquina</strong> (física o virtual). Los contenedores, APIs, sitios IIS o tópicos Kafka que corren en ella se agregan después en <strong>Sub-aplicativos</strong>.
+    </p>
+
+    <div class="form-group">
+      <label>Hostname *</label>
+      <input type="text" [(ngModel)]="servidorActual.hostname" placeholder="srv-web01" autocomplete="off">
+    </div>
+
+    <div class="form-group">
+      <label>IP *</label>
+      <input type="text" class="mono" [(ngModel)]="servidorActual.ip_address" placeholder="10.0.0.10" autocomplete="off">
+    </div>
+
+    <div class="form-group">
+      <label>Sistema operativo *</label>
+      <select [(ngModel)]="servidorActual.id_sistema_operativo">
+        <option [ngValue]="undefined" disabled>Selecciona uno</option>
+        <option *ngFor="let so of sistemasOperativos" [ngValue]="so.Id">{{ so.Nombre }}</option>
+      </select>
+    </div>
+
+    <div class="form-group">
+      <label>Ambiente</label>
+      <select [(ngModel)]="servidorActual.ambiente">
+        <option value="PRODUCCION">Producción</option>
+        <option value="QA">QA</option>
+        <option value="PRUEBAS">Pruebas</option>
+        <option value="DESARROLLO">Desarrollo</option>
+      </select>
+    </div>
+
+    <div class="form-group" *ngIf="modoEdicion">
+      <label>Estado</label>
+      <select [(ngModel)]="servidorActual.estado">
+        <option value="ACTIVO">Activo</option>
+        <option value="INACTIVO">Inactivo</option>
+        <option value="MANTENIMIENTO">Mantenimiento</option>
+      </select>
+    </div>
+
+    <button type="button" class="toggle-ficha" (click)="fichaAbierta = !fichaAbierta" [attr.aria-expanded]="fichaAbierta">
+      <span class="toggle-ficha__flecha">{{ fichaAbierta ? '▾' : '▸' }}</span>
+      Ficha técnica <em>(opcional)</em>
+      <span class="toggle-ficha__ayuda">Plataforma, responsables, comandos{{ modoEdicion ? ', integraciones' : '' }}…</span>
+    </button>
+
+    <div class="ficha" *ngIf="fichaAbierta">
+    <div class="form-row">
+      <div class="form-group">
+        <label>Plataforma</label>
+        <select [(ngModel)]="servidorActual.plataforma">
+          <option value="">Sin definir</option>
+          <option value="Docker">Docker</option>
+          <option value="Apache">Apache</option>
+          <option value="IIS">IIS</option>
+          <option value="Nginx">Nginx</option>
+          <option value="Kafka">Kafka</option>
+          <optgroup label="Motor de base de datos">
+            <option *ngFor="let motor of motoresBdServidor" [value]="motor">{{ motor }}</option>
+          </optgroup>
+          <option value="Otro">Otro</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Puerto</label>
+        <input type="number" [(ngModel)]="servidorActual.puerto" placeholder="Ej: 8080">
+      </div>
+      <div class="form-group">
+        <label>Criticidad</label>
+        <select [(ngModel)]="servidorActual.criticidad">
+          <option value="">Sin definir</option>
+          <option value="Alta">Alta</option>
+          <option value="Media">Media</option>
+          <option value="Baja">Baja</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="form-row">
+      <div class="form-group">
+        <label>Propietario / Responsable</label>
+        <app-selector-buscable
+          [opciones]="personasOpciones"
+          [valor]="servidorActual.propietario ?? null"
+          (valorChange)="servidorActual.propietario = $event"
+          [permitirAgregar]="true"
+          (agregar)="onAgregarPersona($event)"
+          placeholder="Busca o agrega una persona..."
+        ></app-selector-buscable>
+      </div>
+      <div class="form-group">
+        <label>Dev</label>
+        <app-selector-buscable
+          [opciones]="personasOpciones"
+          [valor]="servidorActual.dev ?? null"
+          (valorChange)="servidorActual.dev = $event"
+          [permitirAgregar]="true"
+          (agregar)="onAgregarPersona($event)"
+          placeholder="Busca o agrega una persona..."
+        ></app-selector-buscable>
+      </div>
+    </div>
+
+    <div class="form-row">
+      <div class="form-group">
+        <label>Fecha Último Despliegue</label>
+        <input type="date" [(ngModel)]="servidorActual.fecha_ultimo_despliegue">
+      </div>
+      <div class="form-group">
+        <label>Info. Seguridad</label>
+        <select [(ngModel)]="servidorActual.info_seguridad">
+          <option value="Ninguna">Ninguna</option>
+          <option value="Certificado SSl">Certificado SSl</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="form-row" *ngIf="servidorActual.info_seguridad === 'Certificado SSl'">
+      <div class="form-group">
+        <label>Certificado</label>
+        <select [(ngModel)]="servidorActual.certificado_id">
+          <option [ngValue]="null">— Selecciona un certificado —</option>
+          <option *ngFor="let c of certificados" [ngValue]="c.id">
+            {{ c.nombre_comun }} ({{ c.entidad_emisora }}{{ c.fecha_fin ? ', vence ' + (c.fecha_fin | date:'dd/MM/yyyy') : '' }})
+          </option>
+        </select>
+      </div>
+    </div>
+
+    <div class="form-group">
+      <label>Descripción Servidor</label>
+      <textarea [(ngModel)]="servidorActual.descripcion" rows="3" placeholder="Detalles del servidor..."></textarea>
+    </div>
+
+    <div class="form-group">
+      <label>Comandos</label>
+      <textarea class="textarea-code" [(ngModel)]="servidorActual.comandos" rows="8" placeholder="Comandos de despliegue / administración"></textarea>
+    </div>
+    <div class="form-group">
+      <label>Config</label>
+      <textarea class="textarea-code" [(ngModel)]="servidorActual.configuracion" rows="8" placeholder="Ej: variables de entorno, archivos de configuración..."></textarea>
+    </div>
+
+    <!-- INTEGRACIONES RELACIONALES (solo disponible al editar un servidor ya guardado) -->
+    <div *ngIf="modoEdicion && servidorActual.id" class="panel-integraciones">
+      <p class="aviso-recien-creado" *ngIf="servidorRecienCreado">
+        ✓ Servidor creado correctamente. Ya puedes agregar sus integraciones aquí mismo.
+      </p>
+      <h4>Integraciones (aplicativos/servidores relacionados)</h4>
+
+      <div *ngIf="integracionesServidor.length; else sinIntegracionesServidor">
+        <div *ngFor="let ig of integracionesServidor" class="fila-integracion">
+          <div>
+            <span class="badge badge-plataforma" style="margin-right: 8px;">{{ ig.tipo_destino }}</span>
+            <strong>{{ ig.nombre_destino }}</strong>
+            <span *ngIf="ig.descripcion" class="text-gray"> — {{ ig.descripcion }}</span>
+          </div>
+          <button class="btn-icon delete" (click)="eliminarIntegracionServidor(ig.id)" title="Quitar integración">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="icon-svg"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
+          </button>
+        </div>
+      </div>
+      <ng-template #sinIntegracionesServidor>
+        <p class="text-gray" style="font-size: 13px; margin: 0;">Sin integraciones registradas todavía.</p>
+      </ng-template>
+
+      <div class="agregar-integracion">
+        <div class="form-group">
+          <label>Servidor</label>
+          <app-selector-buscable
+            [opciones]="opcionesIntegracion.servidores"
+            [valor]="nuevaIntegracionServidor.servidor_id"
+            (valorChange)="nuevaIntegracionServidor.servidor_id = $event; nuevaIntegracionServidor.aplicativoSeleccionado = null"
+            placeholder="Busca por hostname o IP..."
+          ></app-selector-buscable>
+        </div>
+        <div class="form-group">
+          <label>Aplicativo (opcional)</label>
+          <select [(ngModel)]="nuevaIntegracionServidor.aplicativoSeleccionado" [disabled]="!nuevaIntegracionServidor.servidor_id" [compareWith]="compararOpcion">
+            <option [ngValue]="null">— Todo el servidor —</option>
+            <option *ngFor="let ap of aplicativosDelServidorElegido(nuevaIntegracionServidor.servidor_id)" [ngValue]="ap">
+              {{ ap.nombre }}
+            </option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Nota (opcional)</label>
+          <input type="text" [(ngModel)]="nuevaIntegracionServidor.descripcion" placeholder="Ej: consulta saldo">
+        </div>
+        <button class="btn-primary" (click)="agregarIntegracionServidor()">+ Agregar</button>
+      </div>
+    </div>
+
+    </div><!-- /ficha -->
+
+    </div>
+    <div class="modal-actions">
+      <button class="btn-secondary" (click)="cerrarModalForm()">Cancelar</button>
+      <button class="btn-primary" (click)="guardarServidor()">Guardar servidor</button>
+    </div>
+  </div>
+</div>
+
+<!-- VISOR DE CÓDIGO (Comandos/Config completos, aparte para no inflar el modal de detalle) -->
+<div class="modal-overlay" *ngIf="codigoVisualizado" (click)="cerrarVisorCodigo()">
+  <div class="modal-content modal-lg visor-codigo" (click)="$event.stopPropagation()">
+    <header class="detail-header" style="border-bottom: none; margin-bottom: 8px; padding-bottom: 0;">
+      <h2 style="margin: 0; font-size: 16px;">{{ codigoVisualizado!.titulo }}</h2>
+      <button class="btn-close" (click)="cerrarVisorCodigo()">✕</button>
+    </header>
+    <pre class="visor-codigo-pre">{{ codigoVisualizado!.contenido }}</pre>
+    <div class="modal-actions">
+      <button class="btn-secondary" (click)="copiarCodigo()">{{ copiadoOk ? '✓ Copiado' : 'Copiar' }}</button>
+      <button class="btn-primary" (click)="cerrarVisorCodigo()">Cerrar</button>
+    </div>
+  </div>
+</div>

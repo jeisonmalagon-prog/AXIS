@@ -1,0 +1,14 @@
+{
+  "_ayuda": "Rangos de puertos por tipo de componente. Los usa la pestaña «Sugerir puertos libres» de Inventario > Servidores > Puertos. Edita este archivo con la norma de arquitectura vigente y reinicia el backend. Cada tipo: id (sin espacios), nombre, desde, hasta, descripcion. «reservados» nunca se sugieren (puertos por defecto de herramientas y servicios conocidos).",
+  "tipos": [
+    { "id": "frontend",    "nombre": "Frontend / Web",                        "desde": 3000,  "hasta": 3499,  "descripcion": "Portales y aplicaciones web (Angular, React, nginx)" },
+    { "id": "api",         "nombre": "API / Gateway",                         "desde": 8000,  "hasta": 8499,  "descripcion": "APIs REST o SOAP que se publican hacia otros sistemas" },
+    { "id": "backend",     "nombre": "Backend / Microservicio interno",       "desde": 8500,  "hasta": 8999,  "descripcion": "Servicios internos que solo consumen otros componentes" },
+    { "id": "worker",      "nombre": "Worker / Batch / Jobs",                 "desde": 7000,  "hasta": 7499,  "descripcion": "Procesos en segundo plano, colas y tareas programadas" },
+    { "id": "integracion", "nombre": "Integración / Mensajería",              "desde": 9100,  "hasta": 9399,  "descripcion": "Kafka, MQ, ESB y conectores" },
+    { "id": "monitoreo",   "nombre": "Monitoreo / Administración",            "desde": 9500,  "hasta": 9899,  "descripcion": "Paneles, métricas y herramientas de administración" },
+    { "id": "datos",       "nombre": "Datos (BD y caché no estándar)",        "desde": 10000, "hasta": 10499, "descripcion": "Bases de datos o cachés publicadas en un puerto distinto al estándar" },
+    { "id": "pruebas",     "nombre": "Pruebas / Temporal",                    "desde": 20000, "hasta": 20999, "descripcion": "Entornos de prueba y despliegues temporales" }
+  ],
+  "reservados": [1433, 1521, 3000, 3306, 3389, 4200, 5000, 5432, 5985, 5986, 6379, 8000, 8080, 8443, 9000, 9090, 9092, 9200, 9443, 27017, 47001]
+}

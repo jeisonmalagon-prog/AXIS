@@ -1,0 +1,925 @@
+<header class="page-header">
+  <div>
+    <h1>Monitoreo de Servidores</h1>
+    <p class="subtitle">Entornos de Portainer en vivo — se actualiza cada pocos segundos</p>
+  </div>
+</header>
+
+<!-- ===================================================
+     ENTORNOS PORTAINER: vista directa de lo que hay en Portainer — no
+     depende de agregar el servidor a ningún grupo.
+==================================================== -->
+<nav class="vistas-monitoreo" role="tablist" aria-label="Vistas de monitoreo">
+  <button type="button" role="tab" *ngFor="let v of vistasMonitoreo" [class.activa]="vistaMonitoreo === v.valor" [attr.aria-selected]="vistaMonitoreo === v.valor" (click)="cambiarVistaMonitoreo(v.valor)">{{ v.etiqueta }}</button>
+</nav>
+
+<app-portainer-salud *ngIf="vistaMonitoreo !== 'entornos'" [vista]="$any(vistaMonitoreo)" [puedeEditar]="puedeEditar"></app-portainer-salud>
+
+<section class="seccion-portainer" *ngIf="vistaMonitoreo === 'entornos'">
+  <div class="seccion-portainer-header">
+    <h2>Entornos Portainer</h2>
+    <div class="portainer-resumen" *ngIf="!cargandoPortainer && portainerConfigurado && entornosPortainer.length > 0">
+      <span class="chip-resumen">{{ resumenPortainerGlobal.entornosArriba }}/{{ resumenPortainerGlobal.entornosTotal }} entornos conectados</span>
+      <span class="chip-resumen chip-resumen-ok" *ngIf="resumenPortainerGlobal.corriendo">{{ resumenPortainerGlobal.corriendo }} contenedores activos</span>
+      <span class="chip-resumen chip-resumen-danger" *ngIf="resumenPortainerGlobal.detenidos">{{ resumenPortainerGlobal.detenidos }} detenidos</span>
+    </div>
+  </div>
+
+  <div class="loading-state" *ngIf="cargandoPortainer">
+    <div class="spinner"></div>
+    <p>Consultando Portainer...</p>
+  </div>
+
+  <div class="empty" *ngIf="!cargandoPortainer && !portainerConfigurado">
+    <p>Portainer todavía no está configurado en el backend (variables PORTAINER_URL/PORTAINER_USER/PORTAINER_PASS en el .env).</p>
+  </div>
+
+  <div class="mensaje-error mensaje-error-seccion" *ngIf="!cargandoPortainer && portainerConfigurado && errorPortainer">
+    <svg class="icono-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M12 3.5l9.5 16.5H2.5L12 3.5z"/>
+      <path d="M12 10v4.5"/>
+      <circle cx="12" cy="17.2" r="0.9" fill="currentColor" stroke="none"/>
+    </svg>
+    No se pudo consultar Portainer: {{ errorPortainer }}
+  </div>
+
+  <div class="empty" *ngIf="!cargandoPortainer && portainerConfigurado && !errorPortainer && entornosPortainer.length === 0">
+    <p>Portainer respondió, pero no tiene ningún entorno configurado todavía.</p>
+  </div>
+
+  <!-- ===================================================
+       ANÁLISIS ESTADÍSTICO: panorama agregado de todo el parque de
+       Portainer — salud de la flota, distribución de contenedores, top
+       consumidores de CPU/memoria, recursos (imágenes/redes/volúmenes) y
+       tendencia histórica. Siempre visible, entre los chips de resumen de
+       arriba y la grilla de tarjetas por entorno.
+  ==================================================== -->
+  <section class="centro-analitica" *ngIf="!cargandoPortainer && portainerConfigurado && entornosPortainer.length > 0">
+    <div class="analitica-header">
+      <div>
+        <h2>Análisis Estadístico</h2>
+        <p class="analitica-subtitulo">Panorama agregado de todos los entornos de Portainer</p>
+      </div>
+      <div style="display:flex; align-items:center; gap:12px;">
+        <button type="button" class="btn-sm" (click)="actualizarAnalisis()" [disabled]="cargandoEstadisticas || cargandoHistorico">
+          ↻ Actualizar análisis
+        </button>
+        <div class="salud-badge">
+          <span class="salud-badge-label">Salud de la flota</span>
+          <span class="salud-badge-valor" [style.color]="colorSaludFlota()">{{ saludFlota.porcentajeSalud }}%</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="kpis-grid">
+      <div class="kpi-card kpi-info" [ngClass]="saludFlota.entornosArriba === saludFlota.entornosTotal ? 'kpi-sano' : 'kpi-riesgo'">
+        <div class="kpi-icono">
+          <svg class="icono-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 17V7a2 2 0 012-2h12a2 2 0 012 2v10"/><path d="M2 17h20"/></svg>
+        </div>
+        <div class="kpi-texto">
+          <span class="kpi-valor">{{ saludFlota.entornosArriba }}/{{ saludFlota.entornosTotal }}</span>
+          <span class="kpi-label">Entornos conectados</span>
+        </div>
+      </div>
+
+      <div class="kpi-card kpi-info kpi-sano">
+        <div class="kpi-icono">
+          <svg class="icono-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="4" width="16" height="16" rx="2"/><path d="M9 9h6v6H9z"/></svg>
+        </div>
+        <div class="kpi-texto">
+          <span class="kpi-valor">{{ saludFlota.cpuTotal }}</span>
+          <span class="kpi-label">CPUs totales</span>
+        </div>
+      </div>
+
+      <div class="kpi-card kpi-info kpi-sano">
+        <div class="kpi-icono">
+          <svg class="icono-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="7" width="18" height="10" rx="1.5"/><path d="M7 7v10M17 7v10"/></svg>
+        </div>
+        <div class="kpi-texto">
+          <span class="kpi-valor">{{ saludFlota.memoriaTotalGb }} <small>GB</small></span>
+          <span class="kpi-label">Memoria total</span>
+        </div>
+      </div>
+
+      <div class="kpi-card kpi-info kpi-sano">
+        <div class="kpi-icono">
+          <svg class="icono-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 13l4 4L19 7"/></svg>
+        </div>
+        <div class="kpi-texto">
+          <span class="kpi-valor">{{ saludFlota.corriendo }}</span>
+          <span class="kpi-label">Contenedores activos</span>
+        </div>
+      </div>
+
+      <div class="kpi-card kpi-info kpi-critico" *ngIf="saludFlota.detenidos">
+        <div class="kpi-icono">
+          <svg class="icono-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6L6 18"/></svg>
+        </div>
+        <div class="kpi-texto">
+          <span class="kpi-valor">{{ saludFlota.detenidos }}</span>
+          <span class="kpi-label">Contenedores detenidos</span>
+        </div>
+      </div>
+
+      <div class="kpi-card kpi-info kpi-sano" *ngIf="estadisticasFlota">
+        <div class="kpi-icono">
+          <svg class="icono-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="9.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg>
+        </div>
+        <div class="kpi-texto">
+          <span class="kpi-valor">{{ estadisticasFlota.imagenesTotal }}</span>
+          <span class="kpi-label">Imágenes</span>
+        </div>
+      </div>
+
+      <div class="kpi-card kpi-info" [ngClass]="claseKpiUso(usoFlota.cpuUsadoPct)">
+        <div class="kpi-icono">
+          <svg class="icono-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="4" width="16" height="16" rx="2"/><path d="M9 9h6v6H9z"/></svg>
+        </div>
+        <div class="kpi-texto">
+          <span class="kpi-valor">{{ usoFlota.cpuUsadoPct }}%</span>
+          <span class="kpi-label">CPU en uso (flota)</span>
+        </div>
+      </div>
+
+      <div class="kpi-card kpi-info" [ngClass]="claseKpiUso(usoFlota.memUsadaPct)">
+        <div class="kpi-icono">
+          <svg class="icono-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="7" width="18" height="10" rx="1.5"/><path d="M7 7v10M17 7v10"/></svg>
+        </div>
+        <div class="kpi-texto">
+          <span class="kpi-valor">{{ usoFlota.memUsadaGb }} <small>GB</small></span>
+          <span class="kpi-label">Memoria en uso ({{ usoFlota.memUsadaPct }}%)</span>
+        </div>
+      </div>
+    </div>
+
+    <p class="sin-datos" *ngIf="errorEstadisticas">{{ errorEstadisticas }}</p>
+
+    <div class="analitica-paneles">
+      <div class="panel-analitica panel-dona">
+        <h3>Distribución de contenedores por estado</h3>
+        <ng-container *ngIf="totalContenedoresFlota > 0; else sinContenedoresFlota">
+          <div class="dona-contenedor">
+            <svg class="dona-svg" viewBox="0 0 160 160">
+              <circle class="dona-fondo" cx="80" cy="80" r="70"></circle>
+              <circle
+                *ngFor="let seg of distribucionEstadosFlota"
+                class="dona-segmento"
+                cx="80" cy="80" r="70"
+                [attr.stroke]="seg.color"
+                [attr.stroke-dasharray]="seg.dasharray"
+                [attr.stroke-dashoffset]="seg.dashoffset"
+              ></circle>
+            </svg>
+            <div class="dona-centro">
+              <span class="dona-total">{{ totalContenedoresFlota }}</span>
+              <span class="dona-total-label">contenedores</span>
+            </div>
+          </div>
+          <div class="dona-leyenda">
+            <div class="leyenda-item" *ngFor="let seg of distribucionEstadosFlota">
+              <span class="leyenda-punto" [ngClass]="seg.clase"></span>
+              {{ seg.etiqueta }}
+              <b>{{ seg.cantidad }}</b>
+            </div>
+          </div>
+        </ng-container>
+        <ng-template #sinContenedoresFlota>
+          <p class="sin-datos">Todavía no hay contenedores para mostrar.</p>
+        </ng-template>
+      </div>
+
+      <div class="panel-analitica panel-atencion">
+        <h3>Top consumidores de CPU</h3>
+        <p class="panel-atencion-subtitulo" *ngIf="topConsumidoresCpu.length">Contenedores corriendo con mayor uso de CPU en este momento</p>
+        <div class="tabla-atencion" *ngIf="topConsumidoresCpu.length; else sinConsumoCpu">
+          <div class="tabla-atencion-header cols-3">
+            <span>Contenedor</span>
+            <span>Entorno</span>
+            <span class="col-derecha">CPU</span>
+          </div>
+          <div class="tabla-atencion-fila cols-3" *ngFor="let fila of topConsumidoresCpu; trackBy: trackFilaConsumo">
+            <span [title]="fila.nombre">{{ fila.nombre }}</span>
+            <span [title]="fila.entorno">{{ fila.entorno }}</span>
+            <span class="col-derecha mono">{{ fila.cpuTexto }}</span>
+          </div>
+        </div>
+        <ng-template #sinConsumoCpu>
+          <p class="sin-datos">No hay contenedores corriendo en este momento.</p>
+        </ng-template>
+
+        <h3 style="margin-top:18px;">Top consumidores de memoria</h3>
+        <div class="tabla-atencion" *ngIf="topConsumidoresMemoria.length; else sinConsumoMem">
+          <div class="tabla-atencion-header cols-3">
+            <span>Contenedor</span>
+            <span>Entorno</span>
+            <span class="col-derecha">Memoria</span>
+          </div>
+          <div class="tabla-atencion-fila cols-3" *ngFor="let fila of topConsumidoresMemoria; trackBy: trackFilaConsumo">
+            <span [title]="fila.nombre">{{ fila.nombre }}</span>
+            <span [title]="fila.entorno">{{ fila.entorno }}</span>
+            <span class="col-derecha mono">{{ fila.memTexto }}</span>
+          </div>
+        </div>
+        <ng-template #sinConsumoMem>
+          <p class="sin-datos">No hay contenedores corriendo en este momento.</p>
+        </ng-template>
+      </div>
+    </div>
+
+    <div class="analitica-paneles-secundarios">
+      <div class="panel-analitica">
+        <h3>Tendencia de CPU promedio</h3>
+        <ng-container *ngIf="haySuficienteHistorico; else sinHistoricoCpu">
+          <div class="sparkline-header">
+            <span class="sparkline-valor">{{ ultimoValorHistorico('cpuPromedio') }}%</span>
+            <span class="sparkline-tendencia" [ngClass]="'tendencia-' + tendenciaHistorico('cpuPromedio')">
+              <svg class="icono-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" *ngIf="tendenciaHistorico('cpuPromedio') === 'subiendo'"><path d="M4 17l6-6 4 4 6-8"/><path d="M14 7h6v6"/></svg>
+              <svg class="icono-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" *ngIf="tendenciaHistorico('cpuPromedio') === 'bajando'"><path d="M4 7l6 6 4-4 6 8"/><path d="M14 17h6v-6"/></svg>
+              <svg class="icono-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" *ngIf="tendenciaHistorico('cpuPromedio') === 'estable'"><path d="M4 12h16"/></svg>
+            </span>
+          </div>
+          <svg class="sparkline-svg" viewBox="0 0 300 44" preserveAspectRatio="none">
+            <polyline class="sparkline-linea" [attr.points]="rutaSparkline('cpuPromedio')"></polyline>
+          </svg>
+        </ng-container>
+        <ng-template #sinHistoricoCpu>
+          <p class="sin-datos">{{ errorHistorico || 'Aún no hay suficiente histórico — las muestras se guardan cada 10 minutos.' }}</p>
+        </ng-template>
+      </div>
+
+      <div class="panel-analitica">
+        <h3>Tendencia de memoria usada</h3>
+        <ng-container *ngIf="haySuficienteHistorico; else sinHistoricoMem">
+          <div class="sparkline-header">
+            <span class="sparkline-valor">{{ ultimoValorHistorico('memUsadaGb') }} <small>GB</small></span>
+            <span class="sparkline-tendencia" [ngClass]="'tendencia-' + tendenciaHistorico('memUsadaGb')">
+              <svg class="icono-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" *ngIf="tendenciaHistorico('memUsadaGb') === 'subiendo'"><path d="M4 17l6-6 4 4 6-8"/><path d="M14 7h6v6"/></svg>
+              <svg class="icono-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" *ngIf="tendenciaHistorico('memUsadaGb') === 'bajando'"><path d="M4 7l6 6 4-4 6 8"/><path d="M14 17h6v-6"/></svg>
+              <svg class="icono-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" *ngIf="tendenciaHistorico('memUsadaGb') === 'estable'"><path d="M4 12h16"/></svg>
+            </span>
+          </div>
+          <svg class="sparkline-svg" viewBox="0 0 300 44" preserveAspectRatio="none">
+            <polyline class="sparkline-linea sparkline-linea-mem" [attr.points]="rutaSparkline('memUsadaGb')"></polyline>
+          </svg>
+        </ng-container>
+        <ng-template #sinHistoricoMem>
+          <p class="sin-datos">{{ errorHistorico || 'Aún no hay suficiente histórico — las muestras se guardan cada 10 minutos.' }}</p>
+        </ng-template>
+      </div>
+
+      <div class="panel-analitica" *ngIf="estadisticasFlota">
+        <h3>Imágenes, redes y volúmenes (toda la flota)</h3>
+        <div class="stats-fila">
+          <div class="stat-bloque">
+            <span class="stat-valor">{{ estadisticasFlota.imagenesTotal }}</span>
+            <span class="stat-label">Imágenes</span>
+          </div>
+          <div class="stat-bloque">
+            <span class="stat-valor">{{ estadisticasFlota.imagenesSinTag }}</span>
+            <span class="stat-label">Sin tag</span>
+          </div>
+          <div class="stat-bloque">
+            <span class="stat-valor">{{ estadisticasFlota.espacioImagenesTexto }}</span>
+            <span class="stat-label">Espacio usado</span>
+          </div>
+        </div>
+        <div class="stats-fila">
+          <div class="stat-bloque">
+            <span class="stat-valor">{{ estadisticasFlota.redesTotal }}</span>
+            <span class="stat-label">Redes</span>
+          </div>
+          <div class="stat-bloque">
+            <span class="stat-valor">{{ estadisticasFlota.redesSinUsar }}</span>
+            <span class="stat-label">Redes sin usar</span>
+          </div>
+          <div class="stat-bloque">
+            <span class="stat-valor">{{ estadisticasFlota.volumenesTotal }}</span>
+            <span class="stat-label">Volúmenes</span>
+          </div>
+          <div class="stat-bloque">
+            <span class="stat-valor">{{ estadisticasFlota.volumenesSinUsar }}</span>
+            <span class="stat-label">Volúmenes sin usar</span>
+          </div>
+        </div>
+        <p class="panel-nota">Agregado de {{ estadisticasFlota.entornosConsultados }} entorno(s) activo(s).</p>
+      </div>
+      <div class="panel-analitica" *ngIf="cargandoEstadisticas && !estadisticasFlota">
+        <h3>Imágenes, redes y volúmenes (toda la flota)</h3>
+        <p class="sin-datos">Consultando...</p>
+      </div>
+    </div>
+
+    <!-- ===================================================
+         CONSUMO POR SERVIDOR: complementa el "top consumidores" de arriba
+         (por contenedor) con la misma cuenta agregada por servidor — CPU y
+         memoria en uso frente a la capacidad total de cada host.
+    ==================================================== -->
+    <div class="panel-analitica panel-atencion panel-analitica-ancho" *ngIf="consumoServidores.length">
+      <h3>Consumo por servidor</h3>
+      <p class="panel-atencion-subtitulo">
+        CPU y memoria en uso (suma de los contenedores corriendo) frente a la capacidad total de cada servidor conectado
+      </p>
+      <div class="tabla-atencion tabla-atencion-servidores">
+        <div class="tabla-atencion-header cols-4-servidores">
+          <span>Servidor</span>
+          <span class="col-derecha">CPU en uso</span>
+          <span class="col-derecha">Memoria en uso</span>
+          <span class="col-derecha">Contenedores</span>
+        </div>
+        <div class="tabla-atencion-fila cols-4-servidores" *ngFor="let s of consumoServidoresOrdenados; trackBy: trackServidorConsumo">
+          <span [title]="s.ip ? s.nombre + ' (' + s.ip + ')' : s.nombre">
+            {{ s.nombre }}<span class="ip-servidor mono" *ngIf="s.ip"> {{ s.ip }}</span>
+          </span>
+          <span class="col-derecha mono" [ngClass]="'texto-' + claseNivelUso(s.cpuUsadoPct)">
+            {{ s.cpuUsadoPct }}% <small *ngIf="s.cpuCores">/ {{ s.cpuCores }} CPUs</small>
+          </span>
+          <span class="col-derecha mono" [ngClass]="'texto-' + claseNivelUso(s.memUsadaPct)">
+            {{ s.memUsadaGb }}GB <small>({{ s.memUsadaPct }}%)</small>
+          </span>
+          <span class="col-derecha">{{ s.corriendo }}/{{ s.total }}</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===================================================
+       FILTROS DE BÚSQUEDA: búsqueda por nombre/IP + chips de estado sobre
+       la grilla de tarjetas de entorno.
+  ==================================================== -->
+  <div class="barra-filtros" *ngIf="!cargandoPortainer && entornosPortainer.length > 0">
+    <div class="filtro-busqueda">
+      <svg class="icono-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+        <circle cx="11" cy="11" r="7"/>
+        <path d="M21 21l-4.3-4.3"/>
+      </svg>
+      <input
+        type="text"
+        placeholder="Buscar entorno por nombre o IP..."
+        [(ngModel)]="filtroTextoEntorno"
+        name="filtroTextoEntorno"
+      />
+      <button type="button" class="filtro-limpiar-texto" *ngIf="filtroTextoEntorno" (click)="filtroTextoEntorno = ''" title="Limpiar búsqueda">
+        <svg class="icono-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M6 6l12 12M18 6L6 18"/>
+        </svg>
+      </button>
+    </div>
+
+    <div class="filtro-chips">
+      <button
+        type="button"
+        class="chip-filtro chip-filtro-sano"
+        [class.chip-filtro-activo]="filtroEstadoEntorno === 'conectados'"
+        (click)="alternarFiltroEstadoEntorno('conectados')"
+      >
+        Conectados <b>{{ resumenPortainerGlobal.entornosArriba }}</b>
+      </button>
+      <button
+        type="button"
+        class="chip-filtro chip-filtro-critico"
+        [class.chip-filtro-activo]="filtroEstadoEntorno === 'caidos'"
+        (click)="alternarFiltroEstadoEntorno('caidos')"
+      >
+        Caídos <b>{{ resumenPortainerGlobal.entornosTotal - resumenPortainerGlobal.entornosArriba }}</b>
+      </button>
+      <button
+        type="button"
+        class="chip-filtro chip-filtro-riesgo"
+        [class.chip-filtro-activo]="filtroSoloConDetenidos"
+        (click)="toggleFiltroSoloConDetenidos()"
+      >
+        Con detenidos <b>{{ entornosConDetenidos }}</b>
+      </button>
+      <button type="button" class="chip-filtro" *ngIf="hayFiltrosEntornoActivos" (click)="limpiarFiltrosEntorno()">
+        ✕ Limpiar filtros
+      </button>
+    </div>
+  </div>
+
+  <div class="empty" *ngIf="!cargandoPortainer && entornosPortainer.length > 0 && entornosFiltrados.length === 0">
+    <p>No hay entornos que coincidan con la búsqueda o los filtros aplicados.</p>
+  </div>
+
+  <div class="grid-tarjetas grid-tarjetas-portainer" *ngIf="!cargandoPortainer && entornosFiltrados.length > 0">
+    <div class="tarjeta-servidor" *ngFor="let e of entornosFiltrados; trackBy: trackEntorno" [class.tarjeta-error]="e.estadoConexion !== 'up'">
+
+      <div class="tarjeta-header">
+        <div class="tarjeta-header-info">
+          <span class="punto-estado" [class.punto-error]="e.estadoConexion !== 'up'"></span>
+          <span class="mono nombre-servidor">{{ e.nombre }}</span>
+          <span class="ip-servidor mono" *ngIf="e.ipInventario">{{ e.ipInventario }}</span>
+        </div>
+        <span class="chip-resumen" *ngIf="entornoCoincidePorContenedor(e)" title="Este entorno aparece porque uno de sus contenedores coincide con la búsqueda">
+          Coincide por contenedor
+        </span>
+      </div>
+
+      <ng-container *ngIf="e.estadoConexion === 'up'; else entornoCaido">
+        <div class="metricas-principales" *ngIf="e.cpuCores !== null || e.memoriaTotalGb !== null">
+          <div class="metrica" *ngIf="e.cpuCores !== null">
+            <div class="metrica-texto">
+              <span class="metrica-valor">{{ e.cpuCores }}</span>
+              <span class="metrica-label">CPUs</span>
+            </div>
+          </div>
+          <div class="metrica" *ngIf="e.memoriaTotalGb !== null">
+            <div class="metrica-texto">
+              <span class="metrica-valor">{{ e.memoriaTotalGb }} <small>GB</small></span>
+              <span class="metrica-label">Memoria total</span>
+            </div>
+          </div>
+          <div class="metrica" *ngIf="e.dockerVersion">
+            <div class="metrica-texto">
+              <span class="metrica-valor">{{ e.dockerVersion }}</span>
+              <span class="metrica-label">Docker</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Consumo real de CPU/memoria: suma de lo que reportan los
+             contenedores corriendo, frente a la capacidad total del host.
+             Portainer no expone el uso real del sistema operativo sin una
+             extensión de pago — esto es lo más cercano disponible. -->
+        <div class="metricas-uso" *ngIf="e.cpuCores || e.memoriaTotalGb">
+          <div class="barra-item" *ngIf="e.cpuCores">
+            <div class="barra-item-header">
+              <span class="barra-item-nombre">CPU en uso</span>
+              <span class="barra-item-valor">{{ utilizacionDeEntorno(e).cpuUsadoPct }}%</span>
+            </div>
+            <div class="barra-fondo">
+              <div
+                class="barra-relleno"
+                [ngClass]="claseNivelUso(utilizacionDeEntorno(e).cpuUsadoPct)"
+                [style.width.%]="utilizacionDeEntorno(e).cpuUsadoPct"
+              ></div>
+            </div>
+          </div>
+          <div class="barra-item" *ngIf="e.memoriaTotalGb">
+            <div class="barra-item-header">
+              <span class="barra-item-nombre">Memoria en uso</span>
+              <span class="barra-item-valor">{{ utilizacionDeEntorno(e).memUsadaGb }} / {{ e.memoriaTotalGb }} GB</span>
+            </div>
+            <div class="barra-fondo">
+              <div
+                class="barra-relleno"
+                [ngClass]="claseNivelUso(utilizacionDeEntorno(e).memUsadaPct)"
+                [style.width.%]="utilizacionDeEntorno(e).memUsadaPct"
+              ></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="seccion-docker">
+          <div class="docker-header">
+            <div class="entorno-tabs">
+              <button type="button" class="pestana-btn" [class.pestana-activa]="pestanaEntornoActiva(e.id) === 'contenedores'" (click)="cambiarPestanaEntorno(e.id, 'contenedores')">Contenedores</button>
+              <button type="button" class="pestana-btn" [class.pestana-activa]="pestanaEntornoActiva(e.id) === 'imagenes'" (click)="cambiarPestanaEntorno(e.id, 'imagenes')">Imágenes</button>
+              <button type="button" class="pestana-btn" [class.pestana-activa]="pestanaEntornoActiva(e.id) === 'redes'" (click)="cambiarPestanaEntorno(e.id, 'redes')">Redes</button>
+              <button type="button" class="pestana-btn" [class.pestana-activa]="pestanaEntornoActiva(e.id) === 'volumenes'" (click)="cambiarPestanaEntorno(e.id, 'volumenes')">Volúmenes</button>
+              <button type="button" class="pestana-btn" [class.pestana-activa]="pestanaEntornoActiva(e.id) === 'eventos'" (click)="cambiarPestanaEntorno(e.id, 'eventos')">Eventos</button>
+              <button type="button" class="pestana-btn" [class.pestana-activa]="pestanaEntornoActiva(e.id) === 'host'" (click)="cambiarPestanaEntorno(e.id, 'host')">Host</button>
+            </div>
+            <div class="docker-header-meta" *ngIf="pestanaEntornoActiva(e.id) === 'contenedores'">
+              <div class="docker-resumen">
+                <span class="chip-resumen chip-resumen-ok" *ngIf="e.resumenContenedores?.corriendo">
+                  {{ e.resumenContenedores?.corriendo }} activos
+                </span>
+                <span class="chip-resumen chip-resumen-danger" *ngIf="e.resumenContenedores?.detenidos">
+                  {{ e.resumenContenedores?.detenidos }} detenidos
+                </span>
+              </div>
+              <div class="filtro-busqueda filtro-busqueda-mini">
+                <svg class="icono-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                  <circle cx="11" cy="11" r="7"/>
+                  <path d="M21 21l-4.3-4.3"/>
+                </svg>
+                <input
+                  type="text"
+                  placeholder="Buscar contenedor..."
+                  [ngModel]="textoBusquedaContenedor(e.id)"
+                  (ngModelChange)="actualizarBusquedaContenedor(e.id, $event)"
+                  name="busquedaContenedor{{ e.id }}"
+                />
+                <button type="button" class="filtro-limpiar-texto" *ngIf="textoBusquedaContenedor(e.id)" (click)="limpiarBusquedaContenedor(e.id)" title="Limpiar búsqueda">
+                  <svg class="icono-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M6 6l12 12M18 6L6 18"/>
+                  </svg>
+                </button>
+              </div>
+              <label class="toggle-filtro">
+                <input type="checkbox" [checked]="mostrarSoloActivosEntorno[e.id]" (change)="toggleSoloActivosEntorno(e.id)" />
+                Solo activos
+              </label>
+            </div>
+          </div>
+
+          <!-- PESTAÑA: CONTENEDORES -->
+          <ng-container *ngIf="pestanaEntornoActiva(e.id) === 'contenedores'">
+            <div class="fila-contenedor fila-contenedor-header">
+              <span class="punto-contenedor punto-contenedor-header"></span>
+              <div class="contenedor-cuerpo">
+                <div class="contenedor-linea-superior">
+                  <span class="header-label">Contenedor</span>
+                  <span class="header-label header-label-derecha">Estado</span>
+                </div>
+                <div class="contenedor-linea-inferior">
+                  <span class="header-label">Imagen</span>
+                  <span class="header-label">Recursos</span>
+                  <span class="header-label">Puertos</span>
+                </div>
+              </div>
+            </div>
+
+            <div class="lista-contenedores">
+              <div
+                class="fila-contenedor fila-contenedor-clic"
+                *ngFor="let c of contenedoresOrdenadosEntorno(e.id, e.contenedores); trackBy: trackContenedor"
+                (click)="abrirDetalle(e.id, c.id)"
+              >
+                <span class="punto-contenedor" [ngClass]="claseEstadoContenedor(c.estado)"></span>
+                <div class="contenedor-cuerpo">
+                  <div class="contenedor-linea-superior">
+                    <span class="contenedor-nombre mono" [title]="c.nombre">{{ c.nombre }}</span>
+                    <span class="chevron-detalle">›</span>
+                    <span class="contenedor-estado-texto" [ngClass]="claseEstadoContenedor(c.estado)" [title]="c.estadoTexto">
+                      {{ c.estadoTexto }}
+                    </span>
+                  </div>
+                  <div class="contenedor-linea-inferior">
+                    <span class="contenedor-imagen mono" [title]="c.imagen">{{ c.imagen }}</span>
+                    <span class="contenedor-recursos mono" *ngIf="c.recursos"
+                          [title]="'Red: ' + c.recursos.redIO + ' · Disco: ' + c.recursos.discoIO + ' · PIDs: ' + c.recursos.pids">
+                      CPU {{ c.recursos.cpuPorcentaje }} · Mem {{ c.recursos.memPorcentaje }}
+                    </span>
+                    <span class="contenedor-puertos mono" *ngIf="c.puertos" [title]="c.puertos">
+                      {{ resumenPuertos(c.puertos) }}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              <div class="sin-contenedores" *ngIf="!contenedoresOrdenadosEntorno(e.id, e.contenedores).length">
+                No hay contenedores {{ mostrarSoloActivosEntorno[e.id] ? 'activos' : '' }} para mostrar.
+              </div>
+            </div>
+          </ng-container>
+
+          <!-- PESTAÑA: IMÁGENES -->
+          <div class="pestana-recurso" *ngIf="pestanaEntornoActiva(e.id) === 'imagenes'">
+            <div class="recurso-header">
+              <button type="button" class="btn-sm" (click)="cargarImagenes(e.id)">↻ Actualizar</button>
+              <span class="logs-nota" *ngIf="estadoImagenes(e.id) === 'listo'">{{ datosImagenes(e.id).length }} imágenes</span>
+            </div>
+            <p class="sin-datos" *ngIf="estadoImagenes(e.id) === 'cargando'">Cargando imágenes...</p>
+            <div class="mensaje-error" *ngIf="estadoImagenes(e.id) === 'error'">{{ mensajeErrorImagenes(e.id) }}</div>
+
+            <div class="lista-contenedores" *ngIf="estadoImagenes(e.id) === 'listo'">
+              <div class="fila-recurso" *ngFor="let img of datosImagenes(e.id); trackBy: trackImagen">
+                <div class="recurso-cuerpo">
+                  <div class="recurso-linea-superior">
+                    <span class="recurso-nombre mono" [title]="img.tags.join(', ')">{{ img.tags.length ? img.tags.join(', ') : '(sin tag) · ' + img.id }}</span>
+                    <span class="chip-resumen chip-resumen-ok" *ngIf="img.enUso">En uso</span>
+                  </div>
+                  <div class="recurso-linea-inferior">
+                    <span class="recurso-meta mono">{{ img.tamano }}</span>
+                    <span class="recurso-meta mono" *ngIf="img.creadaEn">{{ img.creadaEn | date:'dd/MM/yyyy HH:mm' }}</span>
+                    <span class="recurso-meta mono">{{ img.id }}</span>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  class="btn-accion btn-accion-kill"
+                  *ngIf="puedeEditar"
+                  [disabled]="recursoEnCurso('imagen', e.id, img.id)"
+                  (click)="eliminarImagenAccion(e.id, img)"
+                >{{ recursoEnCurso('imagen', e.id, img.id) ? 'Procesando…' : 'Eliminar' }}</button>
+              </div>
+
+              <div class="sin-contenedores" *ngIf="!datosImagenes(e.id).length">No hay imágenes para mostrar.</div>
+            </div>
+          </div>
+
+          <!-- PESTAÑA: REDES -->
+          <div class="pestana-recurso" *ngIf="pestanaEntornoActiva(e.id) === 'redes'">
+            <div class="recurso-header">
+              <button type="button" class="btn-sm" (click)="cargarRedes(e.id)">↻ Actualizar</button>
+              <span class="logs-nota" *ngIf="estadoRedes(e.id) === 'listo'">{{ datosRedes(e.id).length }} redes</span>
+            </div>
+            <p class="sin-datos" *ngIf="estadoRedes(e.id) === 'cargando'">Cargando redes...</p>
+            <div class="mensaje-error" *ngIf="estadoRedes(e.id) === 'error'">{{ mensajeErrorRedes(e.id) }}</div>
+
+            <div class="lista-contenedores" *ngIf="estadoRedes(e.id) === 'listo'">
+              <div class="fila-recurso" *ngFor="let r of datosRedes(e.id); trackBy: trackRed">
+                <div class="recurso-cuerpo">
+                  <div class="recurso-linea-superior">
+                    <span class="recurso-nombre mono" [title]="r.nombre">{{ r.nombre }}</span>
+                    <span class="chip-resumen" *ngIf="r.contenedoresConectados">{{ r.contenedoresConectados }} conectados</span>
+                  </div>
+                  <div class="recurso-linea-inferior">
+                    <span class="recurso-meta mono">{{ r.driver }}</span>
+                    <span class="recurso-meta mono">{{ r.scope }}</span>
+                    <span class="recurso-meta mono" *ngIf="r.interna">interna</span>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  class="btn-accion btn-accion-kill"
+                  *ngIf="puedeEditar && !redEsPredeterminada(r.nombre)"
+                  [disabled]="recursoEnCurso('red', e.id, r.id)"
+                  (click)="eliminarRedAccion(e.id, r)"
+                >{{ recursoEnCurso('red', e.id, r.id) ? 'Procesando…' : 'Eliminar' }}</button>
+              </div>
+
+              <div class="sin-contenedores" *ngIf="!datosRedes(e.id).length">No hay redes para mostrar.</div>
+            </div>
+          </div>
+
+          <!-- PESTAÑA: VOLÚMENES -->
+          <div class="pestana-recurso" *ngIf="pestanaEntornoActiva(e.id) === 'volumenes'">
+            <div class="recurso-header">
+              <button type="button" class="btn-sm" (click)="cargarVolumenes(e.id)">↻ Actualizar</button>
+              <span class="logs-nota" *ngIf="estadoVolumenes(e.id) === 'listo'">{{ datosVolumenes(e.id).length }} volúmenes</span>
+            </div>
+            <p class="sin-datos" *ngIf="estadoVolumenes(e.id) === 'cargando'">Cargando volúmenes...</p>
+            <div class="mensaje-error" *ngIf="estadoVolumenes(e.id) === 'error'">{{ mensajeErrorVolumenes(e.id) }}</div>
+
+            <div class="lista-contenedores" *ngIf="estadoVolumenes(e.id) === 'listo'">
+              <div class="fila-recurso" *ngFor="let v of datosVolumenes(e.id); trackBy: trackVolumen">
+                <div class="recurso-cuerpo">
+                  <div class="recurso-linea-superior">
+                    <span class="recurso-nombre mono" [title]="v.nombre">{{ v.nombre }}</span>
+                    <span class="chip-resumen chip-resumen-ok" *ngIf="v.enUso">En uso</span>
+                  </div>
+                  <div class="recurso-linea-inferior">
+                    <span class="recurso-meta mono">{{ v.driver }}</span>
+                    <span class="recurso-meta mono" [title]="v.puntoMontaje">{{ v.puntoMontaje }}</span>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  class="btn-accion btn-accion-kill"
+                  *ngIf="puedeEditar"
+                  [disabled]="recursoEnCurso('volumen', e.id, v.nombre)"
+                  (click)="eliminarVolumenAccion(e.id, v)"
+                >{{ recursoEnCurso('volumen', e.id, v.nombre) ? 'Procesando…' : 'Eliminar' }}</button>
+              </div>
+
+              <div class="sin-contenedores" *ngIf="!datosVolumenes(e.id).length">No hay volúmenes para mostrar.</div>
+            </div>
+          </div>
+
+          <!-- PESTAÑA: EVENTOS -->
+          <div class="pestana-recurso" *ngIf="pestanaEntornoActiva(e.id) === 'eventos'">
+            <div class="recurso-header">
+              <select class="selector-rango" [value]="minutosEventosActivo(e.id)" (change)="cambiarRangoEventos(e.id, $any($event.target).value)">
+                <option value="30">Últimos 30 min</option>
+                <option value="60">Última hora</option>
+                <option value="360">Últimas 6 horas</option>
+                <option value="1440">Últimas 24 horas</option>
+              </select>
+              <button type="button" class="btn-sm" (click)="cargarEventos(e.id)">↻ Actualizar</button>
+              <span class="logs-nota" *ngIf="estadoEventos(e.id) === 'listo'">{{ datosEventos(e.id).length }} eventos</span>
+            </div>
+            <p class="sin-datos" *ngIf="estadoEventos(e.id) === 'cargando'">Cargando eventos...</p>
+            <div class="mensaje-error" *ngIf="estadoEventos(e.id) === 'error'">{{ mensajeErrorEventos(e.id) }}</div>
+
+            <div class="lista-contenedores" *ngIf="estadoEventos(e.id) === 'listo'">
+              <div class="fila-evento" *ngFor="let ev of datosEventos(e.id); trackBy: trackEvento">
+                <span class="evento-tiempo mono">{{ ev.tiempo | date:'dd/MM HH:mm:ss' }}</span>
+                <span class="chip-resumen evento-tipo">{{ ev.tipo }}</span>
+                <span class="evento-accion mono">{{ ev.accion }}</span>
+                <span class="evento-recurso mono" [title]="ev.recurso">{{ ev.recurso }}</span>
+              </div>
+
+              <div class="sin-contenedores" *ngIf="!datosEventos(e.id).length">No hay eventos en el rango seleccionado.</div>
+            </div>
+          </div>
+
+          <!-- PESTAÑA: HOST -->
+          <div class="pestana-recurso" *ngIf="pestanaEntornoActiva(e.id) === 'host'">
+            <div class="recurso-header">
+              <button type="button" class="btn-sm" (click)="cargarHost(e.id)">↻ Actualizar</button>
+            </div>
+            <p class="sin-datos" *ngIf="estadoHost(e.id) === 'cargando'">Cargando datos del host...</p>
+            <div class="mensaje-error" *ngIf="estadoHost(e.id) === 'error'">{{ mensajeErrorHost(e.id) }}</div>
+
+            <ng-container *ngIf="datosHost(e.id) as h">
+              <div class="detalle-grid">
+                <div class="contenedor-detalle-fila">
+                  <span class="contenedor-detalle-etiqueta">Host</span>
+                  <span class="mono">{{ h.nombreHost }}</span>
+                </div>
+                <div class="contenedor-detalle-fila">
+                  <span class="contenedor-detalle-etiqueta">Sistema operativo</span>
+                  <span>{{ h.sistemaOperativo }}</span>
+                </div>
+                <div class="contenedor-detalle-fila">
+                  <span class="contenedor-detalle-etiqueta">Arquitectura</span>
+                  <span>{{ h.arquitectura }}</span>
+                </div>
+                <div class="contenedor-detalle-fila">
+                  <span class="contenedor-detalle-etiqueta">Kernel</span>
+                  <span class="mono">{{ h.kernelVersion }}</span>
+                </div>
+                <div class="contenedor-detalle-fila">
+                  <span class="contenedor-detalle-etiqueta">Versión Docker</span>
+                  <span class="mono">{{ h.versionDocker }}</span>
+                </div>
+                <div class="contenedor-detalle-fila" *ngIf="h.cpus !== null">
+                  <span class="contenedor-detalle-etiqueta">CPUs</span>
+                  <span>{{ h.cpus }}</span>
+                </div>
+                <div class="contenedor-detalle-fila" *ngIf="h.memoriaTotalGb !== null">
+                  <span class="contenedor-detalle-etiqueta">Memoria total</span>
+                  <span>{{ h.memoriaTotalGb }} GB</span>
+                </div>
+                <div class="contenedor-detalle-fila">
+                  <span class="contenedor-detalle-etiqueta">Driver de almacenamiento</span>
+                  <span>{{ h.driverAlmacenamiento }}</span>
+                </div>
+                <div class="contenedor-detalle-fila contenedor-detalle-fila-ancha">
+                  <span class="contenedor-detalle-etiqueta">Directorio raíz Docker</span>
+                  <span class="mono">{{ h.directorioRaizDocker }}</span>
+                </div>
+                <div class="contenedor-detalle-fila">
+                  <span class="contenedor-detalle-etiqueta">Logging driver</span>
+                  <span>{{ h.loggingDriver }}</span>
+                </div>
+                <div class="contenedor-detalle-fila">
+                  <span class="contenedor-detalle-etiqueta">Cgroup driver</span>
+                  <span>{{ h.cgroupDriver }}</span>
+                </div>
+              </div>
+
+              <div class="detalle-bloque">
+                <span class="detalle-bloque-titulo">Contenedores en este host</span>
+                <div class="fila-espacio-docker">
+                  <span class="chip-espacio" *ngIf="h.contenedoresTotal !== null">
+                    <span class="chip-espacio-tipo">Total</span>
+                    <span class="chip-espacio-valor">{{ h.contenedoresTotal }}</span>
+                  </span>
+                  <span class="chip-espacio" *ngIf="h.contenedoresCorriendo !== null">
+                    <span class="chip-espacio-tipo">Corriendo</span>
+                    <span class="chip-espacio-valor">{{ h.contenedoresCorriendo }}</span>
+                  </span>
+                  <span class="chip-espacio" *ngIf="h.contenedoresPausados !== null">
+                    <span class="chip-espacio-tipo">Pausados</span>
+                    <span class="chip-espacio-valor">{{ h.contenedoresPausados }}</span>
+                  </span>
+                  <span class="chip-espacio" *ngIf="h.contenedoresDetenidos !== null">
+                    <span class="chip-espacio-tipo">Detenidos</span>
+                    <span class="chip-espacio-valor">{{ h.contenedoresDetenidos }}</span>
+                  </span>
+                  <span class="chip-espacio" *ngIf="h.imagenesTotal !== null">
+                    <span class="chip-espacio-tipo">Imágenes</span>
+                    <span class="chip-espacio-valor">{{ h.imagenesTotal }}</span>
+                  </span>
+                </div>
+              </div>
+            </ng-container>
+          </div>
+        </div>
+      </ng-container>
+
+      <ng-template #entornoCaido>
+        <div class="mensaje-error">
+          <svg class="icono-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M12 3.5l9.5 16.5H2.5L12 3.5z"/>
+            <path d="M12 10v4.5"/>
+            <circle cx="12" cy="17.2" r="0.9" fill="currentColor" stroke="none"/>
+          </svg>
+          {{ e.error || 'Entorno desconectado en Portainer.' }}
+        </div>
+      </ng-template>
+    </div>
+  </div>
+</section>
+
+<!-- ===================================================
+     MODAL DE DETALLE DE CONTENEDOR: vive fuera de la grilla de entornos a
+     propósito — así el refresco automático de la lista (cada 6s) nunca lo
+     toca ni le resetea el scroll mientras se están viendo logs o el detalle.
+     Se identifica sólo por ids, así que sigue mostrando datos en vivo.
+==================================================== -->
+<div class="modal-overlay" *ngIf="seleccion" (click)="cerrarDetalle()">
+  <div class="modal-contenedor" (click)="$event.stopPropagation()">
+
+    <div class="modal-header">
+      <div class="modal-header-info">
+        <span
+          class="punto-estado modal-punto"
+          *ngIf="contenedorSeleccionado as cSel"
+          [ngClass]="claseEstadoContenedor(cSel.estado)"
+        ></span>
+        <div class="modal-header-texto">
+          <h3 class="mono">{{ contenedorSeleccionado?.nombre || seleccion?.contenedorId }}</h3>
+          <span class="modal-subtitulo">
+            {{ entornoSeleccionado?.nombre }}
+            <ng-container *ngIf="contenedorSeleccionado as cSel">· {{ cSel.estadoTexto }}</ng-container>
+          </span>
+        </div>
+      </div>
+      <button type="button" class="modal-cerrar" (click)="cerrarDetalle()" title="Cerrar">
+        <svg class="icono-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+          <path d="M6 6l12 12M18 6L6 18"/>
+        </svg>
+      </button>
+    </div>
+
+    <ng-container *ngIf="contenedorSeleccionado as c; else contenedorNoDisponible">
+      <!-- ACCIONES: sólo administradores (puedeEditar) -->
+      <div class="contenedor-acciones" *ngIf="puedeEditar">
+        <button
+          type="button"
+          class="btn-accion"
+          *ngFor="let a of accionesDisponibles(c.estado)"
+          [ngClass]="'btn-accion-' + a"
+          [disabled]="accionEnCursoPara(seleccion!.entornoId, c.id)"
+          (click)="ejecutarAccion(seleccion!.entornoId, c.id, c.nombre, a)"
+        >{{ accionEnCursoPara(seleccion!.entornoId, c.id) ? 'Procesando…' : etiquetaAccion(a) }}</button>
+      </div>
+
+      <div class="contenedor-pestanas">
+        <button type="button" class="pestana-btn" [class.pestana-activa]="pestanaActiva(seleccion!.entornoId, c.id) === 'detalle'" (click)="cambiarPestana(seleccion!.entornoId, c.id, 'detalle')">Detalle</button>
+        <button type="button" class="pestana-btn" [class.pestana-activa]="pestanaActiva(seleccion!.entornoId, c.id) === 'logs'" (click)="cambiarPestana(seleccion!.entornoId, c.id, 'logs')">Logs</button>
+      </div>
+
+      <div class="modal-body">
+        <!-- PESTAÑA: DETALLE (inspect) -->
+        <div class="pestana-contenido" *ngIf="pestanaActiva(seleccion!.entornoId, c.id) === 'detalle'">
+          <p class="sin-datos" *ngIf="estadoDetalle(seleccion!.entornoId, c.id) === 'cargando'">Cargando detalle...</p>
+          <div class="mensaje-error" *ngIf="estadoDetalle(seleccion!.entornoId, c.id) === 'error'">{{ mensajeErrorDetalle(seleccion!.entornoId, c.id) }}</div>
+
+          <ng-container *ngIf="datosDetalle(seleccion!.entornoId, c.id) as d">
+            <div class="detalle-grid">
+              <div class="contenedor-detalle-fila contenedor-detalle-fila-ancha">
+                <span class="contenedor-detalle-etiqueta">Comando</span>
+                <span class="mono">{{ d.comando || '(sin comando)' }}</span>
+              </div>
+              <div class="contenedor-detalle-fila" *ngIf="d.creadoEn">
+                <span class="contenedor-detalle-etiqueta">Creado</span>
+                <span>{{ d.creadoEn | date:'dd/MM/yyyy HH:mm' }}</span>
+              </div>
+              <div class="contenedor-detalle-fila" *ngIf="d.iniciadoEn">
+                <span class="contenedor-detalle-etiqueta">Iniciado</span>
+                <span>{{ d.iniciadoEn | date:'dd/MM/yyyy HH:mm' }}</span>
+              </div>
+              <div class="contenedor-detalle-fila" *ngIf="d.terminadoEn">
+                <span class="contenedor-detalle-etiqueta">Terminado</span>
+                <span>{{ d.terminadoEn | date:'dd/MM/yyyy HH:mm' }}</span>
+              </div>
+              <div class="contenedor-detalle-fila">
+                <span class="contenedor-detalle-etiqueta">Reinicio</span>
+                <span>{{ d.politicaReinicio }}<ng-container *ngIf="d.reinicios">&nbsp;({{ d.reinicios }})</ng-container></span>
+              </div>
+              <div class="contenedor-detalle-fila">
+                <span class="contenedor-detalle-etiqueta">Variables de entorno</span>
+                <span>{{ d.variablesEntorno }}</span>
+              </div>
+              <div class="contenedor-detalle-fila" *ngIf="d.redes?.length">
+                <span class="contenedor-detalle-etiqueta">Redes</span>
+                <span>{{ d.redes.join(', ') }}</span>
+              </div>
+              <div class="contenedor-detalle-fila" *ngIf="d.privilegiado">
+                <span class="contenedor-detalle-etiqueta">Privilegios</span>
+                <span class="chip-resumen chip-resumen-danger">Privilegiado</span>
+              </div>
+            </div>
+
+            <div class="detalle-bloque" *ngIf="d.volumenes?.length">
+              <span class="detalle-bloque-titulo">Volúmenes</span>
+              <div class="contenedor-detalle-volumenes">
+                <div class="mono" *ngFor="let v of d.volumenes">{{ v.origen }} → {{ v.destino }} ({{ v.modo }})</div>
+              </div>
+            </div>
+
+            <div class="detalle-bloque" *ngIf="objectKeys(d.etiquetas).length">
+              <span class="detalle-bloque-titulo">Etiquetas</span>
+              <div class="fila-espacio-docker">
+                <span class="chip-espacio" *ngFor="let k of objectKeys(d.etiquetas)" [title]="d.etiquetas[k]">
+                  <span class="chip-espacio-tipo">{{ k }}</span>
+                </span>
+              </div>
+            </div>
+          </ng-container>
+        </div>
+
+        <!-- PESTAÑA: LOGS -->
+        <div class="pestana-contenido" *ngIf="pestanaActiva(seleccion!.entornoId, c.id) === 'logs'">
+          <div class="logs-header">
+            <button type="button" class="btn-sm" (click)="recargarLogs(seleccion!.entornoId, c.id)">↻ Actualizar</button>
+            <span class="logs-nota">Últimas 200 líneas</span>
+          </div>
+          <p class="sin-datos" *ngIf="estadoLogs(seleccion!.entornoId, c.id) === 'cargando'">Cargando logs...</p>
+          <div class="mensaje-error" *ngIf="estadoLogs(seleccion!.entornoId, c.id) === 'error'">{{ mensajeErrorLogs(seleccion!.entornoId, c.id) }}</div>
+          <pre class="logs-contenido" *ngIf="estadoLogs(seleccion!.entornoId, c.id) === 'listo'">{{ textoLogs(seleccion!.entornoId, c.id) || '(sin salida)' }}</pre>
+        </div>
+      </div>
+    </ng-container>
+
+    <ng-template #contenedorNoDisponible>
+      <p class="sin-datos modal-sin-datos">Este contenedor ya no está disponible (puede haber sido eliminado o el entorno se desconectó).</p>
+    </ng-template>
+  </div>
+</div>

@@ -1,0 +1,66 @@
+<div class="er-barra">
+  <div class="er-niveles" role="group" aria-label="Profundidad del diagrama">
+    <span>Profundidad</span>
+    <button type="button" [class.on]="profundidad === 1" (click)="cambiarProfundidad.emit(1)">Directas</button>
+    <button type="button" [class.on]="profundidad === 2" (click)="cambiarProfundidad.emit(2)">2 niveles</button>
+  </div>
+  <div class="er-leyenda" aria-hidden="true">
+    <span><i class="lg lg-pk">PK</i> llave primaria</span>
+    <span><i class="lg lg-fk">FK</i> llave foránea</span>
+    <span><svg width="26" height="12" viewBox="0 0 26 12"><path d="M0 6 H26 M0 6 L8 1 M0 6 L8 11" class="lg-linea"/></svg> muchos → uno</span>
+  </div>
+  <span class="er-espacio"></span>
+  <div class="er-zoom">
+    <button type="button" (click)="pz.zoomCentro(1.25)" aria-label="Acercar" title="Acercar">+</button>
+    <button type="button" (click)="pz.zoomCentro(0.8)" aria-label="Alejar" title="Alejar">−</button>
+    <button type="button" (click)="centrar()" title="Volver a la tabla central">Centrar</button>
+    <button type="button" (click)="verTodo()" title="Encuadrar todo el diagrama">Ver todo</button>
+  </div>
+</div>
+
+<div class="aviso-aviso" *ngIf="grafo.truncado">El diagrama se limitó a las tablas más cercanas porque esta tabla tiene muchísimas relaciones.</div>
+
+<div class="er-lienzo" #lienzo>
+  <svg #svg class="er-svg" [attr.viewBox]="'0 0 ' + pz.ancho + ' ' + pz.alto" role="img"
+       [attr.aria-label]="'Diagrama de relaciones de ' + (diseno.nodos.length || 0) + ' tabla(s)'"
+       (wheel)="pz.rueda($event, svg)" (pointerdown)="pz.bajar($event, svg)" (pointermove)="pz.mover($event, svg)"
+       (pointerup)="pz.soltar()" (pointerleave)="pz.soltar()">
+    <g [attr.transform]="pz.transform">
+      <!-- Relaciones -->
+      <g class="aristas">
+        <g *ngFor="let e of diseno.aristas" class="arista" [class.viva]="esVecina(e)" [class.hover]="aristaActiva === e"
+           [class.apagada]="nodoActivo && !esVecina(e)"
+           (mouseenter)="aristaActiva = e" (mouseleave)="aristaActiva = null">
+          <path class="arista-hit" [attr.d]="e.d"></path>
+          <path class="arista-linea" [attr.d]="e.d"></path>
+          <path class="arista-marca" [attr.d]="e.pata"></path>
+          <path class="arista-marca" [attr.d]="e.barra"></path>
+          <title>{{ fkInfo(e) }}</title>
+        </g>
+      </g>
+      <!-- Tablas -->
+      <g *ngFor="let n of diseno.nodos" class="nodo" [class.centro]="esCentro(n)" [class.vista]="n.n.tipo === 'VISTA'"
+         [class.activo]="nodoActivo === n.n.id" [attr.transform]="'translate(' + n.x + ' ' + n.y + ')'"
+         [attr.tabindex]="esCentro(n) ? null : 0" [attr.role]="esCentro(n) ? null : 'button'"
+         [attr.aria-label]="esCentro(n) ? null : 'Abrir ' + nombreCompleto(n)"
+         (mouseenter)="nodoActivo = n.n.id" (mouseleave)="nodoActivo = null" (focus)="nodoActivo = n.n.id" (blur)="nodoActivo = null"
+         (click)="clicNodo(n)" (keydown)="teclaNodo($event, n)">
+        <rect class="nodo-caja" [attr.width]="n.w" [attr.height]="n.h" rx="10"></rect>
+        <path class="nodo-cab" [attr.d]="'M0 10 A10 10 0 0 1 10 0 H' + (n.w - 10) + ' A10 10 0 0 1 ' + n.w + ' 10 V' + CAB + ' H0 Z'"></path>
+        <text class="nodo-titulo" x="12" y="16">{{ recortar(nombreCompleto(n), 30) }}</text>
+        <text class="nodo-bd" x="12" y="29" *ngIf="!esCentro(n)">{{ recortar(n.n.bd, 34) }}{{ n.n.tipo === 'VISTA' ? ' · vista' : '' }}</text>
+        <text class="nodo-bd nodo-bd-c" x="12" y="29" *ngIf="esCentro(n)">{{ n.n.bd }}{{ n.n.tipo === 'VISTA' ? ' · vista' : '' }}</text>
+        <g *ngFor="let c of n.n.columnas; let i = index" [attr.transform]="'translate(0 ' + (CAB + i * FILA) + ')'" class="fila">
+          <rect class="fila-fondo" [attr.width]="n.w" [attr.height]="FILA" *ngIf="i % 2 === 1"></rect>
+          <text class="marca marca-pk" x="10" y="15" *ngIf="c.pk">PK</text>
+          <text class="marca marca-fk" x="10" y="15" *ngIf="!c.pk && c.fk">FK</text>
+          <text class="col-nombre" [class.es-pk]="c.pk" x="32" y="15">{{ recortar(c.nombre, 22) }}</text>
+          <text class="col-tipo" [attr.x]="n.w - 10" y="15" text-anchor="end">{{ recortar(c.tipo, 14) }}{{ c.nulo ? '' : ' *' }}</text>
+        </g>
+        <text class="mas" x="12" [attr.y]="CAB + n.n.columnas.length * FILA + 15" *ngIf="n.n.masColumnas > 0">… y {{ n.n.masColumnas }} columna(s) más</text>
+      </g>
+    </g>
+  </svg>
+  <div class="er-info" *ngIf="aristaActiva as a">{{ fkInfo(a) }}</div>
+  <p class="er-ayuda">Rueda del mouse para acercar · arrastra para mover · clic en una tabla para abrirla · <span class="mono">*</span> = no admite nulos</p>
+</div>

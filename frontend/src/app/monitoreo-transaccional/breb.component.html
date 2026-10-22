@@ -1,0 +1,471 @@
+<div class="pro">
+  <header class="cab">
+    <span class="sobre">Monitoreo transaccional</span>
+    <h1>BREB</h1>
+    <p class="sub">Todo lo que pasa con las transacciones de BreB en un solo lugar: lo que reporta Redeban, el recorrido de cada transacción en los logs, errores, clientes, llaves y QR. Todo es de solo lectura y los datos personales se muestran ocultos.</p>
+  </header>
+
+  @if (aviso) { <div class="toast" role="status">{{ aviso }}</div> }
+  @if (errorEstado) { <div class="error-banner" role="alert">{{ errorEstado }}</div> }
+  @if (cargandoEstado && !estado) { <div class="esq"><span></span><span></span></div> }
+
+  @if (estado; as e) {
+    <!-- ============ barra de conexiones ============ -->
+    <div class="conexiones" [class.conexiones--mal]="!hayDatos">
+      <ul class="fuentes">
+        @for (f of fuentes; track f.id) {
+          <li>
+            <span class="punto" [class.punto--mal]="!e.conexiones[f.id].configurada"></span>
+            <div><strong>{{ f.t }}</strong><span class="suave">{{ textoConexion(f.id) }}</span></div>
+          </li>
+        }
+      </ul>
+      <div class="conexiones__acc">
+        @if (hayDatos) { <button type="button" class="btn" (click)="actualizar()" [disabled]="cargandoActual">{{ cargandoActual ? 'Consultando…' : '↻ Actualizar' }}</button> }
+        @if (e.esAdminPod) { <button type="button" class="btn" [class.btn--marca]="!hayDatos" (click)="abrirConexiones()">⚙ {{ hayDatos ? 'Conexiones' : 'Configurar conexiones' }}</button> }
+      </div>
+    </div>
+    @if (!hayDatos) {
+      <div class="nota nota--aviso">
+        @if (e.esAdminPod) { Configura al menos la base SQL Server de BreB o los logs de MariaDB (y, si quieres consultar llaves, el servicio de llaves). Las claves se guardan cifradas y no vuelven a mostrarse. }
+        @else { Todavía no hay conexiones configuradas. Pide al ADMIN_POD que las configure desde esta misma pantalla. }
+      </div>
+    }
+
+    @if (hayDatos || hayApi) {
+      <nav class="pestanas" role="tablist" aria-label="Secciones de BREB">
+        @for (p of pestanas; track p.id) {
+          <button type="button" role="tab" class="pestana" [class.pestana--act]="pestana === p.id" [attr.aria-selected]="pestana === p.id" (click)="irA(p.id)">{{ p.texto }}</button>
+        }
+      </nav>
+    }
+
+    <!-- ===================== RESUMEN ===================== -->
+    @if (hayDatos && pestana === 'resumen') {
+      <form class="filtros" (ngSubmit)="cargarResumen()">
+        <label class="campo">Período
+          <select [(ngModel)]="rResumen.rango" name="rr" (ngModelChange)="cambiarRangoResumen()">@for (r of rangosTodos; track r.id) { <option [value]="r.id">{{ r.texto }}</option> }</select>
+        </label>
+        @if (rResumen.rango === 'custom') {
+          <label class="campo">Desde<input type="datetime-local" [(ngModel)]="rResumen.desde" name="rd" /></label>
+          <label class="campo">Hasta<input type="datetime-local" [(ngModel)]="rResumen.hasta" name="rh" /></label>
+          <button type="submit" class="btn btn--marca" [disabled]="cargandoResumen">Aplicar</button>
+        }
+        <label class="check"><input type="checkbox" [(ngModel)]="auto" name="auto" /> Actualizar cada minuto</label>
+        @if (resumen) { <span class="suave">{{ resumen.ventana?.etiqueta }} · consultado {{ resumen.generadoEn.slice(11, 19) }} UTC</span> }
+      </form>
+      @if (errorResumen) { <div class="error-banner" role="alert">{{ errorResumen }}</div> }
+      @if (cargandoResumen && !resumen) { <div class="esq"><span></span><span></span><span></span></div> }
+      @if (resumen; as r) {
+        @for (a of avisosOrigen(r.origenes); track a) { <div class="nota nota--aviso">{{ a }}</div> }
+        <section class="hallazgos" aria-label="Hallazgos">
+          @for (h of r.hallazgos; track $index) { <div class="hallazgo" [class]="'hallazgo h-' + h.nivel"><span class="hallazgo__tag">{{ nivelTexto(h.nivel) }}</span><span>{{ h.texto }}</span></div> }
+        </section>
+
+        @if (tarjetas.length) {
+          <section class="kpis" aria-label="Indicadores de transacciones">
+            @for (t of tarjetas; track t.titulo) {
+              <article class="kpi" [class]="'kpi kpi--' + t.tono" [attr.title]="t.ayuda || null">
+                <span class="kpi__tit">{{ t.titulo }}</span>
+                <strong class="kpi__val">{{ t.valor }}</strong>
+                @if (t.sub) { <span class="kpi__sub">{{ t.sub }}</span> }
+              </article>
+            }
+          </section>
+          <div class="atajos">
+            <button type="button" class="mini" (click)="verTransacciones('rechazada')">Ver las rechazadas</button>
+            <button type="button" class="mini" (click)="verTransacciones('pendiente')">Ver las pendientes</button>
+            <button type="button" class="mini" (click)="verTransacciones('problema')">Ver todas con problema</button>
+            <button type="button" class="mini" (click)="irA('errores')">Ir a errores</button>
+          </div>
+        }
+
+        <div class="rejilla">
+          <app-prospeccion-bloque [bloque]="dSerHora" titulo="Transacciones por hora del día" vista="serie"></app-prospeccion-bloque>
+          <app-prospeccion-bloque [bloque]="dSerDia" titulo="Transacciones por día" vista="serie"></app-prospeccion-bloque>
+          <app-prospeccion-bloque [bloque]="dPorEstado" titulo="Por estado de la transacción" vista="barras"></app-prospeccion-bloque>
+          <app-prospeccion-bloque [bloque]="dPorDireccion" titulo="Dirección del dinero" vista="barras"></app-prospeccion-bloque>
+          <app-prospeccion-bloque [bloque]="r.bloques['por_monto']" titulo="Distribución por monto" vista="barras"></app-prospeccion-bloque>
+        </div>
+        <div class="apilado">
+          <app-prospeccion-bloque [bloque]="r.bloques['por_iniciador']" titulo="Cómo se inició (QR, directorio…)"></app-prospeccion-bloque>
+          <app-prospeccion-bloque [bloque]="r.bloques['por_caso']" titulo="Por caso de uso y escenario"></app-prospeccion-bloque>
+          <app-prospeccion-bloque [bloque]="r.bloques['por_banco']" titulo="Entidades contraparte"></app-prospeccion-bloque>
+          <app-prospeccion-bloque [bloque]="r.bloques['por_codigos']" titulo="Códigos de respuesta y motivos"></app-prospeccion-bloque>
+        </div>
+
+        @if (tarjetasLog.length) {
+          <h2 class="seccion">Lo que dicen los logs</h2>
+          @if (r.logsRecortados) { <p class="suave">Los logs son muy grandes: se consultan hasta los últimos 3 días del rango.</p> }
+          <section class="kpis" aria-label="Indicadores de logs">
+            @for (t of tarjetasLog; track t.titulo) {
+              <article class="kpi" [class]="'kpi kpi--' + t.tono"><span class="kpi__tit">{{ t.titulo }}</span><strong class="kpi__val kpi__val--chico">{{ t.valor }}</strong>@if (t.sub) { <span class="kpi__sub">{{ t.sub }}</span> }</article>
+            }
+          </section>
+          <app-prospeccion-bloque [bloque]="dLogErrHora" titulo="Errores y débitos por hora (logs)" vista="serie"></app-prospeccion-bloque>
+        }
+      }
+    }
+
+    <!-- ===================== TRANSACCIONES ===================== -->
+    @if (hayDatos && pestana === 'transacciones') {
+      <form class="filtros filtros--rejilla" (ngSubmit)="cargarTransacciones()">
+        <label class="campo">Período
+          <select [(ngModel)]="ft.rango" name="tr">@for (r of rangosTodos; track r.id) { <option [value]="r.id">{{ r.texto }}</option> }</select>
+        </label>
+        @if (ft.rango === 'custom') {
+          <label class="campo">Desde<input type="datetime-local" [(ngModel)]="ft.desde" name="td" /></label>
+          <label class="campo">Hasta<input type="datetime-local" [(ngModel)]="ft.hasta" name="th" /></label>
+        }
+        <label class="campo">Estado
+          <select [(ngModel)]="ft.estado" name="te">
+            <option value="">Todos</option><option value="aprobada">Aprobadas</option><option value="rechazada">Rechazadas</option><option value="pendiente">Pendientes</option>
+            <option value="sinestado">Sin estado</option><option value="problema">Con problema (no aprobadas)</option>
+          </select>
+        </label>
+        <label class="campo">Dirección
+          <select [(ngModel)]="ft.direccion" name="tdir"><option value="">Todas</option><option value="saliente">Salientes</option><option value="entrante">Entrantes</option><option value="interna">Internas (OnUs)</option></select>
+        </label>
+        <label class="campo">Caso de uso<input type="text" [(ngModel)]="ft.caso" name="tc" placeholder="P2P, P2M…" autocomplete="off" /></label>
+        <label class="campo">Escenario<input type="text" [(ngModel)]="ft.escenario" name="tes" placeholder="PAGO, ENVIO…" autocomplete="off" /></label>
+        <label class="campo">Iniciador<input type="text" [(ngModel)]="ft.iniciador" name="ti" placeholder="QRCODE, DIRECTORIO…" autocomplete="off" /></label>
+        <label class="campo">Entidad contraparte<input type="text" [(ngModel)]="ft.entidad" name="ten" placeholder="0001" autocomplete="off" /></label>
+        <label class="campo">Monto mínimo<input type="number" [(ngModel)]="ft.montoMin" name="tmn" min="0" /></label>
+        <label class="campo">Monto máximo<input type="number" [(ngModel)]="ft.montoMax" name="tmx" min="0" /></label>
+        <label class="campo campo--ancho">CUS, documento, cuenta o llave exactos<input type="text" [(ngModel)]="ft.q" name="tq" placeholder="Búsqueda exacta" autocomplete="off" /></label>
+        <label class="campo">Tope
+          <select [(ngModel)]="ft.top" name="tt"><option [ngValue]="50">50</option><option [ngValue]="100">100</option><option [ngValue]="250">250</option><option [ngValue]="500">500</option></select>
+        </label>
+        <div class="acciones-filtro">
+          <button type="submit" class="btn btn--marca" [disabled]="cargandoTrx">{{ cargandoTrx ? 'Consultando…' : 'Buscar' }}</button>
+          <button type="button" class="btn" (click)="limpiarTransacciones()" [disabled]="cargandoTrx">Limpiar</button>
+        </div>
+      </form>
+      @if (errorTrx) { <div class="error-banner" role="alert">{{ errorTrx }}</div> }
+      @if (cargandoTrx && !trx) { <div class="esq"><span></span><span></span><span></span></div> }
+      @if (trx; as t) {
+        @for (a of avisosOrigen(t.origenes); track a) { <div class="nota nota--aviso">{{ a }}</div> }
+        <app-prospeccion-bloque [bloque]="t.bloques['transacciones']" titulo="Transacciones" (fila)="abrir(t.bloques['transacciones'], $event)" etiquetaClic="Ver detalle" vacio="Ninguna transacción coincide con estos filtros."></app-prospeccion-bloque>
+      }
+    }
+
+    <!-- ===================== ERRORES ===================== -->
+    @if (hayDatos && pestana === 'errores') {
+      <form class="filtros" (ngSubmit)="cargarErrores()">
+        <label class="campo">Período
+          <select [(ngModel)]="rErrores.rango" name="er" (ngModelChange)="cambiarRangoErrores()">@for (r of rangosErrores; track r.id) { <option [value]="r.id">{{ r.texto }}</option> }</select>
+        </label>
+        @if (rErrores.rango === 'custom') {
+          <label class="campo">Desde<input type="datetime-local" [(ngModel)]="rErrores.desde" name="ed" /></label>
+          <label class="campo">Hasta<input type="datetime-local" [(ngModel)]="rErrores.hasta" name="eh" /></label>
+          <button type="submit" class="btn btn--marca" [disabled]="cargandoErrores">Aplicar</button>
+        }
+        <span class="suave">Rechazos, débitos sin crédito, transacciones lentas, repetidas y errores de los logs (máximo 31 días; los logs, 3 días).</span>
+      </form>
+      @if (errorErrores) { <div class="error-banner" role="alert">{{ errorErrores }}</div> }
+      @if (cargandoErrores && !errores) { <div class="esq"><span></span><span></span><span></span></div> }
+      @if (errores; as r) {
+        @for (a of avisosOrigen(r.origenes); track a) { <div class="nota nota--aviso">{{ a }}</div> }
+        <section class="hallazgos" aria-label="Hallazgos">
+          @for (h of r.hallazgos; track $index) { <div class="hallazgo" [class]="'hallazgo h-' + h.nivel"><span class="hallazgo__tag">{{ nivelTexto(h.nivel) }}</span><span>{{ h.texto }}</span></div> }
+        </section>
+
+        <h2 class="seccion">En SQL Server (trx.Redeban)</h2>
+        <div class="apilado">
+          <app-prospeccion-bloque [bloque]="r.bloques['err_motivos']" titulo="Motivos y códigos de rechazo" (fila)="abrirTrx($event)" etiquetaClic="Ver ejemplo"></app-prospeccion-bloque>
+          <app-prospeccion-bloque [bloque]="r.bloques['err_inconsistentes']" titulo="Débito aceptado y crédito rechazado (posible reverso)" (fila)="abrirTrx($event)"></app-prospeccion-bloque>
+          <app-prospeccion-bloque [bloque]="r.bloques['err_lista']" titulo="Transacciones con problema" (fila)="abrirTrx($event)"></app-prospeccion-bloque>
+          <app-prospeccion-bloque [bloque]="r.bloques['err_lentas']" titulo="Transacciones más lentas" (fila)="abrirTrx($event)"></app-prospeccion-bloque>
+          <app-prospeccion-bloque [bloque]="r.bloques['err_duplicadas']" titulo="CUS repetidos en trx.Redeban" (fila)="abrirTrx($event)"></app-prospeccion-bloque>
+          <app-prospeccion-bloque [bloque]="r.bloques['err_clientes']" titulo="Clientes con más intentos no aprobados"></app-prospeccion-bloque>
+        </div>
+
+        <h2 class="seccion">En los logs de MariaDB</h2>
+        @if (r.logsRecortados) { <p class="suave">Los logs son muy grandes: se consultan hasta los últimos 3 días del rango.</p> }
+        <div class="rejilla">
+          <app-prospeccion-bloque [bloque]="r.bloques['log_kpis']" titulo="Actividad y errores en logs"></app-prospeccion-bloque>
+          <app-prospeccion-bloque [bloque]="dErrLogHora" titulo="Errores y débitos por hora" vista="serie"></app-prospeccion-bloque>
+        </div>
+        <div class="apilado">
+          <app-prospeccion-bloque [bloque]="r.bloques['log_err_grupos']" titulo="Errores agrupados por componente y mensaje"></app-prospeccion-bloque>
+          <app-prospeccion-bloque [bloque]="r.bloques['log_err_recientes']" titulo="Errores más recientes" (fila)="abrirLog($event)" etiquetaClic="Ver Rq/Rs"></app-prospeccion-bloque>
+          <app-prospeccion-bloque [bloque]="r.bloques['log_flujo_incompleto']" titulo="Transacciones con el recorrido incompleto" (fila)="abrirTrx($event)"></app-prospeccion-bloque>
+          <app-prospeccion-bloque [bloque]="r.bloques['log_avisos']" titulo="Avisos de mensajería (no son errores de la transacción)"></app-prospeccion-bloque>
+        </div>
+      }
+
+      <!-- reconciliación -->
+      @if (haySql && hayLog) {
+        <section class="panel">
+          <header>
+            <h3>Reconciliación entre el core y trx.Redeban</h3>
+            <p>Compara los débitos que quedaron en los logs (PAIN 008) con las transacciones salientes que reportó Redeban: sirve para encontrar un débito sin reporte, o un reporte sin débito. Rango máximo: 2 días.</p>
+          </header>
+          <form class="filtros" (ngSubmit)="cargarReconciliacion()">
+            <label class="campo">Período
+              <select [(ngModel)]="rRec.rango" name="rcr">@for (r of rangosRec; track r.id) { <option [value]="r.id">{{ r.texto }}</option> }</select>
+            </label>
+            @if (rRec.rango === 'custom') {
+              <label class="campo">Desde<input type="datetime-local" [(ngModel)]="rRec.desde" name="rcd" /></label>
+              <label class="campo">Hasta<input type="datetime-local" [(ngModel)]="rRec.hasta" name="rch" /></label>
+            }
+            <button type="submit" class="btn btn--marca" [disabled]="cargandoRec">{{ cargandoRec ? 'Comparando…' : 'Comparar' }}</button>
+          </form>
+          @if (errorRec) { <div class="error-banner" role="alert">{{ errorRec }}</div> }
+          @if (rec; as c) {
+            <section class="hallazgos" aria-label="Resultado de la reconciliación">
+              @for (h of c.hallazgos; track $index) { <div class="hallazgo" [class]="'hallazgo h-' + h.nivel"><span class="hallazgo__tag">{{ nivelTexto(h.nivel) }}</span><span>{{ h.texto }}</span></div> }
+            </section>
+            <section class="kpis kpis--chicos">
+              <article class="kpi"><span class="kpi__tit">Débitos en logs</span><strong class="kpi__val kpi__val--chico">{{ c.resumen.debitosEnLog.toLocaleString('es-CO') }}</strong></article>
+              <article class="kpi"><span class="kpi__tit">Salientes en trx.Redeban</span><strong class="kpi__val kpi__val--chico">{{ c.resumen.salientesEnBd.toLocaleString('es-CO') }}</strong></article>
+              <article class="kpi kpi--ok"><span class="kpi__tit">Coinciden</span><strong class="kpi__val kpi__val--chico">{{ c.resumen.coinciden.toLocaleString('es-CO') }}</strong></article>
+              <article class="kpi" [class.kpi--mal]="c.resumen.logSinBd > 0"><span class="kpi__tit">Débito sin reporte</span><strong class="kpi__val kpi__val--chico">{{ c.resumen.logSinBd.toLocaleString('es-CO') }}</strong></article>
+              <article class="kpi" [class.kpi--pend]="c.resumen.bdSinLog > 0"><span class="kpi__tit">Reporte sin débito en logs</span><strong class="kpi__val kpi__val--chico">{{ c.resumen.bdSinLog.toLocaleString('es-CO') }}</strong></article>
+            </section>
+            <div class="apilado">
+              <app-prospeccion-bloque [bloque]="c.bloques['rec_log_sin_bd']" titulo="Débito en logs sin registro en trx.Redeban" (fila)="abrirTrx($event)" vacio="Todos los débitos de los logs están en trx.Redeban."></app-prospeccion-bloque>
+              <app-prospeccion-bloque [bloque]="c.bloques['rec_bd_sin_log']" titulo="Salientes en trx.Redeban sin débito en logs" (fila)="abrirTrx($event)" vacio="Todas las salientes tienen su débito en los logs."></app-prospeccion-bloque>
+            </div>
+          }
+        </section>
+      }
+    }
+
+    <!-- ===================== CLIENTE ===================== -->
+    @if (hayDatos && pestana === 'cliente') {
+      <form class="buscador" (ngSubmit)="buscarCliente()">
+        <label class="campo campo--doc">Número de documento
+          <input type="text" [(ngModel)]="docInput" name="doc" autocomplete="off" maxlength="20" placeholder="Ej. 1020453573" />
+        </label>
+        <label class="campo">Transacciones de
+          <select [(ngModel)]="diasCliente" name="dc"><option [ngValue]="7">Últimos 7 días</option><option [ngValue]="30">Últimos 30 días</option><option [ngValue]="90">Últimos 90 días</option></select>
+        </label>
+        <label class="campo">Logs de
+          <select [(ngModel)]="diasLogsCliente" name="dlc"><option [ngValue]="1">Último día</option><option [ngValue]="3">Últimos 3 días</option><option [ngValue]="7">Últimos 7 días</option></select>
+        </label>
+        <button type="submit" class="btn btn--marca" [disabled]="cargandoCliente">{{ cargandoCliente ? 'Buscando…' : 'Buscar' }}</button>
+      </form>
+      <p class="suave aviso-privacidad">Reúne lo que hay del documento: cliente, llaves, QR, transacciones y logs. Los datos personales salen ocultos y la búsqueda queda en la auditoría con el documento enmascarado.</p>
+      @if (errorCliente) { <div class="error-banner" role="alert">{{ errorCliente }}</div> }
+      @if (cargandoCliente && !cliente) { <div class="esq"><span></span><span></span><span></span></div> }
+      @if (cliente; as c) {
+        @for (a of avisosOrigen(c.origenes); track a) { <div class="nota nota--aviso">{{ a }}</div> }
+        <section class="cliente-cab">
+          <div>
+            <span class="suave">Documento</span><strong class="mono grande">{{ c.enmascarado }}</strong>
+            @if (usuarioCliente; as u) { <span class="suave">{{ u.persona }} · {{ u.tipoDocumento }}</span> }
+          </div>
+          <div class="chips">
+            @for (x of resumenCliente; track x.etiqueta) { <span class="chip" [class.chip--cero]="x.n === 0"><b>{{ x.n }}</b> {{ x.etiqueta }}</span> }
+          </div>
+          @if (hayApi && c.encontrado) { <button type="button" class="btn" (click)="consultarLlavesDelCliente()">Consultar sus llaves en BreB</button> }
+        </section>
+        <section class="hallazgos" aria-label="Hallazgos del cliente">
+          @for (h of c.hallazgos; track $index) { <div class="hallazgo" [class]="'hallazgo h-' + h.nivel"><span class="hallazgo__tag">{{ nivelTexto(h.nivel) }}</span><span>{{ h.texto }}</span></div> }
+        </section>
+
+        <section class="panel">
+          <header><h3>Línea de tiempo</h3><p>Transacciones, cambios de llave, QR y errores de los logs, del más reciente al más antiguo. Haz clic en una transacción para ver su detalle.</p></header>
+          @if (c.lineaTiempo.length) {
+            <ol class="tiempo">
+              @for (ev of c.lineaTiempo; track $index) {
+                <li [class]="'tl-' + ev.tipo">
+                  <span class="tiempo__fecha">{{ ev.fecha.slice(0, 19) }}</span>
+                  <span class="tiempo__punto"></span>
+                  <span class="tiempo__txt">
+                    <span class="tiempo__tipo">{{ etiquetaEvento(ev.tipo) }}</span> {{ ev.titulo }}@if (ev.detalle) { <span class="suave"> · {{ ev.detalle }}</span> }
+                    @if (ev.cus) { <button type="button" class="enlace mono" (click)="abrirPorCus(ev.cus)" title="Ver el detalle de esta transacción">{{ ev.cus.slice(0, 12) }}…</button> }
+                  </span>
+                </li>
+              }
+            </ol>
+          } @else { <p class="vacio">No hay eventos con fecha para este documento en el período.</p> }
+        </section>
+
+        <div class="apilado">
+          <app-prospeccion-bloque [bloque]="c.bloques['cl_usuario']" titulo="Cliente en BreB" [plegable]="true"></app-prospeccion-bloque>
+          <app-prospeccion-bloque [bloque]="c.bloques['cl_llaves']" titulo="Llaves registradas" [plegable]="true"></app-prospeccion-bloque>
+          <app-prospeccion-bloque [bloque]="c.bloques['cl_resumen_trx']" titulo="Resumen de transacciones" [plegable]="true"></app-prospeccion-bloque>
+          <app-prospeccion-bloque [bloque]="c.bloques['cl_trx']" titulo="Transacciones del cliente" [plegable]="true" (fila)="abrirTrx($event)"></app-prospeccion-bloque>
+          <app-prospeccion-bloque [bloque]="c.bloques['cl_historico']" titulo="Histórico de cambios de llave" [plegable]="true" [abierto]="false"></app-prospeccion-bloque>
+          <app-prospeccion-bloque [bloque]="c.bloques['cl_qr']" titulo="Códigos QR" [plegable]="true" [abierto]="false"></app-prospeccion-bloque>
+          <app-prospeccion-bloque [bloque]="c.bloques['cl_log_kpis']" titulo="Actividad en los logs" [plegable]="true"></app-prospeccion-bloque>
+          <app-prospeccion-bloque [bloque]="c.bloques['cl_log_trx']" titulo="Transacciones vistas en los logs" [plegable]="true" (fila)="abrirTrx($event)"></app-prospeccion-bloque>
+          <app-prospeccion-bloque [bloque]="c.bloques['cl_log_errores']" titulo="Errores del cliente en los logs" [plegable]="true" (fila)="abrirLog($event)" etiquetaClic="Ver Rq/Rs"></app-prospeccion-bloque>
+        </div>
+      }
+    }
+
+    <!-- ===================== LLAVES Y QR ===================== -->
+    @if (haySql && pestana === 'llaves') {
+      <form class="filtros" (ngSubmit)="cargarLlaves()">
+        <label class="campo">Período
+          <select [(ngModel)]="rLlaves.rango" name="lr" (ngModelChange)="cambiarRangoLlaves()">@for (r of rangosTodos; track r.id) { <option [value]="r.id">{{ r.texto }}</option> }</select>
+        </label>
+        @if (rLlaves.rango === 'custom') {
+          <label class="campo">Desde<input type="datetime-local" [(ngModel)]="rLlaves.desde" name="ld" /></label>
+          <label class="campo">Hasta<input type="datetime-local" [(ngModel)]="rLlaves.hasta" name="lh" /></label>
+          <button type="submit" class="btn btn--marca" [disabled]="cargandoLlaves">Aplicar</button>
+        }
+        <span class="suave">El período aplica a las llaves creadas, los cambios y los QR del rango.</span>
+      </form>
+      @if (errorLlaves) { <div class="error-banner" role="alert">{{ errorLlaves }}</div> }
+      @if (cargandoLlaves && !llaves) { <div class="esq"><span></span><span></span><span></span></div> }
+      @if (llaves; as r) {
+        <section class="hallazgos" aria-label="Hallazgos de llaves">
+          @for (h of r.hallazgos; track $index) { <div class="hallazgo" [class]="'hallazgo h-' + h.nivel"><span class="hallazgo__tag">{{ nivelTexto(h.nivel) }}</span><span>{{ h.texto }}</span></div> }
+        </section>
+        <div class="rejilla">
+          <app-prospeccion-bloque [bloque]="r.bloques['ll_totales']" titulo="Totales"></app-prospeccion-bloque>
+          <app-prospeccion-bloque [bloque]="r.bloques['ll_anomalias']" titulo="Anomalías detectadas"></app-prospeccion-bloque>
+          <app-prospeccion-bloque [bloque]="r.bloques['ll_spbvi']" titulo="Llaves por directorio (SPBVI)" vista="barras"></app-prospeccion-bloque>
+          <app-prospeccion-bloque [bloque]="r.bloques['ll_proceso']" titulo="Cambios por tipo de proceso" vista="barras"></app-prospeccion-bloque>
+          <app-prospeccion-bloque [bloque]="r.bloques['ll_dia']" titulo="Cambios de llave por día" vista="serie"></app-prospeccion-bloque>
+          <app-prospeccion-bloque [bloque]="r.bloques['qr_tipo']" titulo="Códigos QR por tipo"></app-prospeccion-bloque>
+        </div>
+        <div class="apilado">
+          <app-prospeccion-bloque [bloque]="r.bloques['ll_tipo_estado']" titulo="Llaves por tipo y estado"></app-prospeccion-bloque>
+          <app-prospeccion-bloque [bloque]="r.bloques['ll_recientes']" titulo="Últimos cambios de llave"></app-prospeccion-bloque>
+        </div>
+      }
+    }
+    @if (hayDatos && !haySql && pestana === 'llaves') { <div class="nota nota--aviso">Esta sección usa la base SQL Server de BreB, que aún no está configurada.</div> }
+
+    <!-- ===================== LOGS ===================== -->
+    @if (hayLog && pestana === 'logs') {
+      <form class="filtros filtros--rejilla" (ngSubmit)="cargarLogs()">
+        <label class="campo">Período
+          <select [(ngModel)]="fl.rango" name="lgr">@for (r of rangosLogs; track r.id) { <option [value]="r.id">{{ r.texto }}</option> }</select>
+        </label>
+        @if (fl.rango === 'custom') {
+          <label class="campo">Desde<input type="datetime-local" [(ngModel)]="fl.desde" name="lgd" /></label>
+          <label class="campo">Hasta<input type="datetime-local" [(ngModel)]="fl.hasta" name="lgh" /></label>
+        }
+        <label class="campo">Nivel
+          <select [(ngModel)]="fl.nivel" name="lgn"><option value="">Todos</option><option value="error">Solo errores</option></select>
+        </label>
+        <label class="campo">CUS<input type="text" [(ngModel)]="fl.cus" name="lgc" placeholder="Transacción" autocomplete="off" /></label>
+        <label class="campo">Documento<input type="text" [(ngModel)]="fl.documento" name="lgdoc" placeholder="Hasta 7 días" autocomplete="off" /></label>
+        <label class="campo">Componente<input type="text" [(ngModel)]="fl.clase" name="lgcl" placeholder="WebApiHubBreB…" autocomplete="off" /></label>
+        <label class="campo">Método<input type="text" [(ngModel)]="fl.metodo" name="lgm" placeholder="PAIN 008, SendMail…" autocomplete="off" /></label>
+        <label class="campo campo--ancho">Texto en la descripción<input type="text" [(ngModel)]="fl.texto" name="lgt" placeholder="Palabra o frase" autocomplete="off" /></label>
+        <label class="check check--fila"><input type="checkbox" [(ngModel)]="fl.enPayload" name="lgp" /> Buscar también dentro de lo enviado y recibido (solo 1 día, o con CUS/documento)</label>
+        <div class="acciones-filtro">
+          <button type="submit" class="btn btn--marca" [disabled]="cargandoLogs">{{ cargandoLogs ? 'Consultando…' : 'Buscar' }}</button>
+          <button type="button" class="btn" (click)="limpiarLogs()" [disabled]="cargandoLogs">Limpiar</button>
+        </div>
+      </form>
+      @if (errorLogs) { <div class="error-banner" role="alert">{{ errorLogs }}</div> }
+      @if (cargandoLogs && !logs) { <div class="esq"><span></span><span></span><span></span></div> }
+      @if (logs; as l) {
+        <div class="apilado">
+          <app-prospeccion-bloque [bloque]="l.bloques['actividad']" titulo="Actividad por componente y método" [plegable]="true"></app-prospeccion-bloque>
+          <app-prospeccion-bloque [bloque]="logsLista" titulo="Registros del log" (fila)="abrirLog($event)" etiquetaClic="Ver Rq/Rs" vacio="Ningún registro coincide con estos filtros."></app-prospeccion-bloque>
+          @if (l.siguiente) {
+            <div class="mas-logs"><button type="button" class="btn" (click)="masLogs()" [disabled]="cargandoMasLogs">{{ cargandoMasLogs ? 'Cargando…' : 'Cargar registros más antiguos' }}</button></div>
+          }
+        </div>
+      }
+    }
+    @if (hayDatos && !hayLog && pestana === 'logs') { <div class="nota nota--aviso">Esta sección usa los logs de MariaDB, que aún no están configurados.</div> }
+
+    <!-- ===================== PARÁMETROS ===================== -->
+    @if (haySql && pestana === 'parametros') {
+      <form class="filtros" (ngSubmit)="cargarParametros()">
+        <label class="campo">Aplicación<input type="text" [(ngModel)]="parApp" name="pa" placeholder="Todas" autocomplete="off" /></label>
+        <label class="campo">Buscar en el nombre<input type="text" [(ngModel)]="parTexto" name="pt" placeholder="Parte del nombre" autocomplete="off" /></label>
+        <button type="submit" class="btn btn--marca" [disabled]="cargandoParametros">{{ cargandoParametros ? 'Consultando…' : 'Buscar' }}</button>
+        <span class="suave">Claves, tokens y secretos se muestran como «[oculto]». La comparación con el respaldo ayuda a ver qué cambió.</span>
+      </form>
+      @if (errorParametros) { <div class="error-banner" role="alert">{{ errorParametros }}</div> }
+      @if (cargandoParametros && !parametros) { <div class="esq"><span></span><span></span></div> }
+      @if (parametros; as p) {
+        <div class="apilado">
+          <app-prospeccion-bloque [bloque]="p.bloques['par_cambios']" titulo="Diferencias con el respaldo" vacio="Los parámetros actuales coinciden con el respaldo."></app-prospeccion-bloque>
+          <app-prospeccion-bloque [bloque]="p.bloques['par_lista']" titulo="Parámetros de las aplicaciones"></app-prospeccion-bloque>
+        </div>
+      }
+    }
+    @if (hayDatos && !haySql && pestana === 'parametros') { <div class="nota nota--aviso">Esta sección usa la base SQL Server de BreB, que aún no está configurada.</div> }
+
+    <!-- ===================== CONSULTAR LLAVES (servicio de BreB) ===================== -->
+    @if (pestana === 'herramientas') {
+      @if (!hayApi) {
+        <div class="nota nota--aviso">El servicio de llaves de BreB no está configurado. @if (e.esAdminPod) { <button type="button" class="enlace" (click)="abrirConexiones('api')">Configurarlo ahora</button> } @else { Pide al ADMIN_POD que lo configure. }</div>
+      } @else {
+        <div class="nota">Estas dos herramientas hacen una consulta real al servicio de BreB (<b>solo consultar y resolver llave</b>, sin modificar nada). Cada consulta queda en la auditoría con el documento o la llave enmascarados, y la respuesta se muestra con los datos personales ocultos. Si la base SQL Server está configurada, se cruza con lo que ya tiene BreB localmente.</div>
+        <div class="rejilla rejilla--herr">
+          <!-- consultar llave -->
+          <section class="panel">
+            <header><h3>Consultar llave</h3><p>Trae las llaves asociadas a un documento (tipo de persona, tipo de documento y número).</p></header>
+            <form class="form-herr" (ngSubmit)="consultarLlave()">
+              @if (tiposDisponibles && catalogos; as cat) {
+                <label class="campo">Tipo de persona
+                  <select [(ngModel)]="hCon.idTipoPersona" name="hp">@for (x of cat.personas; track x.id) { <option [ngValue]="x.id">{{ x.nombre }} ({{ x.id }})</option> }</select>
+                </label>
+                <label class="campo">Tipo de documento
+                  <select [(ngModel)]="hCon.idTipoDocumento" name="hd">@for (x of cat.documentos; track x.id) { <option [ngValue]="x.id">{{ x.nombre }} ({{ x.id }})</option> }</select>
+                </label>
+              } @else {
+                <label class="campo">Tipo de persona (id)<input type="number" [(ngModel)]="hCon.idTipoPersona" name="hp2" min="0" /></label>
+                <label class="campo">Tipo de documento (id)<input type="number" [(ngModel)]="hCon.idTipoDocumento" name="hd2" min="0" /></label>
+              }
+              <label class="campo">Número de documento<input type="text" [(ngModel)]="hCon.numeroDocumento" name="hn" maxlength="20" autocomplete="off" placeholder="Ej. 1020453573" /></label>
+              <button type="submit" class="btn btn--marca" [disabled]="cargandoCon">{{ cargandoCon ? 'Consultando…' : 'Consultar llave' }}</button>
+            </form>
+            @if (errorCon) { <div class="error-banner" role="alert">{{ errorCon }}</div> }
+            @if (resCon; as r) {
+              <div class="resultado-cab">
+                <span class="etq" [class]="'etq etq--' + claseHttp(r.http)">HTTP {{ r.http }}</span><span class="suave">{{ r.ms }} ms · {{ r.ruta }}</span>
+                <button type="button" class="mini" (click)="verPayloadCon = !verPayloadCon">{{ verPayloadCon ? 'Ver como tabla' : 'Ver respuesta (JSON)' }}</button>
+              </div>
+              @if (verPayloadCon && r.payload) { <pre class="payload">{{ r.payload.texto }}</pre> }
+              @else if (r.campos.length) {
+                <div class="tabla-caja"><table class="tabla"><thead><tr><th>Campo</th><th>Valor</th></tr></thead><tbody>@for (c of r.campos; track $index) { <tr><td class="mono">{{ c.Campo }}</td><td>{{ c.Valor ?? '—' }}</td></tr> }</tbody></table></div>
+              } @else { <p class="vacio">La respuesta no trae datos.</p> }
+              @if (r.cruce) {
+                <app-prospeccion-bloque [bloque]="r.cruce.usuario" titulo="En la base local de BreB: cliente"></app-prospeccion-bloque>
+                <app-prospeccion-bloque [bloque]="r.cruce.llaves" titulo="En la base local de BreB: llaves"></app-prospeccion-bloque>
+              }
+            }
+          </section>
+
+          <!-- resolver llave -->
+          <section class="panel">
+            <header><h3>Resolver llave</h3><p>Dice a quién pertenece una llave (celular, correo, documento, código de comercio o alfanumérica).</p></header>
+            <form class="form-herr" (ngSubmit)="resolverLlave()">
+              <label class="campo">Llave a resolver<input type="text" [(ngModel)]="hRes.aliasValue" name="ha" maxlength="100" autocomplete="off" placeholder="Ej. 0092175582" /></label>
+              <label class="campo">Fecha «received» (opcional)<input type="text" [(ngModel)]="hRes.received" name="hr" autocomplete="off" placeholder="Vacío = ahora (hora de Colombia)" /></label>
+              <p class="suave">Formato: 2026-10-02T10:04:48.984-05:00. Si lo dejas vacío, AXIS usa la fecha y hora actuales.</p>
+              <button type="submit" class="btn btn--marca" [disabled]="cargandoRes">{{ cargandoRes ? 'Resolviendo…' : 'Resolver llave' }}</button>
+            </form>
+            @if (errorRes) { <div class="error-banner" role="alert">{{ errorRes }}</div> }
+            @if (resRes; as r) {
+              <div class="resultado-cab">
+                <span class="etq" [class]="'etq etq--' + claseHttp(r.http)">HTTP {{ r.http }}</span><span class="suave">{{ r.ms }} ms · {{ r.ruta }}</span>
+                <button type="button" class="mini" (click)="verPayloadRes = !verPayloadRes">{{ verPayloadRes ? 'Ver como tabla' : 'Ver respuesta (JSON)' }}</button>
+              </div>
+              @if (r.recibido) { <p class="suave">Fecha enviada: <span class="mono">{{ r.recibido }}</span></p> }
+              @if (verPayloadRes && r.payload) { <pre class="payload">{{ r.payload.texto }}</pre> }
+              @else if (r.campos.length) {
+                <div class="tabla-caja"><table class="tabla"><thead><tr><th>Campo</th><th>Valor</th></tr></thead><tbody>@for (c of r.campos; track $index) { <tr><td class="mono">{{ c.Campo }}</td><td>{{ c.Valor ?? '—' }}</td></tr> }</tbody></table></div>
+              } @else { <p class="vacio">La respuesta no trae datos.</p> }
+              @if (cruceResolver) { <app-prospeccion-bloque [bloque]="cruceResolver" titulo="En la base local de BreB: esta llave"></app-prospeccion-bloque> }
+            }
+          </section>
+        </div>
+      }
+    }
+  }
+</div>
+
+<!-- ======================= DETALLE ======================= -->
+@if (detalle; as d) {
+  <app-breb-detalle [modo]="d.modo" [id]="d.id" (cerrar)="cerrarDetalle()" (verLog)="abrirLog($event)" (verTransaccion)="abrirTrx($event)"></app-breb-detalle>
+}
+
+<!-- ======================= CONEXIONES (ADMIN_POD) ======================= -->
+@if (mostrarConexiones && con) {
+  <app-breb-conexiones [conexiones]="con" [inicial]="destinoInicial" (cerrar)="cerrarConexiones()" (cambiaron)="conexionesCambiaron($event)"></app-breb-conexiones>
+}

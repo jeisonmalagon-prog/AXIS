@@ -1,0 +1,101 @@
+<section class="bloque" [class.bloque--error]="bloque && !bloque.ok && !bloque.omitido" [class.bloque--omitido]="bloque?.omitido">
+  <header class="bloque__cab">
+    <div class="bloque__tit">
+      @if (plegable) {
+        <button type="button" class="bloque__plegar" (click)="alternar()" [attr.aria-expanded]="abierto" [attr.aria-label]="(abierto ? 'Contraer ' : 'Expandir ') + titulo">
+          <span class="flecha" [class.flecha--abierta]="abierto">▾</span><h3>{{ titulo || bloque?.titulo }}</h3>
+        </button>
+      } @else {
+        <h3>{{ titulo || bloque?.titulo }}</h3>
+      }
+      @if (bloque?.ayuda && abre) { <p class="ayuda">{{ bloque?.ayuda }}</p> }
+    </div>
+    <div class="bloque__meta">
+      @if (bloque?.ok) {
+        <span class="pildora">{{ bloque?.filas?.length }} fila{{ bloque?.filas?.length === 1 ? '' : 's' }}{{ bloque?.truncado ? '+' : '' }}</span>
+        @if (bloque?.externa) { <span class="pildora pildora--marca" title="Se consulta en la base LogTransaccional">LogTransaccional</span> }
+        @if (bloque?.ms !== undefined) { <span class="pildora pildora--tenue">{{ bloque?.ms }} ms</span> }
+      }
+      @if (bloque?.sql) { <button type="button" class="mini" (click)="verSql = !verSql" [attr.aria-pressed]="verSql">{{ verSql ? 'Ocultar SQL' : 'Ver SQL' }}</button> }
+    </div>
+  </header>
+
+  @if (abre) {
+    @if (!bloque) {
+      <div class="esq"><span></span><span></span><span></span></div>
+    } @else if (!bloque.ok) {
+      <p class="aviso-bloque" [class.aviso-bloque--omitido]="bloque.omitido" role="status">
+        <strong>{{ bloque.omitido ? 'No disponible.' : 'No se pudo consultar.' }}</strong> {{ bloque.error }}
+      </p>
+    } @else if (!bloque.filas.length) {
+      <p class="vacio">{{ vacio }}</p>
+    } @else if (comoGrafica === 'barras') {
+      <div class="grafica"><app-bar-list [items]="itemsBarras" anchoValor="56px"></app-bar-list></div>
+    } @else if (comoGrafica === 'serie') {
+      <div class="grafica"><app-line-chart [etiquetas]="serieLineas.etiquetas" [series]="serieLineas.series"></app-line-chart></div>
+    } @else if (bloque.vertical) {
+      <dl class="vertical">
+        @for (c of columnas; track c.clave) {
+          <div><dt>{{ c.etiqueta }}</dt><dd>{{ fmt(bloque.filas[0][c.clave], c.clave) }}</dd></div>
+        }
+      </dl>
+    } @else {
+      @if (mostrarFiltro) {
+        <input class="filtro" type="search" placeholder="Filtrar estas filas…" [value]="filtro" (input)="filtrar($any($event.target).value)" [attr.aria-label]="'Filtrar ' + titulo" />
+      }
+      <div class="tabla-caja">
+        <table class="tabla tabla-apilada">
+          <thead>
+            <tr>
+              @for (c of columnas; track c.clave) { <th [class.num]="c.numerica">{{ c.etiqueta }}</th> }
+              @if (conAvance) { <th>Avance</th> }
+              @if (bloque.clic) { <th></th> }
+            </tr>
+          </thead>
+          <tbody>
+            @for (f of filasVisibles; track trackFila($index)) {
+              <tr [class.fila-clic]="!!bloque.clic" (click)="abrirFila(f)">
+                @for (c of columnas; track c.clave) {
+                  <td [attr.data-label]="c.etiqueta" [class.num]="c.numerica" [class.nw]="sinCorte(f[c.clave])">
+                    @if (esEnlace(c.clave, f[c.clave])) {
+                      <button type="button" class="enlace mono" (click)="abrirDocumento($event, f, c.clave)" title="Ver la trazabilidad de este documento">{{ f[c.clave] }}</button>
+                    } @else {
+                      @if (claseEtiqueta(c.clave, f[c.clave]); as et) {
+                        <span class="etq" [class]="'etq etq--' + et">{{ fmt(f[c.clave], c.clave) }}</span>
+                      } @else {
+                        {{ fmt(f[c.clave], c.clave) }}
+                      }
+                    }
+                  </td>
+                }
+                @if (conAvance) {
+                  <td data-label="Avance"><span class="avance"><i [style.width.%]="avance(f)"></i></span><span class="avance__txt">{{ avance(f) }}%</span></td>
+                }
+                @if (bloque.clic) {
+                  <td class="td-ver"><button type="button" class="mini" (click)="$event.stopPropagation(); abrirFila(f)">{{ textoClic }}</button></td>
+                }
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+      @if (!filasFiltradas.length) { <p class="vacio">Ninguna fila coincide con el filtro.</p> }
+      @if (hayMas) {
+        <div class="mas"><button type="button" class="mini" (click)="masFilas()">Mostrar {{ 50 }} más ({{ filasFiltradas.length - limite }} restantes)</button></div>
+      }
+      @if (bloque.ocultas?.length) {
+        <p class="nota-ocultas">Por privacidad no se muestran {{ bloque.ocultas?.length }} columna{{ bloque.ocultas?.length === 1 ? '' : 's' }} con datos personales o de contacto.</p>
+      }
+      @if (bloque.truncado) { <p class="nota-ocultas">Se muestran las primeras 500 filas.</p> }
+    }
+    @if (verSql && bloque?.sql) {
+      <div class="sql-caja">
+        <div class="sql-caja__barra">
+          <span>Solo lectura · pégalo en SSMS contra GestionCliente</span>
+          <button type="button" class="mini" (click)="copiar()">{{ copiado ? '✓ Copiado' : 'Copiar SQL' }}</button>
+        </div>
+        <pre class="sql">{{ bloque?.sql }}</pre>
+      </div>
+    }
+  }
+</section>

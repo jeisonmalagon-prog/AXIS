@@ -1,0 +1,56 @@
+<section class="ia">
+  <div class="aviso-info">
+    La IA busca primero en el catálogo las tablas que encajan con tu petición y en el repositorio los queries del equipo que ya tocan ese tema; con eso arma un <strong>SELECT de solo lectura</strong>. Siempre revisa el resultado antes de usarlo.
+  </div>
+
+  <label class="etiqueta" for="ia-pregunta">¿Qué quieres consultar?</label>
+  <textarea id="ia-pregunta" class="entrada" rows="3" maxlength="800" [(ngModel)]="pregunta" [disabled]="cargando"
+            placeholder="Ej. Muéstrame las trazas del documento X que tuvieron error en el método GetExtractPdf en los últimos 7 días"></textarea>
+  <div class="ia-ejemplos">
+    <span class="gris">Ideas:</span>
+    <button type="button" class="chip chip-marca ia-chip" *ngFor="let e of ejemplos" (click)="usarEjemplo(e)">{{ e }}</button>
+  </div>
+  <label class="check" *ngIf="tablasElegidas.length">
+    <input type="checkbox" [(ngModel)]="usarTablas" name="ia-usar-tablas" />
+    <span>Partir de las tablas que elegí en el constructor <small class="gris">({{ tablasElegidas.length }})</small></span>
+  </label>
+  <div class="ia-acciones">
+    <button type="button" class="btn btn-purple" [disabled]="!puedePreguntar" (click)="preguntar()">{{ cargando ? 'Pensando…' : 'Generar query' }}</button>
+    <span class="gris" *ngIf="cargando">Puede tardar un minuto la primera vez.</span>
+  </div>
+
+  <div class="error-state" *ngIf="error">{{ error }}</div>
+  <div class="cargando" *ngIf="cargando"><div class="spinner"></div><p>Buscando tablas y armando la consulta…</p></div>
+
+  <ng-container *ngIf="respuesta as r">
+    <div class="tarjeta ia-resultado">
+      <div class="ia-cab">
+        <h3>Consulta propuesta</h3>
+        <span class="chip chip-marca" title="Modelo de IA que respondió">{{ r.modelo }}</span>
+        <span class="chip" *ngIf="r.baseDatos">{{ r.baseDatos }}</span>
+        <span class="chip chip-ok" *ngIf="r.sql && r.soloLectura.ok">Solo lectura</span>
+        <span class="chip chip-alta" *ngIf="r.sql && !r.soloLectura.ok">No ejecutable</span>
+      </div>
+      <p class="ia-explica" *ngIf="r.explicacion">{{ r.explicacion }}</p>
+
+      <div class="aviso-aviso" *ngIf="r.advertencias.length">
+        <div *ngFor="let a of r.advertencias" class="ia-adv">• {{ a }}</div>
+      </div>
+
+      <ng-container *ngIf="r.sql">
+        <textarea class="entrada mono ia-sql" rows="10" [(ngModel)]="sqlEditable" name="ia-sql" spellcheck="false" aria-label="Consulta propuesta (editable)"></textarea>
+        <div class="ia-acciones">
+          <button type="button" class="btn btn-ghost btn-sm" (click)="copiar()">{{ copiado ? '¡Copiado!' : 'Copiar SQL' }}</button>
+          <button type="button" class="btn btn-ghost btn-sm" *ngIf="puedeEditar" (click)="guardarEnRepositorio()">Guardar en el repositorio</button>
+        </div>
+        <app-query-ejecucion [sql]="sqlEditable" [origenes]="origenes" [origenId]="r.origenId" [bd]="r.baseDatos" [puede]="puedeEditar" [motivo]="motivoBloqueo"></app-query-ejecucion>
+      </ng-container>
+
+      <div class="ia-contexto" *ngIf="r.tablasContexto.length || r.queriesEjemplo.length">
+        <div *ngIf="r.tablasContexto.length"><span class="gris">Tablas que vio la IA:</span> <span class="chip" *ngFor="let t of r.tablasContexto">{{ t.nombre }}</span></div>
+        <div *ngIf="r.queriesEjemplo.length"><span class="gris">Queries del equipo usados como ejemplo:</span> <span class="chip chip-marca" *ngFor="let q of r.queriesEjemplo">{{ q.titulo }}</span></div>
+        <div *ngIf="r.relaciones.length"><span class="gris">Uniones conocidas:</span> <span class="mono ia-rel" *ngFor="let x of r.relaciones">{{ x }}</span></div>
+      </div>
+    </div>
+  </ng-container>
+</section>

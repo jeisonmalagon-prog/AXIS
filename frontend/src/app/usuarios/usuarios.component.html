@@ -1,0 +1,210 @@
+<div class="servidores-container">
+  <div class="header-section">
+    <div>
+      <h1>Gestión de Usuarios</h1>
+      <p>Administración de accesos, roles y permisos del sistema</p>
+    </div>
+    
+    <div class="header-actions">
+      <div class="search-box">
+        <input type="text" [(ngModel)]="terminoBusqueda" placeholder="Buscar por usuario, nombre o rol..." />
+      </div>
+      <button class="btn-primary" (click)="abrirModalNuevo()">+ Nuevo Usuario</button>
+    </div>
+  </div>
+
+  <div class="aviso-roles" *ngIf="opcionesCargadas && !rolPorModuloDisponible && avisoRolPorModulo">
+    <strong>Roles por módulo aún no disponibles.</strong> {{ avisoRolPorModulo }}
+    Mientras tanto, el rol de cada usuario aplica a todos sus módulos.
+  </div>
+
+  <div class="aviso-roles" *ngIf="opcionesCargadas && !sesionPersonalizableDisponible && avisoSesion">
+    <strong>Tiempo de sesión por usuario aún no disponible.</strong> {{ avisoSesion }}
+  </div>
+
+  <div class="table-card">
+    <table *ngIf="!loading; else spinner">
+      <thead>
+        <tr>
+          <th>Usuario</th>
+          <th>Nombre Completo</th>
+          <th>Rol</th>
+          <th>Módulos Asignados</th>
+          <th>Estado</th>
+          <th>Acciones</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr *ngFor="let u of usuariosFiltrados" [class.inactivo]="!u.activo">
+          <td class="font-bold">
+            {{ u.username }}
+            <span class="badge badge-env" *ngIf="u.tipo_autenticacion === 'AD'" title="Se autentica contra Active Directory">
+              AD
+            </span>
+            <span class="badge badge-env" *ngIf="u.sesion_personalizable && u.rol !== 'ADMIN_POD'"
+                  [title]="u.sesion_minutos ? 'Puede ajustar su sesión; hoy tiene ' + u.sesion_minutos + ' min de inactividad' : 'Puede ajustar el tiempo de inactividad de su sesión'">
+              Sesión ajustable
+            </span>
+            <span class="badge badge-pendiente" *ngIf="u.debe_cambiar_password" title="Aún no ha cambiado su contraseña temporal/reseteada">
+              Pendiente cambio de contraseña
+            </span>
+          </td>
+          <td>
+            {{ u.nombre_completo }}
+            <span class="contacto-mini" *ngIf="u.correo" [title]="'Recibe el código de recuperación en: ' + u.correo">{{ u.correo }}</span>
+            <span class="contacto-mini contacto-mini--falta" *ngIf="!u.correo && u.tipo_autenticacion !== 'AD'" title="Sin correo: no puede recuperar su contraseña por sí mismo">Sin contacto de recuperación</span>
+          </td>
+          <td>
+            <span class="badge badge-env" *ngIf="u.rol === 'ADMIN_POD' || !rolPorModuloDisponible">{{ u.rol }}</span>
+            <span class="badge badge-env" *ngIf="u.rol !== 'ADMIN_POD' && rolPorModuloDisponible" title="El rol se define en cada módulo">Por módulo</span>
+          </td>
+          <td>
+            <div class="modulos-tags">
+              <span class="tag tag--rol" *ngFor="let m of u.modulos"
+                    [class.tag--admin]="rolDeModulo(u, m) === 'ADMIN_MIN'"
+                    [title]="m + ': ' + (rolDeModulo(u, m) === 'ADMIN_MIN' ? 'puede crear, editar y borrar' : 'solo consulta')">
+                {{ m }} <span class="tag__rol">· {{ etiquetaRolModulo(rolDeModulo(u, m)) }}</span>
+              </span>
+              <span class="text-gray" *ngIf="u.rol === 'ADMIN_POD'">Todos (acceso total)</span>
+              <span class="text-gray" *ngIf="u.rol !== 'ADMIN_POD' && (!u.modulos || u.modulos.length === 0)">Ninguno</span>
+            </div>
+          </td>
+          <td>
+            <span class="badge" [ngClass]="u.activo ? 'activo' : 'inactivo'">
+              {{ u.activo ? 'Activo' : 'Inactivo' }}
+            </span>
+          </td>
+          <td class="acciones">
+            <button class="btn-icon edit" (click)="abrirModalEditar(u)" title="Editar Usuario">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="icon-svg"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>
+            </button>
+            <button class="btn-icon delete" (click)="toggleEstado(u)" [title]="u.activo ? 'Desactivar' : 'Activar'">
+              <!-- Icono de bloqueo / desbloqueo -->
+              <svg *ngIf="u.activo" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="icon-svg"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>
+              <svg *ngIf="!u.activo" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="icon-svg"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 9.9-1"></path></svg>
+            </button>
+          </td>
+        </tr>
+        <tr *ngIf="usuariosFiltrados.length === 0">
+          <td colspan="6" class="text-center py-4">No se encontraron usuarios.</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <ng-template #spinner>
+      <div class="loading-state text-center py-4">Cargando usuarios...</div>
+    </ng-template>
+  </div>
+</div>
+
+<!-- MODAL CREAR / EDITAR USUARIO -->
+<div class="modal-overlay" *ngIf="mostrarModal">
+  <div class="modal-content modal-lg">
+    <h2>{{ modoEdicion ? 'Editar Usuario' : 'Nuevo Usuario' }}</h2>
+    
+    <div class="form-row">
+      <div class="form-group">
+        <label>Tipo de Autenticación *</label>
+        <select [(ngModel)]="usuarioActual.tipo_autenticacion">
+          <option value="LOCAL">Local (usuario y contraseña de AXIS)</option>
+          <option value="AD">Directorio Activo (red Finandina)</option>
+        </select>
+        <p class="password-hint" *ngIf="esAutenticacionAD">
+          El usuario debe ser igual a su usuario de red (sin el dominio). La contraseña la valida Active Directory; AXIS no la guarda.
+        </p>
+      </div>
+    </div>
+
+    <div class="form-row">
+      <div class="form-group">
+        <label>Username (Login) *</label>
+        <input type="text" [(ngModel)]="usuarioActual.username" placeholder="Ej: jlopez" [disabled]="modoEdicion">
+      </div>
+      <div class="form-group" *ngIf="!esAutenticacionAD">
+        <label>Contraseña {{ modoEdicion ? '(Dejar en blanco para no cambiar)' : '*' }}</label>
+        <input type="password" [(ngModel)]="usuarioActual.password" placeholder="******">
+        <p class="password-hint">{{ requisitosPassword }}</p>
+      </div>
+    </div>
+
+    <div class="form-row">
+      <div class="form-group">
+        <label>Nombre Completo *</label>
+        <input type="text" [(ngModel)]="usuarioActual.nombre_completo" placeholder="Ej: Juan López">
+      </div>
+      <div class="form-group">
+        <label>Rol del Sistema *</label>
+        <select [(ngModel)]="usuarioActual.rol" *ngIf="!rolPorModuloDisponible">
+          <option value="ADMIN_POD">ADMIN_POD (Acceso Total)</option>
+          <option value="ADMIN_MIN">ADMIN_MIN (Admin Módulos)</option>
+          <option value="BASIC">BASIC (Solo Consulta)</option>
+        </select>
+        <select [(ngModel)]="usuarioActual.rol" *ngIf="rolPorModuloDisponible">
+          <option value="ADMIN_POD">ADMIN_POD (Acceso Total)</option>
+          <option value="BASIC">Usuario (rol por cada módulo)</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="form-row">
+      <div class="form-group">
+        <label>Correo corporativo</label>
+        <input type="email" [(ngModel)]="usuarioActual.correo" placeholder="nombre.apellido@bancofinandina.com" autocomplete="off">
+      </div>
+    </div>
+    <p style="margin: -6px 0 18px; font-size: 11.5px; line-height: 1.45; color: var(--ax-text-muted, #94a3b8);">Si la persona olvida su contraseña, el código de recuperación se envía a su correo corporativo. Ella también puede completarlos en «Mi perfil».</p>
+
+    <div class="form-group" style="margin-bottom: 24px;">
+      <label style="margin-bottom: 12px; display: block; border-bottom: 1px solid #e2e8f0; padding-bottom: 8px;">
+        Módulos Habilitados
+      </label>
+      <div class="modulos-lista">
+        <div class="modulo-item" *ngFor="let mod of modulosDisponibles"
+             [class.modulo-item--activo]="usuarioActual.modulos.includes(mod) && usuarioActual.rol !== 'ADMIN_POD'">
+          <label class="checkbox-container">
+            <input type="checkbox"
+                   [checked]="usuarioActual.modulos.includes(mod)"
+                   (change)="toggleModulo(mod, $event)"
+                   [disabled]="usuarioActual.rol === 'ADMIN_POD'"> <!-- ADMIN_POD tiene todo por defecto -->
+            <span class="checkmark"></span>
+            {{ mod }}
+          </label>
+          <ng-container *ngIf="rolPorModuloDisponible && usuarioActual.rol !== 'ADMIN_POD' && usuarioActual.modulos.includes(mod)">
+            <span class="modulo-solo-lectura" *ngIf="esModuloSoloLectura(mod)" title="Este módulo es solo de lectura: no tiene nada que editar">Solo consulta</span>
+            <select class="modulo-rol" *ngIf="!esModuloSoloLectura(mod)"
+                    [ngModel]="usuarioActual.modulosRoles?.[mod] || rolPorDefectoModulo(mod)"
+                    (ngModelChange)="cambiarRolModulo(mod, $event)"
+                    [attr.aria-label]="'Rol en ' + mod">
+              <option value="CONSULTA">Consulta</option>
+              <option value="ADMIN_MIN">Admin</option>
+            </select>
+          </ng-container>
+        </div>
+      </div>
+      <p class="text-gray ayuda-roles" *ngIf="rolPorModuloDisponible && usuarioActual.rol !== 'ADMIN_POD'">
+        <strong>Consulta:</strong> solo ve la información del módulo. <strong>Admin (ADMIN_MIN):</strong> además crea, edita y elimina en ese módulo.
+        En Tareas, Consulta ve sus tareas y cambia su estado, pero no crea ni edita tareas.
+      </p>
+      <p class="text-gray" style="font-size: 11px; margin-top: 8px;" *ngIf="usuarioActual.rol === 'ADMIN_POD'">
+        * El rol ADMIN_POD tiene acceso automático a todos los módulos.
+      </p>
+    </div>
+
+    <div class="form-group sesion-permiso" *ngIf="sesionPersonalizableDisponible && usuarioActual.rol !== 'ADMIN_POD'">
+      <label class="checkbox-container">
+        <input type="checkbox" [(ngModel)]="usuarioActual.sesion_personalizable">
+        <span class="checkmark"></span>
+        Puede ajustar el tiempo de su sesión
+      </label>
+      <p class="text-gray ayuda-roles">
+        Si lo activas, este usuario elige en <strong>Mi perfil</strong> cuánto tiempo sin actividad tolera su sesión
+        (15 min a 12 h). Si no, se cierra a los 15 min de inactividad. Al quitárselo vuelve a 15 min.
+      </p>
+    </div>
+
+    <div class="modal-actions">
+      <button class="btn-secondary" (click)="cerrarModal()">Cancelar</button>
+      <button class="btn-primary" (click)="guardarUsuario()">Guardar Usuario</button>
+    </div>
+  </div>
+</div>

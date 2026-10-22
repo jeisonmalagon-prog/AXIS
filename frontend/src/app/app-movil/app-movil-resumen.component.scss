@@ -1,0 +1,36 @@
+@use './tablero-comun';
+
+$texto:    var(--ax-text, #1e293b);
+$suave:    var(--ax-text-muted, #64748b);
+$surface:  var(--ax-surface, #ffffff);
+$surface2: var(--ax-surface-2, #f8fafc);
+$borde:    var(--ax-border, #e2e8f0);
+
+// --- Panel de detalle de errores (modal) ---
+.detalle-overlay {
+  position: fixed; inset: 0; background: rgba(15, 23, 42, 0.55); backdrop-filter: blur(2px);
+  display: flex; align-items: flex-start; justify-content: center; padding: 5vh 20px; z-index: 1000; overflow-y: auto;
+}
+.detalle-panel {
+  background: $surface; border-radius: 20px; width: 100%; max-width: 940px; max-height: 90vh; overflow-y: auto; padding: 26px; box-shadow: 0 25px 60px rgba(15, 23, 42, 0.3);
+  &__header { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; margin-bottom: 14px; h2 { font-size: 20px; font-weight: 800; margin: 0; } .sub a { color: var(--f-brand-ink); font-weight: 700; } }
+  &__acciones { display: flex; align-items: center; gap: 10px; }
+}
+.btn-exportar {
+  display: flex; align-items: center; gap: 8px; padding: 9px 16px; border-radius: 10px; border: 1px solid $borde; background: $surface; color: $texto;
+  font-weight: 700; font-size: 13px; cursor: pointer; font-family: inherit;
+  svg { width: 15px; height: 15px; }
+  &:hover:not(:disabled) { background: $surface2; }
+  &:disabled { opacity: .55; cursor: default; }
+}
+.btn-cerrar { width: 32px; height: 32px; border-radius: 10px; border: 1px solid $borde; background: transparent; color: $suave; font-size: 20px; line-height: 1; cursor: pointer; &:hover { background: $surface2; color: $texto; } }
+.detalle-aviso--exportacion { color: var(--f-warn-ink); background: var(--f-warn-soft); font-weight: 600; }
+.detalle-paginacion {
+  display: flex; align-items: center; justify-content: center; gap: 16px; margin-top: 18px;
+  button { padding: 8px 16px; border-radius: 10px; border: 1px solid $borde; background: $surface; color: $texto; font-weight: 600; font-size: 13px; cursor: pointer; font-family: inherit; &:hover:not(:disabled) { background: $surface2; } &:disabled { opacity: .5; cursor: default; } }
+  span { font-size: 13px; color: $suave; font-weight: 600; }
+}
+@media (max-width: 700px) {
+  .detalle-overlay { padding: 0; align-items: stretch; }
+  .detalle-panel { max-width: none; max-height: none; height: 100%; border-radius: 0; }
+}

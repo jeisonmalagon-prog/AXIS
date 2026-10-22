@@ -1,0 +1,180 @@
+<div class="impacto-container">
+  <div class="header-section">
+    <div>
+      <a class="volver" routerLink="/servidores">← Volver al inventario</a>
+      <h1>Análisis de Impacto</h1>
+      <p>Si este servidor se cae, esto es lo que se lleva por delante</p>
+    </div>
+
+    <div class="header-actions">
+      <div class="search-box">
+        <input type="text" [(ngModel)]="terminoBusqueda" placeholder="Filtrar por hostname o IP..." />
+      </div>
+      <select [ngModel]="servidorId" (ngModelChange)="analizar($event)">
+        <option [ngValue]="null">— Selecciona un servidor —</option>
+        <option *ngFor="let s of servidoresFiltrados" [ngValue]="s.id">{{ s.nombre }} ({{ s.subtitulo }})</option>
+      </select>
+    </div>
+  </div>
+
+  <div class="empty-state text-center py-4" *ngIf="cargando">Calculando el impacto…</div>
+
+  <div class="empty-state text-center py-4" *ngIf="!cargando && !impacto">
+    Elige un servidor arriba para ver qué depende de él.
+  </div>
+
+  <ng-container *ngIf="!cargando && impacto">
+    <!-- OBJETIVO -->
+    <div class="objetivo">
+      <div>
+        <span class="badge badge-env" *ngIf="impacto.servidor.ambiente">{{ impacto.servidor.ambiente }}</span>
+        <span class="badge" *ngIf="impacto.servidor.estado" [ngClass]="(impacto.servidor.estado || '').toLowerCase()">{{ impacto.servidor.estado }}</span>
+        <h2>{{ impacto.servidor.hostname }}</h2>
+        <code>{{ impacto.servidor.ip_address }}</code>
+      </div>
+      <div class="criticidad-global">
+        <label>Criticidad del impacto</label>
+        <span class="badge grande" [ngClass]="'criticidad-' + criticidadMaxima.toLowerCase()">{{ criticidadMaxima }}</span>
+      </div>
+    </div>
+
+    <!-- RESUMEN -->
+    <div class="resumen">
+      <div class="tarjeta-resumen">
+        <strong>{{ impacto.alojados.length }}</strong>
+        <span>sub-aplicativos se caen con él</span>
+      </div>
+      <div class="tarjeta-resumen" [class.alerta]="impacto.dependen_de_sus_bd.length">
+        <strong>{{ impacto.dependen_de_sus_bd.length }}</strong>
+        <span>dependen de sus bases de datos</span>
+      </div>
+      <div class="tarjeta-resumen" [class.alerta]="servidoresAfectados.length">
+        <strong>{{ servidoresAfectados.length }}</strong>
+        <span>otros servidores afectados</span>
+      </div>
+      <div class="tarjeta-resumen" [class.alerta]="impacto.aplicaciones_negocio.length">
+        <strong>{{ impacto.aplicaciones_negocio.length }}</strong>
+        <span>aplicaciones de negocio</span>
+      </div>
+    </div>
+
+    <!-- APLICACIONES DE NEGOCIO -->
+    <section class="bloque" *ngIf="impacto.aplicaciones_negocio.length">
+      <h3>Aplicaciones de negocio afectadas</h3>
+      <p class="explica">Lo que el usuario final deja de ver funcionando.</p>
+      <div class="chips">
+        <span class="chip-negocio" *ngFor="let n of impacto.aplicaciones_negocio">🏢 {{ n.nombre }}</span>
+      </div>
+    </section>
+
+    <!-- SE CAE CON ÉL -->
+    <section class="bloque">
+      <h3>Se cae con el servidor ({{ impacto.alojados.length }})</h3>
+      <p class="explica">Sub-aplicativos alojados en esta máquina.</p>
+      <div *ngIf="impacto.alojados.length; else sinAlojados" class="lista">
+        <div class="fila" *ngFor="let a of impacto.alojados">
+          <div>
+            <span class="badge badge-plataforma" *ngIf="a.plataforma">{{ a.plataforma }}</span>
+            <strong>{{ a.nombre_aplicacion }}</strong>
+            <code *ngIf="a.puerto">:{{ a.puerto }}</code>
+            <span class="text-gray" *ngIf="a.aplicacion_negocio_nombre"> · {{ a.aplicacion_negocio_nombre }}</span>
+          </div>
+          <span class="badge" [ngClass]="'criticidad-' + (a.criticidad || 'media').toLowerCase()">{{ a.criticidad || 'Media' }}</span>
+        </div>
+      </div>
+      <ng-template #sinAlojados>
+        <p class="vacio">Este servidor no tiene sub-aplicativos registrados.</p>
+      </ng-template>
+    </section>
+
+    <!-- DEPENDEN DE SUS BD -->
+    <section class="bloque" *ngIf="impacto.dependen_de_sus_bd.length">
+      <h3 class="peligro">Dependen de sus bases de datos ({{ impacto.dependen_de_sus_bd.length }})</h3>
+      <p class="explica">
+        Estos sub-aplicativos viven en <strong>otras máquinas</strong>, pero se conectan a una base de datos
+        alojada aquí. Es el impacto que no se ve a simple vista.
+      </p>
+      <div class="lista">
+        <div class="fila" *ngFor="let d of impacto.dependen_de_sus_bd">
+          <div>
+            <span class="badge badge-plataforma">{{ d.motor_bd }}</span>
+            <strong>{{ d.aplicativo_nombre }}</strong>
+            <span class="text-gray" *ngIf="d.servidor_hostname"> en {{ d.servidor_hostname }} ({{ d.servidor_ip }})</span>
+            <div class="detalle-bd">
+              usa <code>{{ d.nombre_base_datos }}<span *ngIf="d.esquema">.{{ d.esquema }}</span></code>
+              <span *ngIf="d.puerto"> :{{ d.puerto }}</span>
+              <span *ngIf="d.usuario_servicio"> · 👤 {{ d.usuario_servicio }}</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- INTEGRACIONES ENTRANTES -->
+    <section class="bloque" *ngIf="impacto.entrantes.length">
+      <h3>Le apuntan ({{ impacto.entrantes.length }})</h3>
+      <p class="explica">Integraciones registradas hacia este servidor o hacia sus sub-aplicativos.</p>
+      <div class="lista">
+        <div class="fila" *ngFor="let e of impacto.entrantes">
+          <div>
+            <span class="badge badge-plataforma">{{ e.origen_tipo }}</span>
+            <strong>{{ e.origen_nombre }}</strong>
+            <span class="text-gray" *ngIf="e.origen_servidor"> ({{ e.origen_servidor }})</span>
+            <span class="text-gray" *ngIf="e.descripcion"> — {{ e.descripcion }}</span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- DE QUÉ DEPENDE ESTE SERVIDOR -->
+    <section class="bloque" *ngIf="impacto.conexiones_salientes.length || impacto.salientes.length">
+      <h3>De qué depende este servidor</h3>
+      <p class="explica">Útil para el caso contrario: si algo falla aquí, la causa puede estar afuera.</p>
+      <div class="lista">
+        <div class="fila" *ngFor="let c of impacto.conexiones_salientes">
+          <div>
+            <span class="badge badge-plataforma">{{ c.motor_bd }}</span>
+            <strong>{{ c.servidor_bd_hostname }}</strong>
+            <span class="text-gray"> ({{ c.servidor_bd_ip }})</span>
+            <div class="detalle-bd">
+              <code>{{ c.aplicativo_nombre }}</code> usa <code>{{ c.nombre_base_datos }}<span *ngIf="c.esquema">.{{ c.esquema }}</span></code>
+            </div>
+          </div>
+        </div>
+        <div class="fila" *ngFor="let s of impacto.salientes">
+          <div>
+            <span class="badge badge-plataforma">{{ s.destino_tipo }}</span>
+            <strong>{{ s.destino_nombre }}</strong>
+            <span class="text-gray" *ngIf="s.destino_servidor"> ({{ s.destino_servidor }})</span>
+            <div class="detalle-bd">
+              desde <code>{{ s.origen_nombre }}</code><span *ngIf="s.descripcion"> — {{ s.descripcion }}</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- CERTIFICADOS -->
+    <section class="bloque" *ngIf="impacto.certificados.length">
+      <h3>Certificados involucrados</h3>
+      <p class="explica">Los que están asociados al servidor o a sus sub-aplicativos.</p>
+      <div class="lista">
+        <div class="fila" *ngFor="let c of impacto.certificados">
+          <div>
+            <strong>{{ c.nombre_comun }}</strong>
+            <span class="text-gray" *ngIf="c.entidad_emisora"> · {{ c.entidad_emisora }}</span>
+          </div>
+          <span class="badge" [ngClass]="claseVencimiento(c.fecha_fin)">
+            {{ c.fecha_fin ? (c.fecha_fin | date:'dd/MM/yyyy') : 'Sin fecha' }}
+            <ng-container *ngIf="textoVencimiento(c.fecha_fin)"> · {{ textoVencimiento(c.fecha_fin) }}</ng-container>
+          </span>
+        </div>
+      </div>
+    </section>
+
+    <p class="nota-final" *ngIf="!totalAfectados">
+      No hay nada registrado que dependa de este servidor. Si eso no te cuadra, probablemente falte
+      registrar sus sub-aplicativos, sus conexiones a base de datos o sus integraciones.
+    </p>
+  </ng-container>
+</div>

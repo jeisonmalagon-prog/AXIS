@@ -1,0 +1,343 @@
+<div class="pro">
+  <header class="cab">
+    <a class="volver" routerLink="/soporte-nivel-1">← Soporte Nivel 1</a>
+    <h1>Monitorear prospección</h1>
+    <p class="sub">Sigue los cargues de campañas de los aliados, su prospección, los procesos aliado y los pagarés (GestionCliente · esquema PD). Todo es de solo lectura.</p>
+  </header>
+
+  @if (aviso) { <div class="toast" role="status">{{ aviso }}</div> }
+  @if (errorEstado) { <div class="error-banner" role="alert">{{ errorEstado }}</div> }
+  @if (cargandoEstado && !estado) { <div class="esq"><span></span><span></span></div> }
+
+  @if (estado; as e) {
+    <!-- ============ barra de conexión ============ -->
+    <div class="conexion" [class.conexion--mal]="!e.conexion.configurada">
+      <div class="conexion__txt">
+        @if (e.conexion.configurada) {
+          <span class="punto"></span>
+          <div>
+            <strong>{{ e.conexion.servidor }}<span class="suave"> · {{ e.conexion.base }}</span></strong>
+            <span class="suave">{{ origenTexto }}</span>
+          </div>
+        } @else {
+          <span class="punto punto--mal"></span>
+          <div>
+            <strong>La conexión a GestionCliente no está configurada</strong>
+            <span class="suave">
+              @if (e.esAdminPod) { Configura el servidor, la base, el usuario y la clave para empezar. La clave se guarda cifrada y no vuelve a mostrarse. }
+              @else { Pide al ADMIN_POD que la configure desde esta misma pantalla. }
+            </span>
+          </div>
+        }
+      </div>
+      <div class="conexion__acc">
+        @if (e.conexion.configurada) {
+          <button type="button" class="btn" (click)="actualizar()" [disabled]="cargandoActual">{{ cargandoActual ? 'Consultando…' : '↻ Actualizar' }}</button>
+        }
+        @if (e.esAdminPod) { <button type="button" class="btn" [class.btn--marca]="!e.conexion.configurada" (click)="abrirConexion()">⚙ {{ e.conexion.configurada ? 'Conexión' : 'Configurar conexión' }}</button> }
+      </div>
+    </div>
+
+    @if (e.conexion.configurada) {
+      <nav class="pestanas" role="tablist" aria-label="Secciones de prospección">
+        @for (p of pestanas; track p.id) {
+          <button type="button" role="tab" class="pestana" [class.pestana--act]="pestana === p.id" [attr.aria-selected]="pestana === p.id" (click)="irA(p.id)">{{ p.texto }}</button>
+        }
+      </nav>
+
+      <!-- ===================== RESUMEN ===================== -->
+      @if (pestana === 'resumen') {
+        <div class="filtros">
+          <label class="campo">Período
+            <select [(ngModel)]="dias" name="dias" (ngModelChange)="cambiarDias()">
+              @for (p of periodos; track p.dias) { <option [ngValue]="p.dias">{{ p.texto }}</option> }
+            </select>
+          </label>
+          <label class="check"><input type="checkbox" [(ngModel)]="auto" name="auto" /> Actualizar cada 2 min</label>
+          @if (resumen) { <span class="suave">Consultado {{ resumen.generadoEn.slice(11, 19) }}</span> }
+        </div>
+        @if (errorResumen) { <div class="error-banner" role="alert">{{ errorResumen }}</div> }
+        @if (cargandoResumen && !resumen) { <div class="esq"><span></span><span></span><span></span></div> }
+        @if (resumen; as r) {
+          @if (r.esquemaAviso) { <div class="nota nota--aviso">{{ r.esquemaAviso }}</div> }
+          <section class="hallazgos" aria-label="Hallazgos">
+            @for (h of r.hallazgos; track $index) {
+              <div class="hallazgo" [class]="'hallazgo ' + claveNivel(h.nivel)"><span class="hallazgo__tag">{{ textoNivel(h.nivel) }}</span><span>{{ h.texto }}</span></div>
+            }
+          </section>
+
+          <section class="kpis" [attr.aria-label]="'Indicadores ' + textoPeriodo()">
+            @for (t of tarjetas; track t.id) {
+              <article class="kpi" [class.kpi--mal]="!t.ok" [attr.title]="t.ok ? t.ayuda : t.error">
+                <span class="kpi__tit">{{ t.titulo }}</span>
+                @if (t.ok && t.valor !== null) {
+                  <strong class="kpi__val">{{ t.valor.toLocaleString('es-CO') }}</strong>
+                  @if (t.id === 'kpi_prospectados' && porcentajeProspectado !== null) { <span class="kpi__sub">{{ porcentajeProspectado }}% de los cargados</span> }
+                } @else {
+                  <strong class="kpi__val kpi__val--vacio">—</strong>
+                  <span class="kpi__sub kpi__sub--mal">{{ t.error || 'Sin datos' }}</span>
+                }
+              </article>
+            }
+          </section>
+
+          <div class="rejilla">
+            <section class="panel">
+              <header><h3>Flujo del período</h3><p>Volumen en cada etapa ({{ textoPeriodo() }}). Son conteos de tablas distintas: sirven para ver dónde se corta el avance.</p></header>
+              @if (flujo.length) { <app-bar-list [items]="flujo" anchoValor="64px"></app-bar-list> } @else { <p class="vacio">Sin datos de flujo.</p> }
+            </section>
+            <app-prospeccion-bloque [bloque]="r.bloques['ser_cargues_dia']" titulo="Cargados vs prospectados por día" (documento)="verCliente($event)"></app-prospeccion-bloque>
+            <app-prospeccion-bloque [bloque]="r.bloques['ser_hora']" titulo="Prospecciones por hora" (documento)="verCliente($event)"></app-prospeccion-bloque>
+            <app-prospeccion-bloque [bloque]="r.bloques['tab_procesos_estado']" titulo="Procesos aliado por estado" (documento)="verCliente($event)"></app-prospeccion-bloque>
+            <app-prospeccion-bloque [bloque]="r.bloques['tab_detalle_estado']" titulo="Detalle de campañas por estado" (documento)="verCliente($event)"></app-prospeccion-bloque>
+          </div>
+          <app-prospeccion-bloque [bloque]="r.bloques['tab_procesos_aliado']" titulo="Procesos por aliado y estado" (documento)="verCliente($event)"></app-prospeccion-bloque>
+        }
+      }
+
+      <!-- ===================== CARGUES ===================== -->
+      @if (pestana === 'cargues') {
+        <div class="filtros">
+          <label class="campo">Mostrar
+            <select [(ngModel)]="topCargues" name="topc" (ngModelChange)="cargarCargues()">
+              <option [ngValue]="25">Últimos 25</option><option [ngValue]="50">Últimos 50</option><option [ngValue]="100">Últimos 100</option><option [ngValue]="200">Últimos 200</option>
+            </select>
+          </label>
+          <span class="suave">Haz clic en un cargue para ver sus prospectos, los lotes que generó y el estado de sus procesos.</span>
+        </div>
+        @if (errorCargues) { <div class="error-banner" role="alert">{{ errorCargues }}</div> }
+        <app-prospeccion-bloque [bloque]="cargues?.bloques?.['tab_cargues']" titulo="Cargues de campaña de los aliados" (cargue)="abrirCargue($event)" (documento)="verCliente($event)"></app-prospeccion-bloque>
+      }
+
+      <!-- ===================== CLIENTE ===================== -->
+      @if (pestana === 'cliente') {
+        <form class="buscador" (ngSubmit)="buscarDesdeFormulario()">
+          <label class="campo campo--doc">Número de documento
+            <input type="text" [(ngModel)]="docInput" name="doc" inputmode="text" autocomplete="off" maxlength="20" placeholder="Ej. 1020453573" />
+          </label>
+          <label class="campo">Traza transaccional
+            <select [(ngModel)]="trazaDias" name="traza">
+              <option [ngValue]="1">Hoy</option><option [ngValue]="2">Últimos 2 días</option><option [ngValue]="3">Últimos 3 días</option><option [ngValue]="7">Últimos 7 días</option>
+            </select>
+          </label>
+          <button type="submit" class="btn btn--marca" [disabled]="cargandoCliente">{{ cargandoCliente ? 'Buscando…' : 'Buscar' }}</button>
+        </form>
+        <p class="suave aviso-privacidad">Se consulta todo lo que hay del documento en PD y en la traza. No se muestran celular, correo ni dirección, y la búsqueda queda en la auditoría con el documento enmascarado.</p>
+        @if (errorCliente) { <div class="error-banner" role="alert">{{ errorCliente }}</div> }
+        @if (cargandoCliente && !cliente) { <div class="esq"><span></span><span></span><span></span></div> }
+        @if (cliente; as c) {
+          <section class="cliente-cab">
+            <div><span class="suave">Documento</span><strong class="mono grande">{{ c.documento }}</strong></div>
+            <div class="chips">
+              @for (x of resumenCliente; track x.etiqueta) { <span class="chip" [class.chip--cero]="x.n === 0"><b>{{ x.n }}</b> {{ x.etiqueta }}</span> }
+            </div>
+          </section>
+          @if (c.esquemaAviso) { <div class="nota nota--aviso">{{ c.esquemaAviso }}</div> }
+
+          <section class="panel">
+            <header><h3>Línea de tiempo</h3><p>Lo que pasó con este documento, del más reciente al más antiguo (cargue → prospección → procesos).</p></header>
+            @if (c.lineaTiempo.length) {
+              <ol class="tiempo">
+                @for (ev of c.lineaTiempo; track $index) {
+                  <li [class]="'tl-' + ev.tipo">
+                    <span class="tiempo__fecha">{{ ev.fecha }}</span>
+                    <span class="tiempo__punto"></span>
+                    <span class="tiempo__txt"><span class="tiempo__tipo">{{ etiquetaTipo(ev.tipo) }}</span> {{ ev.titulo }}@if (ev.detalle) { <span class="suave"> · {{ ev.detalle }}</span> }</span>
+                  </li>
+                }
+              </ol>
+            } @else { <p class="vacio">No hay eventos con fecha para este documento.</p> }
+          </section>
+
+          <div class="apilado">
+            <app-prospeccion-bloque [bloque]="c.bloques['cl_procesos']" titulo="Procesos aliado y oferta" [plegable]="true" (documento)="verCliente($event)"></app-prospeccion-bloque>
+            <app-prospeccion-bloque [bloque]="c.bloques['cl_cargues']" titulo="Cargues en los que aparece" [plegable]="true"></app-prospeccion-bloque>
+            <app-prospeccion-bloque [bloque]="c.bloques['cl_prospeccion']" titulo="Prospecciones" [plegable]="true"></app-prospeccion-bloque>
+            <app-prospeccion-bloque [bloque]="c.bloques['cl_detalle']" titulo="Campañas del cliente (DetalleCampanas)" [plegable]="true"></app-prospeccion-bloque>
+            <app-prospeccion-bloque [bloque]="c.bloques['cl_analisis']" titulo="Análisis de listas" [plegable]="true"></app-prospeccion-bloque>
+            <app-prospeccion-bloque [bloque]="c.bloques['cl_pagares']" titulo="Pagarés" [plegable]="true"></app-prospeccion-bloque>
+            <app-prospeccion-bloque [bloque]="c.bloques['cl_campanas']" titulo="Campañas generadas por sus lotes" [plegable]="true"></app-prospeccion-bloque>
+            <app-prospeccion-bloque [bloque]="c.bloques['cl_errores']" titulo="Errores registrados" [plegable]="true"></app-prospeccion-bloque>
+            <app-prospeccion-bloque [bloque]="c.bloques['cl_traza']" titulo="Traza transaccional" [plegable]="true"></app-prospeccion-bloque>
+          </div>
+        }
+      }
+
+      <!-- ===================== PROCESOS ===================== -->
+      @if (pestana === 'procesos') {
+        <form class="filtros" (ngSubmit)="cargarProcesos()">
+          <label class="campo">Período
+            <select [(ngModel)]="procDias" name="pd">@for (p of periodos; track p.dias) { <option [ngValue]="p.dias">{{ p.texto }}</option> }</select>
+          </label>
+          <label class="campo">Estado
+            <select [(ngModel)]="procEstado" name="pe">
+              <option value="">Todos</option>
+              @for (o of procesos?.catalogos?.estados || []; track o.Id) { <option [value]="o.Id">{{ o.Nombre }}</option> }
+            </select>
+          </label>
+          <label class="campo">Aliado
+            <select [(ngModel)]="procAliado" name="pa">
+              <option value="">Todos</option>
+              @for (o of procesos?.catalogos?.aliados || []; track o.Id) { <option [value]="o.Id">{{ o.Nombre }}</option> }
+            </select>
+          </label>
+          <label class="campo">Tope
+            <select [(ngModel)]="procTop" name="pt"><option [ngValue]="100">100</option><option [ngValue]="200">200</option><option [ngValue]="500">500</option></select>
+          </label>
+          <button type="submit" class="btn btn--marca" [disabled]="cargandoProcesos">{{ cargandoProcesos ? 'Consultando…' : 'Aplicar' }}</button>
+          <button type="button" class="btn" (click)="limpiarProcesos()" [disabled]="cargandoProcesos">Limpiar</button>
+        </form>
+        @if (errorProcesos) { <div class="error-banner" role="alert">{{ errorProcesos }}</div> }
+        <app-prospeccion-bloque [bloque]="procesos?.bloques?.['tab_procesos']" titulo="Procesos aliado" (documento)="verCliente($event)"></app-prospeccion-bloque>
+      }
+
+      <!-- ===================== PAGARÉS ===================== -->
+      @if (pestana === 'pagares') {
+        <div class="filtros">
+          <label class="campo">Período
+            <select [(ngModel)]="pagDias" name="pgd" (ngModelChange)="cargarPagares()">@for (p of periodos; track p.dias) { <option [ngValue]="p.dias">{{ p.texto }}</option> }</select>
+          </label>
+        </div>
+        @if (errorPagares) { <div class="error-banner" role="alert">{{ errorPagares }}</div> }
+        <div class="apilado">
+          <app-prospeccion-bloque [bloque]="pagares?.bloques?.['tab_pagares_estado']" titulo="Pagarés por estado"></app-prospeccion-bloque>
+          <app-prospeccion-bloque [bloque]="pagares?.bloques?.['tab_pagares']" titulo="Pagarés publicados" (documento)="verCliente($event)"></app-prospeccion-bloque>
+        </div>
+      }
+
+      <!-- ===================== LOGS ===================== -->
+      @if (pestana === 'logs') {
+        <div class="filtros">
+          <label class="campo">Tabla de log
+            <select [(ngModel)]="logTabla" name="lt" (ngModelChange)="cargarLogs()">
+              @for (t of logs?.tablas || []; track t) { <option [value]="t">{{ t }}</option> }
+            </select>
+          </label>
+          <label class="campo">Período
+            <select [(ngModel)]="logDias" name="ld" (ngModelChange)="cargarLogs()">@for (p of periodos; track p.dias) { <option [ngValue]="p.dias">{{ p.texto }}</option> }</select>
+          </label>
+        </div>
+        @if (errorLogs) { <div class="error-banner" role="alert">{{ errorLogs }}</div> }
+        <div class="apilado">
+          <app-prospeccion-bloque [bloque]="logs?.bloques?.['tab_log_dia']" titulo="Registros por día"></app-prospeccion-bloque>
+          <app-prospeccion-bloque [bloque]="logs?.bloques?.['tab_log']" titulo="Registros del log" (documento)="verCliente($event)"></app-prospeccion-bloque>
+        </div>
+      }
+
+      <!-- ===================== ESQUEMA ===================== -->
+      @if (pestana === 'esquema') {
+        <div class="filtros">
+          <input class="entrada" type="search" placeholder="Buscar tabla o columna…" [(ngModel)]="filtroEsquema" name="fe" aria-label="Buscar tabla o columna" />
+          <button type="button" class="btn" (click)="cargarEsquema(true)" [disabled]="cargandoEsquema">↻ Releer esquema</button>
+          @if (esquema) { <span class="suave">{{ tablasEsquema.length }} de {{ esquema.tablas.length }} tablas</span> }
+        </div>
+        @if (errorEsquema) { <div class="error-banner" role="alert">{{ errorEsquema }}</div> }
+        @if (esquema; as q) {
+          @if (q.aviso) { <div class="nota nota--aviso">{{ q.aviso }}</div> }
+          @else if (!q.descubierto) { <div class="nota nota--aviso">Esquema mínimo conocido (no se pudo leer INFORMATION_SCHEMA).</div> }
+          <section class="panel">
+            <header><h3>Tablas del esquema PD que ve la cuenta</h3><p>Así se arman las consultas: los nombres y tipos de columna salen de aquí, no están escritos a mano.</p></header>
+            <ul class="tablas">
+              @for (t of tablasEsquema; track t.nombre) {
+                <li>
+                  <button type="button" class="tabla-fila" (click)="alternarTabla(t.nombre)" [attr.aria-expanded]="tablaAbierta === t.nombre">
+                    <span class="flecha" [class.flecha--abierta]="tablaAbierta === t.nombre">▾</span>
+                    <strong class="mono">{{ t.nombre }}</strong><span class="suave">{{ t.columnas.length }} columnas</span>
+                  </button>
+                  @if (tablaAbierta === t.nombre) {
+                    <ul class="columnas">
+                      @for (c of t.columnas; track c.nombre) { <li><span class="mono">{{ c.nombre }}</span><span class="suave">{{ c.tipo }}{{ c.largo ? '(' + (c.largo === -1 ? 'max' : c.largo) + ')' : '' }}</span></li> }
+                    </ul>
+                  }
+                </li>
+              }
+            </ul>
+          </section>
+        }
+      }
+    }
+  }
+</div>
+
+<!-- ======================= DETALLE DE UN CARGUE ======================= -->
+@if (cargueSel) {
+  <div class="overlay" (click)="cerrarCargue()">
+    <div class="modal" role="dialog" aria-modal="true" [attr.aria-label]="'Cargue ' + cargueSel" (click)="$event.stopPropagation()">
+      <div class="modal__cab">
+        <div><h2>Cargue {{ cargueSel }}</h2><p class="suave">Prospectos, lotes generados y estado de los procesos aliado.</p></div>
+        <button type="button" class="cerrar" (click)="cerrarCargue()" aria-label="Cerrar">✕</button>
+      </div>
+      @if (errorCargue) { <div class="error-banner" role="alert">{{ errorCargue }}</div> }
+      @if (cargandoCargue && !cargueDatos) { <div class="esq"><span></span><span></span><span></span></div> }
+      @if (cargueDatos; as d) {
+        @if (resumenCargue.length) {
+          <section class="kpis kpis--chicos">
+            @for (k of resumenCargue; track k.etiqueta) { <article class="kpi"><span class="kpi__tit">{{ k.etiqueta }}</span><strong class="kpi__val kpi__val--chico">{{ k.valor }}</strong></article> }
+          </section>
+        }
+        <div class="apilado">
+          <app-prospeccion-bloque [bloque]="d.bloques['cd_fila']" titulo="Datos del cargue"></app-prospeccion-bloque>
+          <app-prospeccion-bloque [bloque]="d.bloques['cd_procesos_estado']" titulo="Procesos de los lotes del cargue, por estado"></app-prospeccion-bloque>
+          <app-prospeccion-bloque [bloque]="d.bloques['cd_lotes']" titulo="Lotes (IdLote) generados" [plegable]="true"></app-prospeccion-bloque>
+          <app-prospeccion-bloque [bloque]="d.bloques['cd_pendientes']" titulo="Prospectos sin prospectar" [plegable]="true" [abierto]="false" (documento)="verCliente($event)"></app-prospeccion-bloque>
+          <app-prospeccion-bloque [bloque]="d.bloques['cd_prospeccion']" titulo="Prospecciones creadas por el cargue" [plegable]="true" [abierto]="false" (documento)="verCliente($event)"></app-prospeccion-bloque>
+          <app-prospeccion-bloque [bloque]="d.bloques['cd_procesos']" titulo="Procesos aliado de esos lotes" [plegable]="true" [abierto]="false" (documento)="verCliente($event)"></app-prospeccion-bloque>
+          <app-prospeccion-bloque [bloque]="d.bloques['cd_prospectos']" titulo="Prospectos del cargue" [plegable]="true" [abierto]="false" (documento)="verCliente($event)"></app-prospeccion-bloque>
+        </div>
+      }
+    </div>
+  </div>
+}
+
+<!-- ======================= CONEXIÓN (ADMIN_POD) ======================= -->
+@if (mostrarConexion) {
+  <div class="overlay" (click)="cerrarConexion()">
+    <div class="modal modal--conexion" role="dialog" aria-modal="true" aria-label="Conexión a GestionCliente" (click)="$event.stopPropagation()">
+      <div class="modal__cab">
+        <div><h2>Conexión a GestionCliente</h2><p class="suave">Solo lectura. Usa una cuenta con permiso SELECT sobre el esquema PD (y sobre LogTransaccional.Traza si quieres ver la traza).</p></div>
+        <button type="button" class="cerrar" (click)="cerrarConexion()" aria-label="Cerrar">✕</button>
+      </div>
+      <form class="form" (ngSubmit)="guardarConexion()" autocomplete="off">
+        <label class="campo campo--bloque">Servidor (host o host\instancia)
+          <input type="text" [(ngModel)]="form.servidor" name="servidor" placeholder="fabogsqlclu" autocomplete="off" required />
+        </label>
+        <div class="dos">
+          <label class="campo campo--bloque">Puerto
+            <input type="number" [(ngModel)]="form.puerto" name="puerto" min="1" max="65535" />
+          </label>
+          <label class="campo campo--bloque">Base de datos
+            <input type="text" [(ngModel)]="form.base" name="base" placeholder="GestionCliente" autocomplete="off" />
+          </label>
+        </div>
+        <div class="dos">
+          <label class="campo campo--bloque">Usuario
+            <input type="text" [(ngModel)]="form.usuario" name="usuario" autocomplete="off" required />
+          </label>
+          <label class="campo campo--bloque">Clave
+            <input type="password" [(ngModel)]="form.clave" name="clave" autocomplete="new-password"
+                   [placeholder]="estado?.conexion?.tieneClave ? '•••••• (déjala vacía para conservar la actual' + (estado?.conexion?.claveFin ? ', termina en «' + estado?.conexion?.claveFin + '»' : '') + ')' : ''" />
+          </label>
+        </div>
+        <label class="check"><input type="checkbox" [(ngModel)]="form.cifrado" name="cifrado" /> Cifrar la conexión (Encrypt)</label>
+        <label class="check"><input type="checkbox" [(ngModel)]="form.confiarCertificado" name="confiar" /> Confiar en el certificado del servidor</label>
+        <p class="suave">La clave se guarda cifrada en la base de AXIS y nunca vuelve al navegador. Si no guardas nada, se usan las variables GESTIONCLIENTE_DB_* del servidor.</p>
+
+        @if (errorConexion) { <div class="error-banner" role="alert">{{ errorConexion }}</div> }
+        @if (prueba; as p) {
+          <div class="prueba" [class.prueba--mal]="!p.ok" role="status">
+            @if (p.ok) { <strong>Conexión correcta.</strong> {{ p.version }} · base {{ p.baseConectada }} }
+            @else { <strong>No se pudo conectar.</strong> {{ p.error }} }
+          </div>
+        }
+        <div class="pie">
+          @if (estado?.conexion?.guardadaEnApp) {
+            <button type="button" class="btn btn--peligro" (click)="quitarConexion()" [disabled]="guardando">{{ confirmarQuitar ? 'Confirmar: quitar conexión guardada' : 'Quitar conexión guardada' }}</button>
+          }
+          <span class="espacio"></span>
+          <button type="button" class="btn" (click)="probarConexion()" [disabled]="probando || guardando">{{ probando ? 'Probando…' : 'Probar conexión' }}</button>
+          <button type="submit" class="btn btn--marca" [disabled]="guardando || probando || !form.servidor.trim() || !form.usuario.trim()">{{ guardando ? 'Guardando…' : 'Guardar' }}</button>
+        </div>
+      </form>
+    </div>
+  </div>
+}

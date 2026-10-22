@@ -1,0 +1,689 @@
+<header class="cab">
+  <div>
+    <h1>Consumo y reusos</h1>
+    <p class="sub">Cuántas consultas se hacen por día a ASISA y a OLIMPIA, cuántas son reusos (el mismo cliente repitiendo la consulta) y qué clientes consultan más veces de lo que deberían: ahí está el sobrecosto. Toma toda la base ORQBIOMETRIA (solo lectura), separa días hábiles de no hábiles y cruza cada caso con su regla, resultado y capturas.</p>
+  </div>
+  <div class="cab-acciones">
+    <a class="btn btn-ghost btn-sm" routerLink="/biometria">Consultar un cliente</a>
+    <a class="btn btn-ghost btn-sm" routerLink="/biometria/por-fecha">Biometrías por fecha</a>
+    <button type="button" class="btn btn-ghost btn-sm" *ngIf="datos" (click)="exportarExcel()">Exportar Excel</button>
+    <button type="button" class="btn btn-purple btn-sm" *ngIf="esAdmin && config" (click)="abrirConfig()">Configuración</button>
+  </div>
+</header>
+
+<div class="cargando chico-v" *ngIf="cargandoConfig"><div class="spinner"></div></div>
+<div class="error-state" *ngIf="errorConfig">{{ errorConfig }}</div>
+
+<ng-container *ngIf="config && !cargandoConfig">
+  <!-- ================= SIN CONFIGURAR ================= -->
+  <section class="tarjeta vacio-inicial" *ngIf="!config.configurada">
+    <h2>Falta configurar la conexión a ORQBIOMETRIA</h2>
+    <p *ngIf="esAdmin">Indica el usuario y la clave de SQL Server (servidor {{ config.servidor || 'AWLPROD001' }}, puerto {{ config.puerto || 61733 }}). Se guardan cifrados y solo los puedes cambiar tú.</p>
+    <p *ngIf="!esAdmin">Un ADMIN_POD debe configurar el usuario y la clave de SQL Server para este tablero.</p>
+    <button type="button" class="btn btn-purple" *ngIf="esAdmin" (click)="abrirConfig()">Configurar conexión</button>
+  </section>
+
+  <ng-container *ngIf="config.configurada">
+    <!-- ================= FILTRO ================= -->
+    <section class="tarjeta filtro-fechas">
+      <div class="filtro-fila">
+        <label class="etiqueta">Desde
+          <input class="entrada" type="date" [(ngModel)]="desde" name="c-desde" (ngModelChange)="cambioManual()" [disabled]="consultando" />
+        </label>
+        <label class="etiqueta">Hasta
+          <input class="entrada" type="date" [(ngModel)]="hasta" name="c-hasta" (ngModelChange)="cambioManual()" [disabled]="consultando" />
+        </label>
+        <div class="presets" role="group" aria-label="Rangos rápidos">
+          <button type="button" class="chip-filtro" [class.activo]="presetActivo === 'hoy'" (click)="elegirPreset('hoy')" [disabled]="consultando">Hoy</button>
+          <button type="button" class="chip-filtro" [class.activo]="presetActivo === 'ayer'" (click)="elegirPreset('ayer')" [disabled]="consultando">Ayer</button>
+          <button type="button" class="chip-filtro" [class.activo]="presetActivo === '7'" (click)="elegirPreset('7')" [disabled]="consultando">7 días</button>
+          <button type="button" class="chip-filtro" [class.activo]="presetActivo === '15'" (click)="elegirPreset('15')" [disabled]="consultando">15 días</button>
+          <button type="button" class="chip-filtro" [class.activo]="presetActivo === '30'" (click)="elegirPreset('30')" [disabled]="consultando">30 días</button>
+          <button type="button" class="chip-filtro" [class.activo]="presetActivo === 'mes'" (click)="elegirPreset('mes')" [disabled]="consultando">Este mes</button>
+        </div>
+        <button type="button" class="btn btn-purple" *ngIf="puedeEditar" (click)="consultar()" [disabled]="consultando || !rangoValido">
+          <span class="spinner chico" *ngIf="consultando"></span>{{ consultando ? 'Consultando…' : (datos ? 'Actualizar' : 'Consultar') }}
+        </button>
+      </div>
+      <p class="ayuda" *ngIf="!puedeEditar">Este módulo no está habilitado para tu usuario.</p>
+      <p class="ayuda" *ngIf="puedeEditar">Máximo 93 días. Los casos se cuentan por su fecha de creación. <strong>ASISA</strong> = reglas 1 y 99 (canal 0 y también canal 1, hecho desde la app) · <strong>OLIMPIA</strong> = todo lo demás: canal 0 «WhoisWho» y canal 1 con regla 0. Sábados, domingos y festivos (tabla DIASNOHABILES) se marcan como no hábiles.</p>
+    </section>
+
+    <div class="error-state" *ngIf="error">
+      {{ error }}
+      <button type="button" class="btn btn-ghost btn-sm" *ngIf="sinConfiguracion && esAdmin" (click)="abrirConfig()">Configurar conexión</button>
+    </div>
+
+    <div class="cargando chico-v" *ngIf="consultando && !datos"><div class="spinner"></div><p>Consultando ORQBIOMETRIA… (puede tardar unos segundos)</p></div>
+
+    <ng-container *ngIf="datos as d">
+      <p class="resumen-consulta">
+        Del <strong>{{ fechaLarga(d.filtro.desde) }}</strong> al <strong>{{ fechaLarga(d.filtro.hasta) }}</strong> ({{ d.filtro.dias }} día{{ d.filtro.dias === 1 ? '' : 's' }})
+        · comparado con {{ fechaLarga(d.filtro.comparadoCon.desde) }} – {{ fechaLarga(d.filtro.comparadoCon.hasta) }}
+        · consultado {{ d.generado | date: 'dd/MM/yyyy HH:mm' }} ({{ d.duracionMs / 1000 | number: '1.1-1' }} s{{ d.deCache ? ', de memoria' : '' }})
+      </p>
+
+      <div class="aviso-aviso" *ngFor="let a of d.avisos">No se pudo calcular la sección «{{ a.seccion }}»: {{ a.error }}</div>
+
+      <!-- ================= HALLAZGOS ================= -->
+      <section class="hallazgos" aria-label="Hallazgos">
+        <div class="hallazgo" *ngFor="let h of d.hallazgos" [ngClass]="'hz-' + h.nivel">
+          <span class="hz-nivel">{{ h.nivel === 'alto' ? 'Atención' : h.nivel === 'medio' ? 'Revisar' : 'Dato' }}</span>
+          <div><strong>{{ h.titulo }}</strong><span class="hz-det">{{ h.detalle }}</span></div>
+        </div>
+      </section>
+
+      <!-- ================= KPIs ================= -->
+      <div class="kpis kpis-6">
+        <div class="kpi"><span class="kpi-et">Casos en el rango</span><span class="kpi-v">{{ d.general.total | number: '1.0-0' }}</span>
+          <span class="kpi-s" [ngClass]="claseVariacion(variacion(d.general.total, d.general.previo))">{{ textoVariacion(variacion(d.general.total, d.general.previo)) }}</span></div>
+        <div class="kpi" title="Reusos = casos − cliente-días (cada cliente-día cuenta una consulta normal; las demás son reusos)"><span class="kpi-et">Reusos</span><span class="kpi-v">{{ d.general.reusos | number: '1.0-0' }}</span>
+          <span class="kpi-s">{{ d.general.tasaReuso | number: '1.0-1' }}% de los casos · {{ d.general.clientesReusan | number: '1.0-0' }} de {{ d.general.clientesDia | number: '1.0-0' }} cliente-días repitieron</span></div>
+        <div class="kpi" [class.kpi-aviso]="d.general.reusosEvitables > 0"><span class="kpi-et">Reusos evitables</span><span class="kpi-v">{{ d.general.reusosEvitables | number: '1.0-0' }}</span>
+          <span class="kpi-s">consultas hechas cuando el cliente ya tenía un éxito ese día con ese proveedor</span></div>
+        <div class="kpi" [class.kpi-alerta]="d.general.excesoClientesDia > 0 || d.general.excesoClientesMes > 0"><span class="kpi-et">Sobre el límite por cliente</span><span class="kpi-v">{{ d.general.excesoConsultas | number: '1.0-0' }}</span>
+          <span class="kpi-s">{{ textoKpiLimite }}</span></div>
+        <div class="kpi" *ngFor="let p of d.proveedores"><span class="kpi-et"><span class="marca" [ngClass]="claseSerie(p.proveedor)"></span>{{ p.proveedor }}</span><span class="kpi-v">{{ p.total | number: '1.0-0' }}</span>
+          <span class="kpi-s" [ngClass]="claseVariacion(variacion(p.total, p.previo.total))">{{ textoVariacion(variacion(p.total, p.previo.total)) }}</span></div>
+      </div>
+
+      <!-- ================= PESTAÑAS ================= -->
+      <nav class="pestanas" role="tablist" aria-label="Secciones del tablero">
+        <button type="button" role="tab" *ngFor="let v of vistas" [class.activa]="vista === v.id" [attr.aria-selected]="vista === v.id" (click)="cambiarVista(v.id)">
+          {{ v.texto }}<span class="pestana-n" *ngIf="v.id === 'clientes' && d.topClientes.length">{{ d.topClientes.length }}</span>
+        </button>
+      </nav>
+
+      <ng-container *ngIf="vista === 'resumen'">
+      <!-- ================= PROVEEDORES ================= -->
+      <div class="prov-grid">
+        <section class="tarjeta prov" *ngFor="let p of d.proveedores">
+          <div class="tarjeta-cab">
+            <h2><span class="marca" [ngClass]="claseSerie(p.proveedor)"></span>{{ p.proveedor }}</h2>
+            <span class="tarjeta-sub">{{ p.proveedor === 'ASISA' ? 'reglas 1 y 99 · canal 0 y app' : 'canal 0 WhoisWho + app (regla 0)' }}</span>
+          </div>
+          <div class="prov-cifras">
+            <div><span class="cifra">{{ p.total | number: '1.0-0' }}</span><span class="cifra-et">casos</span></div>
+            <div><span class="cifra">{{ p.promedioDiario | number: '1.0-1' }}</span><span class="cifra-et">promedio por día</span></div>
+            <div><span class="cifra">{{ p.pico.total | number: '1.0-0' }}</span><span class="cifra-et">pico ({{ fechaCorta(p.pico.fecha) }})</span></div>
+            <div><span class="cifra">{{ p.clientes | number: '1.0-0' }}</span><span class="cifra-et">clientes distintos</span></div>
+          </div>
+          <div class="barra-estados" role="img" [attr.aria-label]="'Estados de ' + p.proveedor">
+            <span *ngFor="let s of segmentos(p)" [ngClass]="s.clase" [style.width.%]="s.pct" [title]="s.etiqueta + ': ' + s.valor"></span>
+          </div>
+          <ul class="leyenda-estados">
+            <li *ngFor="let s of segmentos(p)"><span class="punto" [ngClass]="s.clase"></span>{{ s.etiqueta }} <strong>{{ s.valor | number: '1.0-0' }}</strong><small> {{ p.total ? ((s.valor / p.total) * 100 | number: '1.0-1') : 0 }}%</small></li>
+          </ul>
+          <div class="reuso-bloque">
+            <div title="Casos − cliente-días"><span class="cifra">{{ p.reuso.reusos | number: '1.0-0' }}</span><span class="cifra-et">reusos ({{ p.reuso.tasa | number: '1.0-1' }}% de los casos)</span></div>
+            <div title="Cliente-días con más de una consulta"><span class="cifra">{{ p.reuso.clientesReusan | number: '1.0-0' }}</span><span class="cifra-et">cliente-días con reuso ({{ p.reuso.tasaClientes | number: '1.0-1' }}%)</span></div>
+            <div [class.t-warn]="p.reuso.despuesExito > 0"><span class="cifra">{{ p.reuso.despuesExito | number: '1.0-0' }}</span><span class="cifra-et">tras un éxito (evitables)</span></div>
+            <div><span class="cifra">{{ p.reuso.consultasPorClienteDia | number: '1.0-2' }}</span><span class="cifra-et">consultas por cliente-día</span></div>
+          </div>
+          <p class="prov-nota"><span class="chip-dia chip-habil">Hábiles</span> {{ p.habiles.promedio | number: '1.0-1' }} por día ({{ p.habiles.dias }} día{{ p.habiles.dias === 1 ? '' : 's' }})
+            · <span class="chip-dia chip-nohabil">No hábiles</span> {{ p.noHabiles.promedio | number: '1.0-1' }} por día ({{ p.noHabiles.dias }} día{{ p.noHabiles.dias === 1 ? '' : 's' }})</p>
+          <p class="prov-nota">Reintentos acumulados en los casos (columna «reintentos»): <strong>{{ p.reintentosAcum | number: '1.0-0' }}</strong>
+            · Cliente-días sobre el límite: <strong [class.t-mal]="p.excesoClientesDia > 0 && p.limite.avisar" [class.t-warn]="p.excesoClientesDia > 0 && !p.limite.avisar">{{ p.excesoClientesDia | number: '1.0-0' }}</strong>
+            ({{ p.excesoConsultas | number: '1.0-0' }} consultas de más)</p>
+
+          <!-- Límites por cliente de este proveedor -->
+          <div class="limites" [class.lim-solo]="!p.limite.avisar">
+            <div class="lim-cab">
+              <strong>Límite por cliente</strong>
+              <span class="chip chip-alta" *ngIf="p.limite.avisar">se alerta</span>
+              <span class="chip chip-info" *ngIf="!p.limite.avisar">solo monitoreo</span>
+            </div>
+            <p class="lim-txt">{{ textoLimite(p.limite) }}</p>
+            <div class="lim-cifras" *ngIf="p.limite.dia !== null || p.limite.mes !== null">
+              <div *ngIf="p.limite.dia !== null" [class.t-mal]="p.limite.clientesExcedenDia > 0 && p.limite.avisar" [class.t-warn]="p.limite.clientesExcedenDia > 0 && !p.limite.avisar"><span class="cifra">{{ p.limite.clientesExcedenDia | number: '1.0-0' }}</span><span class="cifra-et">cliente-días sobre {{ p.limite.dia }} por día</span></div>
+              <div *ngIf="p.limite.dia !== null"><span class="cifra">{{ p.limite.alLimiteHoy | number: '1.0-0' }}</span><span class="cifra-et">clientes hoy justo en {{ p.limite.dia }}</span></div>
+              <div *ngIf="p.limite.mes !== null" [class.t-mal]="(p.limite.mesActual?.clientesExceden ?? 0) > 0 && p.limite.avisar" [class.t-warn]="(p.limite.mesActual?.clientesExceden ?? 0) > 0 && !p.limite.avisar"><span class="cifra">{{ p.limite.mesActual?.clientesExceden ?? 0 | number: '1.0-0' }}</span><span class="cifra-et">clientes sobre {{ p.limite.mes }} en {{ p.limite.mesActual?.mes ?? 'el mes' }}</span></div>
+              <div *ngIf="p.limite.mes !== null"><span class="cifra">{{ p.limite.mesActual?.clientesAlLimite ?? 0 | number: '1.0-0' }}</span><span class="cifra-et">clientes justo en {{ p.limite.mes }} este mes</span></div>
+            </div>
+          </div>
+
+          <!-- Cupos (solo si el ADMIN_POD los configuró) -->
+          <div class="cupos" *ngIf="p.cupo.dia !== null || p.cupo.mes !== null">
+            <div class="cupo" *ngIf="p.cupo.dia !== null">
+              <div class="cupo-cab"><span>Cupo diario <strong>{{ p.cupo.dia | number: '1.0-0' }}</strong></span><span [ngClass]="p.cupo.diasExcedidos.length ? 't-mal' : 't-ok'">{{ p.cupo.diasExcedidos.length ? p.cupo.diasExcedidos.length + ' día(s) superado(s)' : 'sin superarlo' }}</span></div>
+              <div class="progreso"><span [ngClass]="claseCupo(p.pico.total, p.cupo.dia)" [style.width.%]="pctCupo(p.pico.total, p.cupo.dia)"></span></div>
+              <small class="gris">Día de mayor consumo: {{ p.pico.total | number: '1.0-0' }} ({{ pctReal(p.pico.total, p.cupo.dia) }}% del cupo){{ p.cupo.sobrecostoDia ? ' · sobrecosto estimado $' + (p.cupo.sobrecostoDia | number: '1.0-0') : '' }}</small>
+            </div>
+            <div class="cupo" *ngIf="p.cupo.mes !== null && p.cupo.mesActual">
+              <div class="cupo-cab"><span>Cupo mensual <strong>{{ p.cupo.mes | number: '1.0-0' }}</strong> · {{ p.cupo.mesActual.periodo }}</span><span [ngClass]="p.cupo.mesActual.total > p.cupo.mes ? 't-mal' : 't-ok'">{{ p.cupo.mesActual.total | number: '1.0-0' }} usados</span></div>
+              <div class="progreso"><span [ngClass]="claseCupo(p.cupo.mesActual.total, p.cupo.mes)" [style.width.%]="pctCupo(p.cupo.mesActual.total, p.cupo.mes)"></span></div>
+              <small class="gris">Al ritmo actual ({{ p.cupo.mesActual.metodoProyeccion === 'calendario' ? 'promedio del calendario' : 'promedio de días hábiles y no hábiles por separado' }}) cerraría el mes en ~{{ p.cupo.mesActual.proyeccion | number: '1.0-0' }}{{ p.cupo.mesActual.proyeccion > p.cupo.mes ? ' (superaría el cupo)' : '' }}{{ p.cupo.sobrecostoMes ? ' · sobrecosto estimado $' + (p.cupo.sobrecostoMes | number: '1.0-0') : '' }}</small>
+            </div>
+          </div>
+          <p class="ayuda" *ngIf="p.cupo.dia === null && p.cupo.mes === null">Sin cupo configurado.{{ esAdmin ? ' Puedes definirlo en Configuración para medir el sobrecosto.' : '' }}</p>
+        </section>
+      </div>
+
+      <section class="tarjeta" *ngIf="d.origenes.length">
+        <div class="tarjeta-cab"><h2>Por origen (canal y regla)</h2><span class="tarjeta-sub">Canal 0 = WhoisWho · canal 1 = app · una regla es un producto/subproducto en una transacción (Enrolamiento o Login)</span></div>
+        <div class="tabla-wrap">
+          <table class="tabla">
+            <thead><tr><th>Origen</th><th title="Producto y subproducto que configura la regla (REGLA → PRODUCTOSUBPRODUCTO)">Producto · subproducto</th><th title="REGLA.idTransaccion → TRANSACCION">Transacción</th><th title="Proveedor que tiene configurado la regla (VALIDACION → PROVEEDORSERVICIO)">Configurada con</th><th class="num">Casos</th><th class="num">Exitosos</th><th class="num">Fallidos</th><th class="num">En reintento</th><th class="num">Otros estados</th><th class="num">Clientes</th></tr></thead>
+            <tbody>
+              <tr *ngFor="let o of d.origenes">
+                <td><span class="marca" [ngClass]="claseSerie(o.proveedor)"></span>{{ o.etiqueta }}</td>
+                <td class="gris td-cons">{{ o.descripcionRegla || '—' }}</td><td class="gris">{{ o.transaccion || '—' }}</td><td class="gris">{{ o.consultaA || '—' }}</td>
+                <td class="num"><strong>{{ o.total | number: '1.0-0' }}</strong></td><td class="num">{{ o.exitosos | number: '1.0-0' }}</td><td class="num">{{ o.fallidos | number: '1.0-0' }}</td>
+                <td class="num">{{ o.reintentos | number: '1.0-0' }}</td><td class="num" title="Pendientes, en proceso y fuera de línea">{{ o.pendientes + o.enProceso + o.fueraLinea | number: '1.0-0' }}</td>
+                <td class="num">{{ o.clientes | number: '1.0-0' }}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- ================= TENDENCIA DIARIA ================= -->
+      <section class="tarjeta">
+        <div class="tarjeta-cab">
+          <h2>Por día · {{ etiquetaMetrica }}</h2>
+          <div class="selector-dias" role="group" aria-label="Métrica del gráfico">
+            <button type="button" [class.activo]="metrica === 'total'" (click)="cambiarMetrica('total')">Casos</button>
+            <button type="button" [class.activo]="metrica === 'reintentos'" (click)="cambiarMetrica('reintentos')">Reintentos</button>
+            <button type="button" [class.activo]="metrica === 'fallidos'" (click)="cambiarMetrica('fallidos')">Fallidos</button>
+            <button type="button" [class.activo]="verTabla" (click)="verTabla = !verTabla">Ver como tabla</button>
+          </div>
+        </div>
+        <div class="leyenda" aria-hidden="false">
+          <span *ngFor="let p of proveedores"><span class="marca" [ngClass]="claseSerie(p)"></span>{{ p }}</span>
+          <span *ngIf="bandasNoHabil.length"><span class="raya-nohabil"></span>sábado, domingo o festivo</span>
+          <span class="leyenda-cupo" *ngIf="metrica === 'total' && (d.umbrales.cupos.ASISA.dia !== null || d.umbrales.cupos.OLIMPIA.dia !== null)"><span class="raya-cupo"></span>cupo diario</span>
+        </div>
+
+        <div class="grafico" *ngIf="!verTabla">
+          <svg [attr.viewBox]="'0 0 ' + ancho + ' ' + alto" preserveAspectRatio="xMidYMid meet" role="img" [attr.aria-label]="'Casos por día de ASISA y OLIMPIA, ' + etiquetaMetrica"
+               (mousemove)="moverSobreTendencia($event)" (mouseleave)="salirTendencia()">
+            <g class="rejilla">
+              <ng-container *ngFor="let t of ticksY">
+                <line [attr.x1]="margen.izq" [attr.x2]="ancho - margen.der" [attr.y1]="t.y" [attr.y2]="t.y"></line>
+                <text class="eje" [attr.x]="margen.izq - 8" [attr.y]="t.y + 4" text-anchor="end">{{ t.v }}</text>
+              </ng-container>
+            </g>
+            <text class="eje" *ngFor="let t of ticksX" [attr.x]="t.x" [attr.y]="alto - 8" text-anchor="middle">{{ t.texto }}</text>
+            <rect class="banda-nohabil" *ngFor="let b of bandasNoHabil" [attr.x]="b.x" [attr.y]="margen.arr" [attr.width]="b.ancho" [attr.height]="planoH"><title>{{ b.texto }}</title></rect>
+            <ng-container *ngFor="let s of series">
+              <line class="cupo-linea" [ngClass]="claseSerie(s.proveedor)" *ngIf="s.cupoY !== null" [attr.x1]="margen.izq" [attr.x2]="ancho - margen.der" [attr.y1]="s.cupoY" [attr.y2]="s.cupoY"></line>
+              <path class="linea" [ngClass]="claseSerie(s.proveedor)" [attr.d]="s.ruta"></path>
+            </ng-container>
+            <line class="mira" *ngIf="hoverIdx !== null" [attr.x1]="xs[hoverIdx]" [attr.x2]="xs[hoverIdx]" [attr.y1]="margen.arr" [attr.y2]="margen.arr + planoH"></line>
+            <ng-container *ngFor="let s of series">
+              <ng-container *ngIf="s.puntos.length <= 40 || hoverIdx !== null">
+                <ng-container *ngFor="let pt of s.puntos; let i = index">
+                  <ng-container *ngIf="s.puntos.length <= 40 || i === hoverIdx">
+                    <circle *ngIf="s.proveedor === 'ASISA'" class="punto-g s1" [class.grande]="i === hoverIdx" [attr.cx]="pt.x" [attr.cy]="pt.y" [attr.r]="i === hoverIdx ? 5 : 3.5"></circle>
+                    <rect *ngIf="s.proveedor === 'OLIMPIA'" class="punto-g s2" [class.grande]="i === hoverIdx" [attr.x]="pt.x - (i === hoverIdx ? 5 : 3.5)" [attr.y]="pt.y - (i === hoverIdx ? 5 : 3.5)" [attr.width]="i === hoverIdx ? 10 : 7" [attr.height]="i === hoverIdx ? 10 : 7"></rect>
+                  </ng-container>
+                </ng-container>
+              </ng-container>
+            </ng-container>
+            <rect class="zona" [attr.x]="margen.izq" [attr.y]="margen.arr" [attr.width]="planoW" [attr.height]="planoH"></rect>
+          </svg>
+          <div class="tooltip" *ngIf="tooltipTendencia as tt" [style.left.%]="tt.left">
+            <strong>{{ tt.fila.diaSemana }} {{ fechaLarga(tt.fila.fecha) }}<small class="tt-nohabil" *ngIf="!tt.fila.habil"> · {{ tt.fila.motivoNoHabil }}</small></strong>
+            <div class="tt-fila"><span class="marca s1"></span>ASISA <b>{{ tt.fila.ASISA[metrica] | number: '1.0-0' }}</b></div>
+            <div class="tt-fila"><span class="marca s2"></span>OLIMPIA <b>{{ tt.fila.OLIMPIA[metrica] | number: '1.0-0' }}</b></div>
+            <div class="tt-fila tt-sub">Reusos: ASISA {{ tt.fila.ASISA.reusos }} · OLIMPIA {{ tt.fila.OLIMPIA.reusos }}</div>
+            <div class="tt-fila tt-sub" *ngIf="tt.fila.ASISA.clientesExceden || tt.fila.OLIMPIA.clientesExceden">Clientes sobre el límite: ASISA {{ tt.fila.ASISA.clientesExceden }} · OLIMPIA {{ tt.fila.OLIMPIA.clientesExceden }}</div>
+          </div>
+        </div>
+
+        <div class="tabla-wrap tabla-alta" *ngIf="verTabla">
+          <table class="tabla">
+            <thead><tr><th>Fecha</th><th>Día</th><th class="num">ASISA casos</th><th class="num">ASISA reusos</th><th class="num">ASISA fallidos</th><th class="num">OLIMPIA casos</th><th class="num">OLIMPIA reusos</th><th class="num">OLIMPIA fallidos</th><th class="num">Clientes sobre el límite</th></tr></thead>
+            <tbody>
+              <tr *ngFor="let f of d.diaria">
+                <td>{{ fechaLarga(f.fecha) }}</td><td><span class="chip-dia" [ngClass]="f.habil ? 'chip-habil' : 'chip-nohabil'">{{ f.habil ? f.diaSemana : f.motivoNoHabil + ' · ' + f.diaSemana }}</span></td>
+                <td class="num">{{ f.ASISA.total | number: '1.0-0' }}</td><td class="num">{{ f.ASISA.reusos | number: '1.0-0' }}</td><td class="num">{{ f.ASISA.fallidos | number: '1.0-0' }}</td>
+                <td class="num">{{ f.OLIMPIA.total | number: '1.0-0' }}</td><td class="num">{{ f.OLIMPIA.reusos | number: '1.0-0' }}</td><td class="num">{{ f.OLIMPIA.fallidos | number: '1.0-0' }}</td>
+                <td class="num">{{ f.ASISA.clientesExceden + f.OLIMPIA.clientesExceden }}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- ================= POR HORA ================= -->
+      <section class="tarjeta">
+        <div class="tarjeta-cab"><h2>Casos por hora del día</h2><span class="tarjeta-sub">Suma de todo el rango elegido</span></div>
+        <div class="leyenda"><span *ngFor="let p of proveedores"><span class="marca" [ngClass]="claseSerie(p)"></span>{{ p }}</span></div>
+        <div class="grafico">
+          <svg [attr.viewBox]="'0 0 ' + ancho + ' ' + alto" preserveAspectRatio="xMidYMid meet" role="img" aria-label="Casos por hora del día de ASISA y OLIMPIA"
+               (mousemove)="moverSobreHoras($event)" (mouseleave)="salirHoras()">
+            <g class="rejilla">
+              <ng-container *ngFor="let t of ticksYHora">
+                <line [attr.x1]="margen.izq" [attr.x2]="ancho - margen.der" [attr.y1]="t.y" [attr.y2]="t.y"></line>
+                <text class="eje" [attr.x]="margen.izq - 8" [attr.y]="t.y + 4" text-anchor="end">{{ t.v }}</text>
+              </ng-container>
+            </g>
+            <ng-container *ngFor="let b of barrasHora">
+              <rect class="fondo-hora" *ngIf="hoverHora === b.hora" [attr.x]="b.x" [attr.y]="margen.arr" [attr.width]="b.ancho" [attr.height]="planoH"></rect>
+              <rect class="barra-g s1" [attr.x]="b.xa" [attr.y]="b.ya" [attr.width]="(b.ancho - 6) / 2" [attr.height]="b.ha" rx="3"></rect>
+              <rect class="barra-g s2" [attr.x]="b.xo" [attr.y]="b.yo" [attr.width]="(b.ancho - 6) / 2" [attr.height]="b.ho" rx="3"></rect>
+              <text class="eje" *ngIf="b.hora % 3 === 0" [attr.x]="b.x + b.ancho / 2" [attr.y]="alto - 8" text-anchor="middle">{{ b.hora < 10 ? '0' + b.hora : b.hora }}h</text>
+            </ng-container>
+          </svg>
+          <div class="tooltip" *ngIf="tooltipHora as th" [style.left.%]="th.left">
+            <strong>{{ th.fila.hora < 10 ? '0' : '' }}{{ th.fila.hora }}:00 – {{ th.fila.hora < 10 ? '0' : '' }}{{ th.fila.hora }}:59</strong>
+            <div class="tt-fila"><span class="marca s1"></span>ASISA <b>{{ th.fila.ASISA.total | number: '1.0-0' }}</b><small> · {{ th.fila.ASISA.reintentos }} reintento(s)</small></div>
+            <div class="tt-fila"><span class="marca s2"></span>OLIMPIA <b>{{ th.fila.OLIMPIA.total | number: '1.0-0' }}</b><small> · {{ th.fila.OLIMPIA.reintentos }} reintento(s)</small></div>
+          </div>
+        </div>
+      </section>
+
+      </ng-container>
+
+      <ng-container *ngIf="vista === 'clientes'">
+      <!-- ================= CLIENTES CON MÁS INTENTOS ================= -->
+      <section class="tarjeta">
+        <div class="tarjeta-cab">
+          <h2>Clientes con más intentos en un mismo día <small class="gris">· haz clic en una fila para ver el detalle</small></h2>
+          <label class="check-chico"><input type="checkbox" [checked]="soloExceso" (change)="alternarExceso()" /> Solo los que superan el límite diario de su proveedor</label>
+        </div>
+        <div class="vacio" *ngIf="!clientesFiltrados.length">{{ d.topClientes.length ? 'Ningún cliente supera el límite en el rango.' : 'Ningún cliente tiene 2 o más intentos el mismo día en el rango.' }}</div>
+        <div class="tabla-wrap" *ngIf="clientesFiltrados.length">
+          <table class="tabla tabla-apilada tabla-cli">
+            <thead><tr><th>Cliente (documento · nombre)</th><th>Proveedor</th><th>Fecha · horario</th><th title="Menor y mayor ID de caso (CASO.id) de ese cliente en el día">ID de caso</th><th>Intentos</th><th class="num" title="Consultas repetidas: intentos − 1">Reusos</th><th title="Exitosos / fallidos / en reintento">Éx. / Fallo / Reint.</th><th></th></tr></thead>
+            <tbody>
+              <tr class="fila-click" *ngFor="let c of clientesPagina; trackBy: trackCliente" tabindex="0" role="button" [attr.aria-label]="'Ver el detalle de ' + (c.documento || 'este cliente') + ' el ' + fechaLarga(c.fecha)"
+                  (click)="abrirDetalle(c)" (keydown.enter)="abrirDetalle(c)">
+                <td class="td-cliente" data-label="Cliente"><span class="mono">{{ c.documento || '—' }}</span><span class="cortar gris bloque">{{ c.nombre || '—' }}</span></td>
+                <td data-label="Proveedor"><span class="marca" [ngClass]="claseSerie(c.proveedor)"></span>{{ c.proveedor }}</td>
+                <td class="td-fecha" data-label="Fecha · horario">{{ fechaLarga(c.fecha) }}<span class="chip-dia chip-nohabil" *ngIf="!c.habil">{{ c.motivoNoHabil }}</span><small class="gris bloque">{{ hora(c.primerIntento) }} – {{ hora(c.ultimoIntento) }}</small></td>
+                <td class="mono td-caso" data-label="ID de caso" title="Menor y mayor ID de caso del cliente en el día; el detalle los lista todos">{{ c.primerCaso ?? '—' }}<ng-container *ngIf="c.ultimoCaso && c.ultimoCaso !== c.primerCaso"><span class="gris"> – </span>{{ c.ultimoCaso }}</ng-container></td>
+                <td class="td-barra" data-label="Intentos"><span class="mini-barra"><span [ngClass]="c.exceso > 0 ? 'mb-mal' : 'mb-ok'" [style.width.%]="(c.intentos / maxIntentos) * 100"></span></span><strong>{{ c.intentos }}</strong>
+                  <span class="chip" [ngClass]="d.umbrales.limites[c.proveedor].avisar ? 'chip-alta' : 'chip-info'" *ngIf="c.exceso > 0">+{{ c.exceso }} sobre el límite{{ d.umbrales.limites[c.proveedor].avisar ? '' : ' (solo monitoreo)' }}</span>
+                  <span class="chip chip-app" *ngIf="c.viaWhoisWho > 0" title="Intentos del canal 0 (WhoisWho)">{{ c.viaWhoisWho }} WhoisWho</span>
+                  <span class="chip chip-app" *ngIf="c.viaApp > 0" title="Intentos hechos desde la app (canal 1)">{{ c.viaApp }} desde app</span></td>
+                <td class="num td-reusos" data-label="Reusos">{{ c.reusos }}<span class="chip chip-evitable" *ngIf="c.despuesExito > 0" title="Consultas hechas cuando el cliente ya tenía un éxito ese día">{{ c.despuesExito }} tras éxito</span></td>
+                <td class="gris td-estados" data-label="Éx. / Fallo / Reint.">{{ c.exitosos }} / {{ c.fallidos }} / {{ c.reintentos }}</td>
+                <td class="td-ver"><span class="ver-detalle">Detalle ›</span></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="paginador" *ngIf="totalPaginasClientes > 1">
+          <button type="button" class="btn-mini" (click)="cambiarPaginaClientes(-1)" [disabled]="paginaClientes <= 1">Anterior</button>
+          <span>Página {{ paginaClientes }} de {{ totalPaginasClientes }}</span>
+          <button type="button" class="btn-mini" (click)="cambiarPaginaClientes(1)" [disabled]="paginaClientes >= totalPaginasClientes">Siguiente</button>
+        </div>
+        <p class="ayuda">Se listan los 50 cliente-día con más intentos. El detalle cruza el caso con sus capturas, resultados, regla y contadores. La cédula y el nombre no se guardan en la auditoría.</p>
+      </section>
+
+      <!-- ================= CLIENTES AL LÍMITE DEL MES ================= -->
+      <section class="tarjeta">
+        <div class="tarjeta-cab">
+          <h2>Clientes sobre el límite del mes <small class="gris">· mes calendario, por proveedor</small></h2>
+          <label class="check-chico"><input type="checkbox" [checked]="soloExcesoMes" (change)="alternarExcesoMes()" /> Solo los que ya lo superaron</label>
+        </div>
+        <div class="resumen-mes">
+          <span *ngFor="let p of d.proveedores" class="rm-item"><span class="marca" [ngClass]="claseSerie(p.proveedor)"></span><strong>{{ p.proveedor }}</strong>
+            <ng-container *ngIf="p.limite.mes !== null; else sinLimMes"> · límite {{ p.limite.mes }} por mes · <strong [class.t-mal]="(p.limite.mesActual?.clientesExceden ?? 0) > 0 && p.limite.avisar" [class.t-warn]="(p.limite.mesActual?.clientesExceden ?? 0) > 0 && !p.limite.avisar">{{ p.limite.mesActual?.clientesExceden ?? 0 }}</strong> cliente(s) por encima · {{ p.limite.mesActual?.clientesAlLimite ?? 0 }} justo en el límite</ng-container>
+            <ng-template #sinLimMes> · sin límite mensual (solo se monitorea)</ng-template></span>
+        </div>
+        <div class="vacio" *ngIf="!clientesMesFiltrados.length">{{ d.clientesMes.length ? 'Ningún cliente ha superado el límite mensual.' : 'Ningún cliente ha llegado al límite mensual en el rango.' }}</div>
+        <div class="tabla-wrap" *ngIf="clientesMesFiltrados.length">
+          <table class="tabla tabla-apilada tabla-cli">
+            <thead><tr><th>Cliente (documento · nombre)</th><th>Proveedor</th><th>Mes</th><th>Consultas del mes</th><th class="num" title="Días distintos del mes con consultas">Días</th><th title="Exitosos / fallidos">Éx. / Fallo</th><th class="num">Hoy</th></tr></thead>
+            <tbody>
+              <tr *ngFor="let c of clientesMesPagina; trackBy: trackClienteMes">
+                <td class="td-cliente" data-label="Cliente"><span class="mono">{{ c.documento || '—' }}</span><span class="cortar gris bloque">{{ c.nombre || '—' }}</span></td>
+                <td data-label="Proveedor"><span class="marca" [ngClass]="claseSerie(c.proveedor)"></span>{{ c.proveedor }}</td>
+                <td data-label="Mes">{{ c.mes }}</td>
+                <td class="td-barra" data-label="Consultas del mes"><span class="mini-barra"><span [ngClass]="c.exceso > 0 ? (d.umbrales.limites[c.proveedor].avisar ? 'mb-mal' : 'mb-warn') : 'mb-ok'" [style.width.%]="pctMes(c)"></span></span><strong>{{ c.intentos }}</strong><small class="gris"> / {{ c.limite }}</small>
+                  <span class="chip" [ngClass]="d.umbrales.limites[c.proveedor].avisar ? 'chip-alta' : 'chip-info'" *ngIf="c.exceso > 0">+{{ c.exceso }} sobre el límite</span>
+                  <span class="chip chip-aviso" *ngIf="c.exceso === 0 && c.alLimite">en el límite</span></td>
+                <td class="num" data-label="Días">{{ c.diasActivo }}</td>
+                <td class="gris td-estados" data-label="Éx. / Fallo">{{ c.exitosos }} / {{ c.fallidos }}</td>
+                <td class="num" data-label="Hoy"><span [class.t-warn]="c.intentosHoy > 0">{{ c.intentosHoy }}</span></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="paginador" *ngIf="totalPaginasMes > 1">
+          <button type="button" class="btn-mini" (click)="cambiarPaginaMes(-1)" [disabled]="paginaMes <= 1">Anterior</button>
+          <span>Página {{ paginaMes }} de {{ totalPaginasMes }}</span>
+          <button type="button" class="btn-mini" (click)="cambiarPaginaMes(1)" [disabled]="paginaMes >= totalPaginasMes">Siguiente</button>
+        </div>
+        <p class="ayuda">El mes es el calendario (del día 1 al fin de mes, o hasta hoy). Se listan los clientes que llegaron al límite mensual de su proveedor. El correo de alerta del mes solo incluye a quienes lo superaron <strong>y consultaron hoy</strong>, para no repetir clientes que ya pasaron hace días.</p>
+      </section>
+
+      </ng-container>
+
+      <ng-container *ngIf="vista === 'reglas'">
+      <!-- ================= CÓMO SE CALCULA EL REUSO ================= -->
+      <section class="tarjeta">
+        <div class="tarjeta-cab"><h2>Cómo se calcula el reuso</h2><span class="tarjeta-sub">con los números del rango elegido</span></div>
+        <ol class="pasos-calculo">
+          <li><strong>Consulta</strong> = un registro de la tabla CASO (se cuenta toda la base). El proveedor sale de la regla (CASO.idRegla = REGLA.id): reglas 1 y 99 = ASISA; lo demás (canal 0 WhoisWho y canal 1 con regla 0) = OLIMPIA.</li>
+          <li><strong>Cliente-día</strong> = un cliente con un proveedor en un día. La primera consulta es la normal; cada una de las siguientes es un <strong>reuso</strong>. Por eso: <strong>reusos = casos − cliente-días</strong>.</li>
+          <li><strong>Reuso evitable</strong> = consulta hecha cuando el cliente ya tenía una exitosa ese mismo día con ese proveedor (ya estaba validado).</li>
+          <li><strong>Sobre el límite</strong> = consultas de un cliente por encima del límite de su proveedor, por día y por mes (se configura en Configuración). <strong>OLIMPIA</strong> es el proveedor con sobrecosto: {{ textoLimite(d.umbrales.limites.OLIMPIA) }}. <strong>ASISA</strong> no tiene sobrecosto: {{ textoLimite(d.umbrales.limites.ASISA) }}. Aparte, cada regla tiene su propio límite diario y mensual (tabla de abajo).</li>
+          <li><strong>Días no hábiles</strong> = sábados, domingos y festivos de DIASNOHABILES. Se marcan en el gráfico y la proyección del mes usa un promedio para hábiles y otro para no hábiles.</li>
+        </ol>
+        <div class="tabla-wrap">
+          <table class="tabla">
+            <thead><tr><th>Proveedor</th><th class="num">Casos</th><th class="num">Cliente-días</th><th class="num">Reusos</th><th class="num">Tasa de reuso</th><th class="num">Cliente-días con reuso</th><th class="num">Evitables (tras éxito)</th><th class="num">Sobre el límite</th></tr></thead>
+            <tbody>
+              <tr *ngFor="let p of d.proveedores">
+                <td><span class="marca" [ngClass]="claseSerie(p.proveedor)"></span>{{ p.proveedor }}</td>
+                <td class="num">{{ p.total | number: '1.0-0' }}</td><td class="num">{{ p.reuso.clientesDia | number: '1.0-0' }}</td>
+                <td class="num"><strong>{{ p.reuso.reusos | number: '1.0-0' }}</strong> <small class="gris">= {{ p.total | number: '1.0-0' }} − {{ p.reuso.clientesDia | number: '1.0-0' }}</small></td>
+                <td class="num">{{ p.reuso.tasa | number: '1.0-1' }}%</td><td class="num">{{ p.reuso.clientesReusan | number: '1.0-0' }} ({{ p.reuso.tasaClientes | number: '1.0-1' }}%)</td>
+                <td class="num">{{ p.reuso.despuesExito | number: '1.0-0' }}</td><td class="num">{{ p.reuso.sobreLimite | number: '1.0-0' }}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <p class="ayuda">Días del rango: {{ d.calendario.diasHabiles }} hábil(es) y {{ d.calendario.diasNoHabiles }} no hábil(es). Calendario: {{ d.calendario.fuente }}{{ d.calendario.festivos.length ? ' · festivos en el rango: ' + d.calendario.festivos.join(', ') : '' }}.
+          Casos en días hábiles: {{ d.general.casosHabiles | number: '1.0-0' }} · en no hábiles: {{ d.general.casosNoHabiles | number: '1.0-0' }}.</p>
+      </section>
+
+      <!-- ================= CATÁLOGO DE REGLAS ================= -->
+      <section class="tarjeta">
+        <div class="tarjeta-cab"><h2>Reglas: a quién consulta cada una</h2><span class="tarjeta-sub">REGLA → VALIDACION → PROVEEDORSERVICIO → PROVEEDOR, con las capturas que pide (VALIDACIONTIPOCAPTURA) y su uso en el rango</span></div>
+        <div class="vacio" *ngIf="!d.reglas.length">No se pudo leer el catálogo de reglas.</div>
+        <div class="tabla-wrap" *ngIf="d.reglas.length">
+          <table class="tabla tabla-reglas tabla-apilada">
+            <thead><tr><th title="CASO.idRegla = REGLA.id">Regla</th><th title="REGLA → PRODUCTOSUBPRODUCTO → PRODUCTO / SUBPRODUCTO">Producto · subproducto</th><th title="REGLA.idTransaccion → TRANSACCION">Transacción</th><th title="Proveedor con el que el equipo cuenta esta regla">Se cuenta como</th><th title="REGLA.idValidacion → VALIDACION → PROVEEDORSERVICIO → PROVEEDOR">Validación configurada · consulta a</th><th>Capturas que pide</th><th class="num" title="Límite por día / por mes · vigencia">Límites día / mes · vigencia</th><th class="num">Casos en el rango</th></tr></thead>
+            <tbody>
+              <tr *ngFor="let r of d.reglas">
+                <td data-label="Regla"><strong>{{ r.id }}</strong></td>
+                <td data-label="Producto · subproducto" class="td-cons">{{ r.descripcion || '—' }}</td>
+                <td data-label="Transacción">{{ r.transaccion || '—' }}</td>
+                <td data-label="Se cuenta como"><span class="marca" [ngClass]="claseSerie(r.clasificacion)"></span>{{ r.clasificacion }}</td>
+                <td data-label="Validación · consulta a" class="td-cons"><small class="gris" *ngIf="r.validacion !== null">#{{ r.validacion }} · </small>{{ textoConsulta(r) }}<span class="chip chip-aviso" *ngIf="r.coincide === false" title="La configuración consulta a otro proveedor distinto al que el equipo usa para clasificarla">distinto</span></td>
+                <td data-label="Capturas que pide" class="gris td-cap"><ng-container *ngFor="let c of r.capturas; let last = last">{{ capturaCorta(c.tipo) }}{{ c.obligatorio ? '*' : '' }}{{ last ? '' : ', ' }}</ng-container><ng-container *ngIf="!r.capturas.length">—</ng-container></td>
+                <td data-label="Límites día / mes" class="num">{{ r.intentosDia ?? '—' }} / {{ r.intentosMes ?? '—' }}<small class="gris bloque">vigencia {{ r.vigencia ?? '—' }}</small></td>
+                <td data-label="Casos en el rango" class="num"><strong>{{ r.uso.casos | number: '1.0-0' }}</strong><small class="gris bloque" *ngIf="r.uso.casos">{{ r.uso.porCanal['0'] || 0 }} WhoisWho · {{ r.uso.porCanal['1'] || 0 }} app</small></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <p class="ayuda">* = captura obligatoria. Una regla es la configuración de un producto/subproducto en una transacción; el nombre de la transacción (Enrolamiento / Login) es otra columna, no el nombre de la regla. «Distinto» no es un error: indica que la validación configurada en la regla no apunta al proveedor con el que se cuenta en este tablero.</p>
+      </section>
+      </ng-container>
+
+      <ng-container *ngIf="vista === 'resultados'">
+      <!-- ================= RESULTADOS ================= -->
+      <section class="tarjeta">
+        <div class="tarjeta-cab">
+          <h2>Resultados más frecuentes</h2>
+          <div class="selector-dias" role="group" aria-label="Filtrar por proveedor">
+            <button type="button" [class.activo]="filtroOrigen === ''" (click)="filtroOrigen = ''">Todos</button>
+            <button type="button" *ngFor="let p of proveedores" [class.activo]="filtroOrigen === p" (click)="filtroOrigen = p">{{ p }}</button>
+          </div>
+        </div>
+        <div class="vacio" *ngIf="!resultadosFiltrados.length">Sin resultados registrados en el rango.</div>
+        <div class="tabla-wrap tabla-alta" *ngIf="resultadosFiltrados.length">
+          <table class="tabla">
+            <thead><tr><th>Origen</th><th>Respondió</th><th>Código</th><th>Descripción</th><th>Cantidad</th></tr></thead>
+            <tbody>
+              <tr *ngFor="let r of resultadosFiltrados">
+                <td><span class="marca" [ngClass]="claseSerie(r.origen)"></span>{{ r.origen }}</td>
+                <td>{{ r.proveedor || '—' }}</td>
+                <td class="mono">{{ r.codigo || '—' }}</td>
+                <td class="td-nombre"><span class="cortar" [title]="r.descripcion || ''">{{ r.descripcion || '—' }}</span></td>
+                <td class="td-barra"><span class="mini-barra"><span class="mb-neutro" [style.width.%]="(r.total / maxResultado) * 100"></span></span><strong>{{ r.total | number: '1.0-0' }}</strong></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- ================= PROVEEDOR REGISTRADO ================= -->
+      <section class="tarjeta" *ngIf="d.proveedoresReg.length">
+        <div class="tarjeta-cab"><h2>Consultas por proveedor que respondió</h2><span class="tarjeta-sub">Según RESULTADO.IdProveedor → PROVEEDOR: sirve para contrastar con la regla por canal</span></div>
+        <div class="tabla-wrap">
+          <table class="tabla">
+            <thead><tr><th>Proveedor</th><th class="num">Consultas</th><th class="num">Promedio por día</th><th>Tendencia del rango</th></tr></thead>
+            <tbody>
+              <tr *ngFor="let x of d.proveedoresReg">
+                <td>{{ x.proveedor }}</td><td class="num"><strong>{{ x.consultas | number: '1.0-0' }}</strong></td><td class="num">{{ x.promedioDiario | number: '1.0-1' }}</td>
+                <td><span class="gris">{{ x.serie.join(' · ') }}</span></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+      </ng-container>
+    </ng-container>
+  </ng-container>
+</ng-container>
+
+<!-- ================= DETALLE DE UN CLIENTE EN UN DÍA ================= -->
+<div class="modal-overlay" *ngIf="clienteAbierto" (click)="cerrarDetalle()">
+  <div class="modal-card modal-detalle" role="dialog" aria-modal="true" aria-label="Detalle del cliente en el día" (click)="$event.stopPropagation()">
+    <div class="modal-header">
+      <div>
+        <h2>Detalle del cliente <span class="mono">{{ detalle?.cliente?.documento || clienteAbierto.documento || '—' }}</span></h2>
+        <p class="sub-modal">
+          {{ detalle?.cliente?.nombre || clienteAbierto.nombre || '—' }}
+          <ng-container *ngIf="detalle?.cliente?.tipoDocumento"> · {{ detalle?.cliente?.tipoDocumento }}</ng-container>
+          · <strong>{{ textoDia(clienteAbierto.fecha, detalle?.diaSemana) }}</strong>
+          <span class="chip-dia" *ngIf="detalle" [ngClass]="detalle.habil ? 'chip-habil' : 'chip-nohabil'">{{ detalle.habil ? 'Día hábil' : detalle.motivoNoHabil }}</span>
+          · consulta a <span class="marca" [ngClass]="claseSerie(clienteAbierto.proveedor)"></span>{{ clienteAbierto.proveedor }}
+        </p>
+      </div>
+      <div class="cab-acciones">
+        <button type="button" class="btn btn-ghost btn-sm" *ngIf="detalle" (click)="exportarDetalle()">Exportar Excel</button>
+        <button type="button" class="close-btn" (click)="cerrarDetalle()" aria-label="Cerrar">✕</button>
+      </div>
+    </div>
+
+    <div class="cargando chico-v" *ngIf="cargandoDetalle"><div class="spinner"></div><p>Consultando el detalle en ORQBIOMETRIA…</p></div>
+    <div class="error-state" *ngIf="errorDetalle">{{ errorDetalle }}</div>
+
+    <ng-container *ngIf="detalle as x">
+      <div class="aviso-aviso" *ngFor="let a of x.avisos">No se pudo leer «{{ a.seccion }}»: {{ a.error }}</div>
+
+      <div class="det-kpis">
+        <div><span class="cifra">{{ x.resumen.casos }}</span><span class="cifra-et">consultas en el día</span></div>
+        <div><span class="cifra">{{ x.resumen.reusos }}</span><span class="cifra-et">reusos (consultas − 1 por proveedor)</span></div>
+        <div [class.t-warn]="x.resumen.despuesExito > 0"><span class="cifra">{{ x.resumen.despuesExito }}</span><span class="cifra-et">tras un éxito (evitables)</span></div>
+        <div [class.t-mal]="x.resumen.sobreLimite > 0"><span class="cifra">{{ x.resumen.sobreLimite }}</span><span class="cifra-et">sobre el límite{{ x.limite ? ' de ' + x.limite + ' por día' : ' (proveedor sin límite)' }}</span></div>
+        <div><span class="cifra">{{ x.resumen.exitosos }} / {{ x.resumen.fallidos }} / {{ x.resumen.reintentos }}</span><span class="cifra-et">éxito / fallo / reintento ({{ x.resumen.tasaExito | number: '1.0-0' }}% éxito)</span></div>
+        <div><span class="cifra">{{ (x.resumen.primerIntento || '—').slice(0, 5) }} – {{ (x.resumen.ultimoIntento || '—').slice(0, 5) }}</span><span class="cifra-et">horario · {{ textoMin(x.resumen.duracionMin) }} en total</span></div>
+        <div><span class="cifra">{{ textoMin(x.resumen.minEntreIntentosMediana) }}</span><span class="cifra-et">tiempo típico entre intentos (mín. {{ textoMin(x.resumen.minEntreIntentosMin) }})</span></div>
+        <div><span class="cifra">{{ x.resumen.viaWhoisWho }} / {{ x.resumen.viaApp }}</span><span class="cifra-et">canal 0 WhoisWho / canal 1 app</span></div>
+      </div>
+
+      <p class="ayuda" *ngIf="x.resumen.truncado">Se muestran los primeros 500 casos del día.</p>
+
+      <h3 class="sec">Línea de tiempo del día <small class="gris" *ngIf="x.proveedorFoco">· {{ x.proveedorFoco }} resaltado</small></h3>
+      <label class="check-chico" *ngIf="x.proveedorFoco && x.porProveedor.length > 1"><input type="checkbox" [(ngModel)]="soloProveedorFoco" name="det-solo-foco" /> Mostrar solo {{ x.proveedorFoco }}</label>
+      <div class="vacio" *ngIf="!casosDetalle.length">No hay casos de este cliente en la fecha.</div>
+      <div class="tabla-wrap tabla-alta" *ngIf="casosDetalle.length">
+        <table class="tabla tabla-linea tabla-apilada">
+          <thead><tr><th title="Número de consulta del día con ese proveedor">#</th><th title="CASO.id">ID caso</th><th>Hora</th><th>Proveedor</th><th title="CASO.idRegla = REGLA.id">Regla</th><th title="REGLA.idTransaccion → TRANSACCION">Transacción</th><th>Canal</th><th>Estado</th><th class="num" title="Minutos desde el intento anterior">+ min</th><th>Capturas</th><th>Resultado del proveedor</th><th>Marcas</th></tr></thead>
+          <tbody>
+            <tr *ngFor="let c of casosDetalle" [class.fila-foco]="x.proveedorFoco === c.proveedor" [class.fila-reuso]="c.esReuso">
+              <td class="mono" data-label="N.º del día">{{ c.numero }}</td>
+              <td class="mono td-caso" data-label="ID caso">{{ c.id }}</td>
+              <td data-label="Hora" class="mono">{{ hora8(c.hora) }}</td>
+              <td data-label="Proveedor"><span class="marca" [ngClass]="claseSerie(c.proveedor)"></span>{{ c.proveedor }}</td>
+              <td data-label="Regla" class="td-regla"><strong>{{ c.regla }}</strong><small class="gris bloque" *ngIf="c.descripcionRegla">{{ c.descripcionRegla }}</small></td>
+              <td data-label="Transacción" class="gris">{{ c.transaccion || '—' }}</td>
+              <td data-label="Canal"><span class="chip chip-canal" [ngClass]="claseCanal(c.canal)" [title]="c.canalNombre">{{ etiquetaCanal(c.canal) }}</span></td>
+              <td data-label="Estado"><span class="chip-estado" [ngClass]="claseEstado(c.estado)">{{ c.estadoNombre }}</span><small class="gris" *ngIf="c.reintentos"> · {{ c.reintentos }} reint.</small></td>
+              <td data-label="+ min" class="num">{{ c.minDesdeAnterior === null ? '—' : (c.minDesdeAnterior | number: '1.0-1') }}</td>
+              <td data-label="Capturas" class="gris td-cap"><ng-container *ngFor="let t of c.tiposCaptura; let last = last">{{ capturaCorta(t.tipo) }}{{ t.total > 1 ? ' ×' + t.total : '' }}{{ last ? '' : ', ' }}</ng-container><ng-container *ngIf="!c.tiposCaptura.length">{{ c.capturas || '—' }}</ng-container></td>
+              <td data-label="Resultado del proveedor" class="td-nombre"><ng-container *ngFor="let r of c.resultados"><span class="cortar res-linea" [title]="(r.respondio || '') + ' · ' + (r.descripcion || '') + (r.homologacion ? ' · ' + r.homologacion : '')">{{ r.respondio || '—' }}<ng-container *ngIf="r.codigo"> · <span class="mono">{{ r.codigo }}</span></ng-container><ng-container *ngIf="r.descripcion"> · {{ r.descripcion }}</ng-container><ng-container *ngIf="r.homologacion"> · <em class="homolog" [ngClass]="claseHomologacion(r.homologacion)">{{ r.homologacion }}</em></ng-container><ng-container *ngIf="r.total > 1"> ×{{ r.total }}</ng-container></span></ng-container><span class="gris" *ngIf="!c.resultados.length">sin resultado</span></td>
+              <td data-label="Marcas" class="td-marcas">
+                <span class="chip chip-reuso" *ngIf="c.esReuso" title="No es la primera consulta del día con este proveedor">reuso</span>
+                <span class="chip chip-evitable" *ngIf="c.despuesExito" title="El cliente ya tenía una consulta exitosa antes">tras éxito</span>
+                <span class="chip chip-alta" *ngIf="c.sobreLimite" title="Supera el máximo por cliente y día">sobre el límite</span>
+                <span class="chip chip-aviso" *ngIf="c.excedeRegla" title="Supera el límite diario de su regla">sobre la regla</span>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3 class="sec">Por proveedor</h3>
+      <div class="tabla-wrap">
+        <table class="tabla">
+          <thead><tr><th>Proveedor</th><th class="num">Consultas</th><th class="num">Éxito</th><th class="num">Fallo</th><th class="num">Reintento</th><th class="num">Reusos</th><th class="num">Tras un éxito</th><th class="num" title="Límite por cliente de ese proveedor: por día / por mes">Límite día / mes</th><th class="num">Sobre el límite</th></tr></thead>
+          <tbody>
+            <tr *ngFor="let p of x.porProveedor">
+              <td><span class="marca" [ngClass]="claseSerie(p.proveedor)"></span>{{ p.proveedor }}</td>
+              <td class="num"><strong>{{ p.casos }}</strong></td><td class="num">{{ p.exitosos }}</td><td class="num">{{ p.fallidos }}</td><td class="num">{{ p.reintentos }}</td>
+              <td class="num">{{ p.reusos }}</td><td class="num">{{ p.despuesExito }}</td>
+              <td class="num">{{ p.limiteDia ?? '—' }} / {{ p.limiteMes ?? '—' }}<span class="chip chip-info" *ngIf="!p.avisar">solo monitoreo</span></td>
+              <td class="num"><span [class.t-mal]="p.sobreLimite > 0 && p.avisar" [class.t-warn]="p.sobreLimite > 0 && !p.avisar">{{ p.sobreLimite }}</span></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3 class="sec">Reglas que usó y sus límites</h3>
+      <div class="tabla-wrap" *ngIf="x.reglas.length">
+        <table class="tabla tabla-reglas tabla-apilada">
+          <thead><tr><th title="CASO.idRegla = REGLA.id">Regla</th><th title="REGLA → PRODUCTOSUBPRODUCTO">Producto · subproducto</th><th title="REGLA.idTransaccion → TRANSACCION">Transacción</th><th title="REGLA.idValidacion → VALIDACION → PROVEEDORSERVICIO">Validación · consulta a</th><th>Capturas que pide</th><th>Hoy / límite por día</th><th>Mes / límite por mes</th><th class="num" title="Contadores guardados en la tabla INTENTO">INTENTO día / mes</th></tr></thead>
+          <tbody>
+            <tr *ngFor="let r of x.reglas">
+              <td data-label="Regla"><strong>{{ r.regla }}</strong></td>
+              <td data-label="Producto · subproducto" class="td-cons">{{ r.descripcion || '—' }}</td>
+              <td data-label="Transacción">{{ r.transaccion || '—' }}</td>
+              <td data-label="Validación · consulta a" class="td-cons"><small class="gris" *ngIf="r.idValidacion !== null">#{{ r.idValidacion }} · </small>{{ textoConsulta(r) }}</td>
+              <td data-label="Capturas que pide" class="gris td-cap"><ng-container *ngFor="let c of r.capturasPedidas; let last = last">{{ capturaCorta(c.tipo) }}{{ c.obligatorio ? '*' : '' }}{{ last ? '' : ', ' }}</ng-container><ng-container *ngIf="!r.capturasPedidas.length">—</ng-container></td>
+              <td class="td-uso" data-label="Hoy / límite por día"><span class="mini-barra"><span [ngClass]="r.excedeDia ? 'mb-mal' : 'mb-ok'" [style.width.%]="porcentajeCupoRegla(r.usadosHoy, r.intentosDia)"></span></span><strong [class.t-mal]="r.excedeDia">{{ r.usadosHoy }}</strong> / {{ r.intentosDia ?? '—' }}</td>
+              <td class="td-uso" data-label="Mes / límite por mes"><span class="mini-barra"><span [ngClass]="r.excedeMes ? 'mb-mal' : 'mb-ok'" [style.width.%]="porcentajeCupoRegla(r.usadosMes, r.intentosMes)"></span></span><strong [class.t-mal]="r.excedeMes">{{ r.usadosMes }}</strong> / {{ r.intentosMes ?? '—' }}</td>
+              <td class="num" data-label="INTENTO día / mes">{{ r.contadorDia ?? '—' }} / {{ r.contadorMes ?? '—' }}<small class="gris bloque">vigencia {{ r.vigencia ?? '—' }}</small></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <p class="ayuda">* = captura obligatoria. «Mes» cuenta los casos del cliente en {{ x.mes.periodo }} hasta este día (ASISA {{ x.mes.ASISA }} · OLIMPIA {{ x.mes.OLIMPIA }}). Los límites (por día, por mes y vigencia) son los de la REGLA; los contadores de INTENTO son los que guarda el sistema ahora mismo para el cliente en esa regla.</p>
+
+      <h3 class="sec">Últimos 30 días del cliente <small class="gris">· {{ x.diasActivos30 }} día(s) con consultas</small></h3>
+      <div class="leyenda"><span><span class="marca s1"></span>ASISA</span><span><span class="marca s2"></span>OLIMPIA</span><span><span class="raya-nohabil"></span>no hábil</span></div>
+      <div class="grafico grafico-hist">
+        <svg [attr.viewBox]="'0 0 760 ' + histAlto" preserveAspectRatio="xMidYMid meet" role="img" aria-label="Consultas del cliente en los últimos 30 días">
+          <g *ngFor="let b of barrasHist; let i = index">
+            <rect class="banda-nohabil" *ngIf="!b.habil" [attr.x]="b.x" y="0" [attr.width]="b.ancho" [attr.height]="histAlto - 18"></rect>
+            <rect class="barra-g s1" *ngIf="b.asisa > 0" [attr.x]="b.x + 3" [attr.y]="b.ya" [attr.width]="b.ancho - 6" [attr.height]="b.ha" rx="2"><title>{{ fechaLarga(b.fecha) }} · ASISA {{ b.asisa }}</title></rect>
+            <rect class="barra-g s2" *ngIf="b.olimpia > 0" [attr.x]="b.x + 3" [attr.y]="b.yo" [attr.width]="b.ancho - 6" [attr.height]="b.ho" rx="2"><title>{{ fechaLarga(b.fecha) }} · OLIMPIA {{ b.olimpia }}</title></rect>
+            <text class="eje" *ngIf="i % 5 === 0 || i === barrasHist.length - 1" [attr.x]="b.x + b.ancho / 2" [attr.y]="histAlto - 4" text-anchor="middle">{{ fechaCorta(b.fecha) }}</text>
+            <text class="eje eje-valor" *ngIf="b.asisa + b.olimpia > 0" [attr.x]="b.x + b.ancho / 2" [attr.y]="b.yo - 3" text-anchor="middle">{{ b.asisa + b.olimpia }}</text>
+          </g>
+        </svg>
+      </div>
+
+      <h3 class="sec">Distribución por hora del día</h3>
+      <div class="horas-mini" role="img" aria-label="Consultas por hora">
+        <span *ngFor="let n of x.horas; let h = index" class="hm" [title]="(h < 10 ? '0' : '') + h + ':00 · ' + n + ' consulta(s)'">
+          <span class="hm-barra" [style.height.%]="(n / maxHoraDetalle()) * 100"></span><small>{{ h % 3 === 0 ? (h < 10 ? '0' : '') + h : '' }}</small>
+        </span>
+      </div>
+    </ng-container>
+  </div>
+</div>
+
+<!-- ================= CONFIGURACIÓN (solo ADMIN_POD) ================= -->
+<div class="modal-overlay" *ngIf="mostrarConfig && form as f" (click)="cerrarConfig()">
+  <div class="modal-card modal-config" role="dialog" aria-modal="true" aria-label="Configuración del consumo de biometría" (click)="$event.stopPropagation()">
+    <div class="modal-header">
+      <div>
+        <h2>Configuración · Consumo y reusos</h2>
+        <p class="sub-modal">Solo el ADMIN_POD ve y cambia esto. La clave se guarda cifrada y nunca vuelve a mostrarse.</p>
+      </div>
+      <button type="button" class="close-btn" (click)="cerrarConfig()" aria-label="Cerrar">✕</button>
+    </div>
+
+    <h3 class="sec">Conexión a ORQBIOMETRIA (SQL Server, solo lectura)</h3>
+    <div class="fila-campos">
+      <label class="etiqueta">Servidor
+        <input class="entrada" type="text" [(ngModel)]="f.servidor" name="cf-servidor" placeholder="AWLPROD001" autocomplete="off" />
+      </label>
+      <label class="etiqueta">Puerto
+        <input class="entrada" type="number" [(ngModel)]="f.puerto" name="cf-puerto" placeholder="61733" />
+      </label>
+      <label class="etiqueta">Base de datos
+        <input class="entrada" type="text" [(ngModel)]="f.base" name="cf-base" placeholder="ORQBIOMETRIA" autocomplete="off" />
+      </label>
+    </div>
+    <div class="fila-campos">
+      <label class="etiqueta">Usuario
+        <input class="entrada" type="text" [(ngModel)]="f.usuario" name="cf-usuario" placeholder="FINANDINA\cuenta_servicio" autocomplete="off" />
+      </label>
+      <label class="etiqueta">Clave
+        <input class="entrada" type="password" [(ngModel)]="f.clave" name="cf-clave" autocomplete="new-password"
+               [placeholder]="config?.tieneClave ? '•••••• guardada (…' + (config?.claveFin || '') + '). Vacía = conservar' : 'Clave de la cuenta'" />
+      </label>
+    </div>
+    <p class="ayuda">En SSMS entras con «Windows Authentication»; desde el servidor de AXIS eso no es posible, así que se usa una cuenta con su clave: un usuario SQL, o una cuenta de dominio escrita como <code>DOMINIO\usuario</code> (se conecta con autenticación de Windows/NTLM). Lo ideal es una cuenta de servicio con SELECT solo sobre ORQBIOMETRIA.</p>
+    <label class="check"><input type="checkbox" [(ngModel)]="f.cifrado" name="cf-cifrado" /><span>Cifrar la conexión <small>(Encryption: Mandatory en SSMS)</small></span></label>
+    <label class="check"><input type="checkbox" [(ngModel)]="f.confiarCertificado" name="cf-confiar" /><span>Confiar en el certificado del servidor <small>(Trust server certificate)</small></span></label>
+    <div class="prueba-bloque">
+      <button type="button" class="btn btn-ghost btn-sm" (click)="probarConexion()" [disabled]="probando || guardando">
+        <span class="spinner chico" *ngIf="probando"></span>{{ probando ? 'Probando…' : 'Probar conexión' }}
+      </button>
+      <div class="resultado-prueba" *ngIf="prueba" [class.mal]="!prueba.ok">
+        <ng-container *ngIf="prueba.ok"><strong>Conexión correcta.</strong> Base {{ prueba.base }} · {{ prueba.casos | number: '1.0-0' }} casos · <span class="mono">{{ prueba.version }}</span></ng-container>
+        <ng-container *ngIf="!prueba.ok"><strong>No se pudo conectar.</strong> {{ prueba.error }}</ng-container>
+      </div>
+    </div>
+
+    <h3 class="sec">Límite de consultas por cliente</h3>
+    <div class="tabla-wrap">
+      <table class="tabla tabla-cupos tabla-limites">
+        <thead><tr><th>Proveedor</th><th>Por día</th><th>Por mes</th><th>Genera alerta</th></tr></thead>
+        <tbody>
+          <tr *ngFor="let p of proveedores">
+            <td><span class="marca" [ngClass]="claseSerie(p)"></span><strong>{{ p }}</strong></td>
+            <td><input class="entrada" type="number" min="0" [(ngModel)]="f.limites[p].dia" [name]="'cf-ldia-' + p" placeholder="sin límite" /></td>
+            <td><input class="entrada" type="number" min="0" [(ngModel)]="f.limites[p].mes" [name]="'cf-lmes-' + p" placeholder="sin límite" /></td>
+            <td><label class="check check-celda"><input type="checkbox" [(ngModel)]="f.limites[p].avisar" [name]="'cf-lavisar-' + p" /><span>Alertar</span></label></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="ayuda"><strong>OLIMPIA</strong> es el proveedor con sobrecosto: cada cliente tiene 5 consultas por día y 15 por mes. <strong>ASISA</strong> no tiene sobrecosto: se deja sin límite y sin alerta, pero igual se monitorea. Vacío = sin límite (solo se monitorea); si pones límite en ASISA y activas «Alertar», también le llegará correo. El límite del mes no puede ser menor al del día. El mes es el calendario.</p>
+
+    <h3 class="sec">Cupos y valor por consulta (opcional)</h3>
+    <p class="ayuda">Si aún no tienes los números del contrato, déjalos vacíos: el tablero igual muestra el consumo y los clientes que consultan de más. Con cupo y valor se calcula el sobrecosto estimado.</p>
+    <div class="tabla-wrap">
+      <table class="tabla tabla-cupos">
+        <thead><tr><th>Proveedor</th><th>Cupo diario</th><th>Cupo mensual</th><th>Valor por consulta excedente ($)</th></tr></thead>
+        <tbody>
+          <tr *ngFor="let p of proveedores">
+            <td><span class="marca" [ngClass]="claseSerie(p)"></span><strong>{{ p }}</strong></td>
+            <td><input class="entrada" type="number" min="0" [(ngModel)]="f.cupos[p].dia" [name]="'cf-dia-' + p" placeholder="sin cupo" /></td>
+            <td><input class="entrada" type="number" min="0" [(ngModel)]="f.cupos[p].mes" [name]="'cf-mes-' + p" placeholder="sin cupo" /></td>
+            <td><input class="entrada" type="number" min="0" step="any" [(ngModel)]="f.cupos[p].valor" [name]="'cf-valor-' + p" placeholder="opcional" /></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h3 class="sec">Alerta por correo</h3>
+    <label class="check"><input type="checkbox" [(ngModel)]="f.alerta" name="cf-alerta" /><span>Avisar a los ADMIN_POD cuando un cliente supere el límite diario o mensual de un proveedor con «Alertar» (hoy OLIMPIA), o se supere un cupo <small>(usa el correo saliente configurado)</small></span></label>
+    <div class="fila-campos">
+      <label class="etiqueta">Si la alerta sigue activa, recordarla
+        <select class="entrada" [(ngModel)]="f.alertaCadaMin" name="cf-alerta-cada" [disabled]="!f.alerta">
+          <option *ngFor="let r of recordatorios" [ngValue]="r.min">{{ r.texto }}</option>
+        </select>
+      </label>
+    </div>
+    <p class="ayuda">Un cliente o una alerta <strong>nueva</strong> se avisa siempre de inmediato (se revisa cada pocos minutos). El recordatorio solo se manda si la situación sigue igual y ya pasó este tiempo desde el último correo. Cada día empieza de cero.</p>
+    <div class="prueba-bloque">
+      <button type="button" class="btn btn-ghost btn-sm" (click)="probarAlerta()" [disabled]="probandoAlerta || guardando">
+        <span class="spinner chico" *ngIf="probandoAlerta"></span>{{ probandoAlerta ? 'Evaluando…' : 'Evaluar hoy y enviar correo de prueba' }}
+      </button>
+      <div class="resultado-prueba" *ngIf="mensajeAlerta" [class.mal]="!mensajeAlerta.ok">{{ mensajeAlerta.texto }}</div>
+    </div>
+    <p class="ayuda">La prueba usa la configuración ya guardada (guarda primero si acabas de cambiarla).</p>
+
+    <div class="error-state" *ngIf="errorForm">{{ errorForm }}</div>
+    <div class="pie-form">
+      <button type="button" class="btn btn-ghost" (click)="cerrarConfig()" [disabled]="guardando">Cancelar</button>
+      <button type="button" class="btn btn-purple" (click)="guardarConfig()" [disabled]="guardando">
+        <span class="spinner chico" *ngIf="guardando"></span>{{ guardando ? 'Guardando…' : 'Guardar' }}
+      </button>
+    </div>
+  </div>
+</div>

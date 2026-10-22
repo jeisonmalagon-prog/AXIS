@@ -1,0 +1,143 @@
+<div class="pestanas" role="tablist">
+  <button type="button" [class.activa]="vista === 'releases'" (click)="cambiarVista('releases')"><app-ico n="cohete"></app-ico>Releases</button>
+  <button type="button" [class.activa]="vista === 'definiciones'" (click)="cambiarVista('definiciones')"><app-ico n="portapapeles"></app-ico>Pipelines de release</button>
+  <button type="button" [class.activa]="vista === 'despliegues'" (click)="cambiarVista('despliegues')"><app-ico n="paquete"></app-ico>Despliegues</button>
+  <button type="button" [class.activa]="vista === 'estadisticas'" (click)="cambiarVista('estadisticas')"><app-ico n="resumen"></app-ico>Estadísticas</button>
+</div>
+
+<app-azure-fallo [fallo]="falloVista"></app-azure-fallo>
+<div class="cargando" *ngIf="cargandoVista"><div class="spinner"></div>Cargando…</div>
+
+<!-- RELEASES -->
+<ng-container *ngIf="vista === 'releases' && !cargandoVista && !falloVista">
+  <div class="barra">
+    <label class="campo">Pipeline
+      <select [(ngModel)]="definicion" (change)="filtrar()"><option value="">Todos</option><option *ngFor="let d of definiciones || []" [value]="d.id">{{ d.nombre }}</option></select>
+    </label>
+    <label class="campo">Periodo
+      <select [(ngModel)]="dias" (change)="filtrar()"><option [ngValue]="14">14 días</option><option [ngValue]="30">30 días</option><option [ngValue]="60">60 días</option><option [ngValue]="180">180 días</option></select>
+    </label>
+  </div>
+  <section class="tarjeta">
+    <p class="vacio" *ngIf="!releases.length">No hay releases en el periodo.</p>
+    <div class="tabla-wrap" *ngIf="releases.length">
+      <table class="tabla">
+        <thead><tr><th>Release</th><th>Pipeline</th><th>Ambientes</th><th>Creó</th><th>Fecha</th></tr></thead>
+        <tbody>
+          <tr class="fila-click" *ngFor="let r of releases" (click)="abrir(r)" tabindex="0" (keyup.enter)="abrir(r)">
+            <td><strong>{{ r.nombre }}</strong></td><td>{{ r.definicion }}</td>
+            <td><span class="est amb" *ngFor="let a of r.ambientes" [ngClass]="'est-' + claseAmbiente(a.estado)" [title]="a.nombre + ': ' + a.estadoTexto">{{ a.nombre }}</span></td>
+            <td>{{ r.autor }}</td><td [title]="fmtFecha(r.creado)">{{ fmtRelativo(r.creado) }}</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+</ng-container>
+
+<!-- DEFINICIONES -->
+<section class="tarjeta" *ngIf="vista === 'definiciones' && definiciones">
+  <div class="tarjeta-cab"><h2>Pipelines de release</h2><span class="tarjeta-sub">{{ definiciones.length }} definidos</span></div>
+  <p class="vacio" *ngIf="!definiciones.length">No hay pipelines de release (o el token no tiene acceso).</p>
+  <div class="tabla-wrap" *ngIf="definiciones.length">
+    <table class="tabla">
+      <thead><tr><th>Pipeline</th><th>Ambientes (en orden)</th><th>Último release</th><th>Autor</th></tr></thead>
+      <tbody>
+        <tr *ngFor="let d of definiciones">
+          <td class="td-nombre"><strong>{{ d.nombre }}</strong></td>
+          <td><ng-container *ngFor="let a of d.ambientes; let i = index"><span class="chip">{{ a }}</span><span class="gris" *ngIf="i < d.ambientes.length - 1"><app-ico n="derecha" class="sep"></app-ico></span></ng-container></td>
+          <td><ng-container *ngIf="d.ultimoRelease; else sinRel">{{ d.ultimoRelease.nombre }} <span class="gris">{{ fmtRelativo(d.ultimoRelease.creado) }}</span></ng-container><ng-template #sinRel><span class="gris">—</span></ng-template></td>
+          <td>{{ d.autor || '—' }}</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<!-- DESPLIEGUES -->
+<ng-container *ngIf="vista === 'despliegues' && !cargandoVista && !falloVista">
+  <div class="barra">
+    <label class="campo">Pipeline
+      <select [(ngModel)]="definicion" (change)="filtrar()"><option value="">Todos</option><option *ngFor="let d of definiciones || []" [value]="d.id">{{ d.nombre }}</option></select>
+    </label>
+    <label class="campo">Estado
+      <select [(ngModel)]="estadoDespliegue" (change)="filtrar()"><option value="">Todos</option><option value="succeeded">Exitoso</option><option value="failed">Fallido</option><option value="partiallySucceeded">Parcial</option><option value="inProgress">En curso</option></select>
+    </label>
+    <label class="campo">Periodo
+      <select [(ngModel)]="dias" (change)="filtrar()"><option [ngValue]="14">14 días</option><option [ngValue]="30">30 días</option><option [ngValue]="60">60 días</option><option [ngValue]="180">180 días</option></select>
+    </label>
+    <span class="espacio"></span>
+    <button type="button" class="btn btn-ghost btn-sm" (click)="exportar()" [disabled]="!despliegues.length"><app-ico n="descargar"></app-ico>CSV</button>
+  </div>
+  <section class="tarjeta">
+    <p class="vacio" *ngIf="!despliegues.length">No hay despliegues con esos filtros.</p>
+    <div class="tabla-wrap" *ngIf="despliegues.length">
+      <table class="tabla">
+        <thead><tr><th>Ambiente</th><th>Release</th><th>Pipeline</th><th>Estado</th><th>Inicio</th><th class="num">Duración</th><th>Solicitó</th></tr></thead>
+        <tbody>
+          <tr *ngFor="let d of despliegues">
+            <td><strong>{{ d.ambiente }}</strong></td><td>{{ d.release }}</td><td>{{ d.definicion }}</td>
+            <td><span class="est" [ngClass]="'est-' + claseAmbiente(d.estado)">{{ d.estadoTexto }}</span></td>
+            <td [title]="fmtFecha(d.inicio)">{{ fmtRelativo(d.inicio) }}</td><td class="num">{{ fmtDuracion(d.duracionMs) }}</td><td>{{ d.solicitadoPor || '—' }}</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+</ng-container>
+
+<!-- ESTADÍSTICAS -->
+<ng-container *ngIf="vista === 'estadisticas' && est as e">
+  <div class="barra"><div class="selector-dias" role="group" aria-label="Periodo"><button type="button" *ngFor="let d of [30, 60, 90, 180]" [class.activo]="diasEst === d" (click)="cambiarDiasEst(d)">{{ d }} días</button></div></div>
+  <app-azure-fallo [fallo]="e.despliegues?.error ? e.despliegues : null"></app-azure-fallo>
+  <ng-container *ngIf="e.despliegues?.datos as dp">
+    <div class="kpis">
+      <div class="kpi"><span class="kpi-et">Despliegues</span><span class="kpi-v">{{ fmtNum(dp.total) }}</span></div>
+      <div class="kpi"><span class="kpi-et">Tasa de éxito</span><span class="kpi-v" [ngClass]="'t-' + claseTasa(dp.tasaExito)">{{ fmtPct(dp.tasaExito) }}</span></div>
+      <div class="kpi"><span class="kpi-et">Duración p50</span><span class="kpi-v">{{ fmtDuracion(dp.duracionMs.p50) }}</span></div>
+      <div class="kpi"><span class="kpi-et">Duración p95</span><span class="kpi-v">{{ fmtDuracion(dp.duracionMs.p95) }}</span></div>
+    </div>
+    <div class="contenido">
+      <section class="tarjeta"><div class="tarjeta-cab"><h2>Despliegues por día</h2></div><app-stacked-bar-chart [etiquetas]="estEtq" [series]="estSeries" [alto]="180" unidad="despliegues"></app-stacked-bar-chart></section>
+      <section class="tarjeta">
+        <div class="tarjeta-cab"><h2>Por ambiente</h2></div>
+        <div class="tabla-wrap"><table class="tabla">
+          <thead><tr><th>Ambiente</th><th class="num">Total</th><th class="num">Éxito</th><th class="num">Fallidos</th><th class="num">Duración media</th><th>Último</th></tr></thead>
+          <tbody><tr *ngFor="let a of dp.porAmbiente"><td><strong>{{ a.nombre }}</strong></td><td class="num">{{ a.total }}</td><td class="num" [ngClass]="'t-' + claseTasa(a.tasaExito)">{{ fmtPct(a.tasaExito) }}</td><td class="num">{{ a.fallidos }}</td><td class="num">{{ fmtDuracion(a.duracionMediaMs) }}</td><td>{{ a.ultimo?.release || '—' }} <span class="est" *ngIf="a.ultimo" [ngClass]="'est-' + claseAmbiente(a.ultimo.estado)">{{ a.ultimo.estadoTexto }}</span></td></tr></tbody>
+        </table></div>
+      </section>
+    </div>
+  </ng-container>
+  <div class="grilla g-1-1" style="margin-top: 16px" *ngIf="e.releases?.datos">
+    <section class="tarjeta"><div class="tarjeta-cab"><h2>Releases por pipeline</h2></div><app-bar-list [items]="estDefs"></app-bar-list></section>
+    <section class="tarjeta"><div class="tarjeta-cab"><h2>Quién crea releases</h2></div><app-bar-list [items]="estAutores"></app-bar-list></section>
+  </div>
+  <app-azure-fallo [fallo]="e.releases?.error ? e.releases : null"></app-azure-fallo>
+</ng-container>
+
+<!-- DETALLE DE RELEASE -->
+<div class="modal-overlay" *ngIf="abierto" (click)="cerrar()">
+  <div class="modal-card" role="dialog" aria-modal="true" (click)="$event.stopPropagation()">
+    <div class="modal-header">
+      <div><h2>{{ abierto.nombre }}</h2><div class="meta"><span>{{ abierto.definicion }}</span><span>{{ abierto.autor }}</span><span>{{ fmtFecha(abierto.creado) }}</span><a class="ext" *ngIf="abierto.url" [href]="abierto.url" target="_blank" rel="noopener">Ver en Azure DevOps<app-ico n="externo" class="fin"></app-ico></a></div></div>
+      <button type="button" class="close-btn" (click)="cerrar()" aria-label="Cerrar"><app-ico n="cerrar" class="solo"></app-ico></button>
+    </div>
+    <div class="cargando" *ngIf="detCargando"><div class="spinner"></div></div>
+    <app-azure-fallo [fallo]="detFallo"></app-azure-fallo>
+    <ng-container *ngIf="det as d">
+      <h3 class="titulo-sec" style="margin-top: 0">Artefactos</h3>
+      <ul class="lista"><li class="item-lista" *ngFor="let a of d.artefactos"><div class="il-cab"><strong>{{ a.alias }}</strong><span class="chip">{{ a.tipo }}</span><span class="chip chip-marca" *ngIf="a.principal">principal</span></div><div class="il-sub"><span *ngIf="a.definicion">{{ a.definicion }}</span><span *ngIf="a.version">versión {{ a.version }}</span><span *ngIf="a.rama">rama {{ a.rama }}</span><span *ngIf="a.commit">commit {{ a.commit }}</span></div></li><li class="vacio" *ngIf="!d.artefactos.length">Sin artefactos.</li></ul>
+      <h3 class="titulo-sec">Ambientes</h3>
+      <div class="amb-card" *ngFor="let a of d.ambientes">
+        <div class="il-cab"><strong>{{ a.nombre }}</strong><span class="est" [ngClass]="'est-' + claseAmbiente(a.estado)">{{ a.estadoTexto }}</span><span class="gris" *ngIf="a.intentos">{{ a.intentos }} intento(s)</span><span class="gris" *ngIf="a.solicitadoPor">· {{ a.solicitadoPor }}</span></div>
+        <div *ngIf="a.aprobacionesPrevias.length || a.aprobacionesPosteriores.length" class="aprob">
+          <div class="il-sub" *ngFor="let p of a.aprobacionesPrevias.concat(a.aprobacionesPosteriores)"><span class="est" [ngClass]="claseAprobacion(p.estado)">{{ p.estadoTexto }}</span><span>{{ p.aprobador }}</span><span *ngIf="p.comentario">«{{ p.comentario }}»</span><span>{{ fmtRelativo(p.fecha) }}</span></div>
+        </div>
+        <div class="tareas" *ngIf="a.tareas.length">
+          <div class="tarea" *ngFor="let t of a.tareas"><span class="est" [ngClass]="claseTarea(t.estado)">{{ t.estado }}</span><span class="cortar">{{ t.fase }} › {{ t.nombre }}</span><span class="gris">{{ fmtDuracion(t.duracionMs) }}</span>
+            <div class="t-mal prob" *ngFor="let p of t.problemas">{{ p.mensaje }}</div></div>
+        </div>
+      </div>
+    </ng-container>
+  </div>
+</div>

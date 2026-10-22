@@ -1,0 +1,220 @@
+<header class="page-header">
+  <div>
+    <h1>Histórico de Apuntamientos</h1>
+    <p class="subtitle" *ngIf="!apuntamientoIdFiltrado && !aplicacionIdFiltrado">Elige una aplicación para ver su historial de cambios — {{ historico.length }} registros en {{ gruposAplicacion.length }} aplicaciones</p>
+    <p class="subtitle" *ngIf="apuntamientoIdFiltrado">
+      Mostrando solo: <strong>{{ etiquetaFiltro || ('Apuntamiento #' + apuntamientoIdFiltrado) }}</strong>
+    </p>
+    <p class="subtitle" *ngIf="aplicacionIdFiltrado && !apuntamientoIdFiltrado">
+      Histórico de <strong>{{ etiquetaFiltro || ('Aplicación #' + aplicacionIdFiltrado) }}</strong> — {{ historicoDeAplicacion.length }} registros en {{ nodos.length }} {{ nodos.length === 1 ? 'nodo' : 'nodos' }}
+    </p>
+  </div>
+
+  <div class="header-actions">
+    <div class="search-box">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <circle cx="11" cy="11" r="8"></circle>
+        <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+      </svg>
+      <input type="text" [(ngModel)]="terminoBusqueda" [placeholder]="(apuntamientoIdFiltrado || aplicacionIdFiltrado) ? 'Buscar aplicación, servicio, usuario...' : 'Buscar aplicación o nodo...'" />
+    </div>
+    <button *ngIf="apuntamientoIdFiltrado || aplicacionIdFiltrado" type="button" class="btn" (click)="quitarFiltro()">Ver todas las aplicaciones</button>
+  </div>
+</header>
+
+<div class="empty" *ngIf="cargando">Cargando histórico…</div>
+
+<ng-container *ngIf="!cargando">
+  <!-- VISTA DE ATERRIZAJE: sin filtros, una tarjeta por Aplicación (igual
+       que la Bitácora de Apuntamientos) — evita mezclar el histórico de
+       TODAS las aplicaciones en una sola línea de tiempo larguísima. -->
+  <ng-container *ngIf="!apuntamientoIdFiltrado && !aplicacionIdFiltrado; else vistaFiltrada">
+    <div class="grupos-grid" *ngIf="gruposFiltrados.length; else sinAplicaciones">
+      <div class="grupo-card" *ngFor="let g of gruposFiltrados" (click)="abrirAplicacion(g)">
+        <div class="grupo-card-header">
+          <h3>{{ g.aplicacionNombre }}</h3>
+          <span class="grupo-total">{{ g.total }} {{ g.total === 1 ? 'cambio' : 'cambios' }}</span>
+        </div>
+
+        <p class="grupo-fecha" *ngIf="g.ultimoCambio">Último cambio: {{ formatearFecha(g.ultimoCambio) }}</p>
+
+        <div class="grupo-card-nodos" *ngIf="g.nodos.length">
+          <span class="nodos-label">Nodos</span>
+          <div class="nodos-lista">
+            <span class="nodo-chip" *ngFor="let n of g.nodos">{{ n.etiqueta }} <b>({{ n.cantidad }})</b></span>
+          </div>
+        </div>
+
+        <div class="grupo-card-footer">
+          <span class="ver-mas">Ver histórico →</span>
+        </div>
+      </div>
+    </div>
+
+    <ng-template #sinAplicaciones>
+      <div class="empty">
+        <ng-container *ngIf="terminoBusqueda">No se encontraron aplicaciones que coincidan con tu búsqueda.</ng-container>
+        <ng-container *ngIf="!terminoBusqueda">Todavía no hay cambios registrados en la Bitácora de Apuntamientos.</ng-container>
+      </div>
+    </ng-template>
+  </ng-container>
+
+  <ng-template #vistaFiltrada>
+  <!-- Botones de nodo: solo aparecen filtrando por aplicación — distintos
+       nodos de una misma aplicación pueden tener cambios muy distintos
+       entre sí. -->
+  <div class="nodos-tabs" *ngIf="aplicacionIdFiltrado && !apuntamientoIdFiltrado && nodos.length">
+    <button
+      type="button"
+      class="nodo-tab"
+      *ngFor="let n of nodos; trackBy: trackNodo"
+      [class.nodo-tab--activo]="nodoSeleccionado === n.id"
+      (click)="seleccionarNodo(n.id)"
+    >{{ n.etiqueta }} <span class="nodo-tab-count">{{ n.cantidad }}</span></button>
+    <button
+      type="button"
+      class="nodo-tab nodo-tab--comparar"
+      *ngIf="nodos.length > 1"
+      [class.nodo-tab--activo]="comparando"
+      (click)="seleccionarNodo('comparar')"
+    >⇄ Comparar nodos</button>
+  </div>
+
+  <!-- COMPARAR NODOS: una fila por servicio, una columna por nodo, con
+       cuántos cambios hay registrados y el último. Resalta los servicios
+       que tienen cambios en algunos nodos pero no en otros. -->
+  <ng-container *ngIf="comparando">
+    <div class="comparar-resumen">
+      <span class="comparar-chip comparar-chip--ok"><b>{{ comparacion.completas }}</b> servicios con cambios en todos los nodos</span>
+      <span class="comparar-chip comparar-chip--dif"><b>{{ comparacion.parciales }}</b> solo en algunos nodos</span>
+      <label class="comparar-toggle">
+        <input type="checkbox" [(ngModel)]="soloDiferencias" /> Mostrar solo diferencias
+      </label>
+    </div>
+
+    <div class="comparar-scroll" *ngIf="filasComparacionVisibles.length; else sinComparacion">
+      <table class="comparar-tabla">
+        <thead>
+          <tr>
+            <th class="col-servicio">Servicio</th>
+            <th *ngFor="let n of comparacion.nodos; trackBy: trackNodo">{{ n.etiqueta }}</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr *ngFor="let f of filasComparacionVisibles; trackBy: trackFila" [class.fila-dif]="f.faltan > 0">
+            <td class="col-servicio">
+              <span>{{ f.etiqueta }}</span>
+              <span class="badge-dif" *ngIf="f.faltan > 0">Falta en {{ f.faltan }} {{ f.faltan === 1 ? 'nodo' : 'nodos' }}</span>
+            </td>
+            <td *ngFor="let c of f.celdas" [class.celda-ausente]="!c.cantidad">
+              <ng-container *ngIf="c.cantidad && c.ultima; else sinCambios">
+                <span class="historico-accion" [ngClass]="claseAccion(c.ultima.Accion)">{{ etiquetaAccion(c.ultima.Accion) }}</span>
+                <span class="celda-meta">{{ formatearFecha(c.ultima.FechaActualizacionDeclarada || c.ultima.FechaCambio) }}</span>
+                <span class="celda-meta">{{ c.ultima.Usuario || 'usuario desconocido' }}<ng-container *ngIf="c.cantidad > 1"> · {{ c.cantidad }} cambios</ng-container></span>
+              </ng-container>
+              <ng-template #sinCambios><span class="celda-vacia">Sin cambios</span></ng-template>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+    <ng-template #sinComparacion>
+      <div class="empty">{{ soloDiferencias ? 'Todos los servicios tienen cambios registrados en todos los nodos.' : 'No hay cambios para comparar.' }}</div>
+    </ng-template>
+  </ng-container>
+
+  <div class="historico-lista" *ngIf="!comparando && historicoFiltrado.length; else sinRegistros">
+    <div class="historico-item" *ngFor="let h of historicoFiltrado">
+      <div class="historico-item-header">
+        <span class="historico-apuntamiento" *ngIf="!apuntamientoIdFiltrado">{{ etiquetaApuntamiento(h) }}</span>
+        <span class="historico-accion" [ngClass]="claseAccion(h.Accion)">
+          {{ etiquetaAccion(h.Accion) }}
+        </span>
+        <span class="historico-fecha">{{ formatearFecha(h.FechaActualizacionDeclarada || h.FechaCambio) }}</span>
+        <span class="historico-usuario">{{ h.Usuario || 'usuario desconocido' }}</span>
+      </div>
+      <ul class="historico-cambios">
+        <li *ngFor="let linea of describirCambios(h)">{{ linea }}</li>
+      </ul>
+      <p class="historico-observaciones" *ngIf="h.Observaciones">{{ h.Observaciones }}</p>
+
+      <div class="historico-evidencia" *ngIf="h.TrandId || h.ErrorDescripcion || h.TieneImagen">
+        <span class="historico-trandid" *ngIf="h.TrandId">TRANDID: {{ h.TrandId }}</span>
+        <p class="historico-error" *ngIf="h.ErrorDescripcion">{{ h.ErrorDescripcion }}</p>
+      </div>
+
+      <div class="historico-item-footer">
+        <button type="button" class="btn btn-ver-detalle" (click)="verDetalle(h)">Ver detalle completo</button>
+      </div>
+    </div>
+  </div>
+
+  <ng-template #sinRegistros>
+    <div class="empty" *ngIf="!comparando">
+      <ng-container *ngIf="apuntamientoIdFiltrado">Todavía no hay cambios registrados para este apuntamiento.</ng-container>
+      <ng-container *ngIf="aplicacionIdFiltrado && !apuntamientoIdFiltrado">No se encontraron cambios para esta aplicación con el filtro actual.</ng-container>
+    </div>
+  </ng-template>
+  </ng-template>
+</ng-container>
+
+<!-- MODAL: detalle completo de una fila del histórico — comparación de
+     TODOS los campos (no solo los que cambiaron), Observaciones, TRANDID,
+     Error e Imagen. -->
+<div class="overlay" *ngIf="detalle as d" (click)="cerrarDetalle()">
+  <div class="modal detalle-modal" (click)="$event.stopPropagation()">
+    <div class="modal-header">
+      <h2>Detalle del {{ d.Accion === 'AJUSTE' ? 'ajuste' : (d.Accion === 'ALTA' ? 'alta' : 'cambio') }}</h2>
+      <button class="btn-cerrar-modal" type="button" (click)="cerrarDetalle()">✕</button>
+    </div>
+
+    <div class="modal-body">
+      <div class="detalle-meta">
+        <span class="historico-accion" [ngClass]="claseAccion(d.Accion)">{{ etiquetaAccion(d.Accion) }}</span>
+        <span class="historico-fecha">{{ formatearFecha(d.FechaActualizacionDeclarada || d.FechaCambio) }}</span>
+        <span class="historico-usuario">{{ d.Usuario || 'usuario desconocido' }}</span>
+      </div>
+
+      <table class="detalle-tabla" *ngIf="d.Accion !== 'ALTA'">
+        <thead>
+          <tr><th>Campo</th><th>Anterior</th><th>Nuevo</th></tr>
+        </thead>
+        <tbody>
+          <tr *ngFor="let fila of filasDetalle(d)" [class.fila-cambiada]="fila.cambio">
+            <td>{{ fila.etiqueta }}</td>
+            <td>{{ fila.anterior }}</td>
+            <td>{{ fila.nuevo }}</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <!-- Estos 4 campos SIEMPRE se muestran (con "—"/"Sin imagen adjunta"
+           cuando no aplican) — así queda claro si el dato simplemente no se
+           llenó en ese registro, en vez de parecer que la función no existe. -->
+      <div class="detalle-campo">
+        <label>Observaciones</label>
+        <p>{{ d.Observaciones || '—' }}</p>
+      </div>
+
+      <div class="detalle-campo">
+        <label>TRANDID</label>
+        <p class="mono-inline">{{ d.TrandId || '—' }}</p>
+      </div>
+
+      <div class="detalle-campo">
+        <label>Error</label>
+        <p [class.detalle-error]="d.ErrorDescripcion">{{ d.ErrorDescripcion || '—' }}</p>
+      </div>
+
+      <div class="detalle-campo">
+        <label>Imagen adjunta</label>
+        <p class="ayuda" *ngIf="!d.TieneImagen">Sin imagen adjunta.</p>
+        <ng-container *ngIf="d.TieneImagen">
+          <p class="ayuda" *ngIf="cargandoImagenDetalle">Cargando imagen…</p>
+          <p class="ayuda ayuda--error" *ngIf="errorImagenDetalle">{{ errorImagenDetalle }}</p>
+          <img *ngIf="imagenDetalle" [src]="imagenDetalle" alt="Imagen adjunta al cambio" class="detalle-imagen" />
+        </ng-container>
+      </div>
+    </div>
+  </div>
+</div>

@@ -1,0 +1,60 @@
+@use '../../repositorio/azure/azure-base' as *;
+@include base;
+
+.cab { display: flex; justify-content: space-between; align-items: flex-end; gap: 16px; flex-wrap: wrap; margin-bottom: 18px;
+  h1 { font-size: 30px; font-weight: 800; margin: 0; letter-spacing: -0.5px; }
+  .sub { margin: 6px 0 0; font-size: 14px; color: $brand-gray; max-width: 720px; } }
+.cab-acciones { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.estado-cat { font-size: 12px; font-weight: 600; color: $brand-gray; }
+.mono { font-family: 'JetBrains Mono', monospace; }
+.peq { font-size: 12.5px; }
+.chico-v { padding: 12px 0; }
+.vacio-inicial { text-align: center; padding: 40px 20px; display: flex; flex-direction: column; align-items: center; gap: 10px; p { margin: 0; color: $brand-gray; max-width: 560px; } }
+.spinner.mini { width: 16px; height: 16px; border-width: 2px; flex: none; }
+.lectura { display: flex; align-items: flex-start; gap: 10px; }
+.adv { font-size: 12px; margin-top: 4px; }
+kbd { font-family: 'JetBrains Mono', monospace; font-size: 11px; padding: 1px 6px; border: 1px solid $border-light; border-bottom-width: 2px; border-radius: 5px; background: $surface-bg; color: $brand-gray; }
+.campo { select { font-family: inherit; font-size: 12px; padding: 6px 8px; border: 1px solid $border-light; border-radius: 8px; background: $surface; color: $brand-dark; max-width: 200px; } }
+
+// --- Spotlight ---
+.spot { margin-bottom: 18px; display: flex; flex-direction: column; gap: 12px; }
+.spot-caja { display: flex; align-items: center; gap: 12px; background: $surface; border: 1.5px solid $border-light; border-radius: 16px; padding: 4px 18px; box-shadow: 0 10px 30px rgba(var(--ax-brand-primary-rgb, 103, 58, 183), 0.06); transition: border-color 0.15s, box-shadow 0.15s;
+  &:focus-within, &.activa { border-color: $brand; box-shadow: 0 12px 34px rgba($brand-rgb, 0.18); } }
+.spot-lupa { font-size: 26px; color: $brand-gray; line-height: 1; }
+.spot-entrada { flex: 1; min-width: 0; border: none; outline: none; background: transparent; font-family: inherit; font-size: 18px; padding: 14px 0; color: $brand-dark;
+  &::placeholder { color: $brand-gray; opacity: 0.8; } &::-webkit-search-cancel-button { cursor: pointer; } }
+.spot-tecla { flex: none; }
+.spot-filtros { display: flex; align-items: center; gap: 10px 16px; flex-wrap: wrap; }
+.spot-ayuda { margin-left: auto; font-size: 11.5px; }
+
+// --- Inicio ---
+.inicio { display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: 16px; align-items: start; }
+.pista { grid-column: 1 / -1; margin: 4px 0 0; }
+.origen-card .tarjeta-cab h3 { font-size: 16px; }
+.bases { display: flex; flex-wrap: wrap; gap: 6px; }
+.base-chip { display: inline-flex; align-items: center; gap: 8px; border: 1px solid $border-light; background: $surface-bg; color: $brand-dark; border-radius: 999px; padding: 4px 6px 4px 12px; font-family: inherit; font-size: 12px; cursor: pointer;
+  small { background: rgba($brand-rgb, 0.12); color: $brand; border-radius: 999px; padding: 1px 8px; font-weight: 800; font-size: 10.5px; }
+  &:hover:not(:disabled) { border-color: $brand; }
+  &:disabled { opacity: 0.5; cursor: default; } }
+
+// --- Resultados ---
+.grupo-tit { margin: 18px 0 8px; font-size: 12px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.4px; color: $brand-gray; .gris { font-weight: 600; text-transform: none; letter-spacing: 0; } }
+.res-lista { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.res-item { position: relative; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; background: $surface; border: 1px solid $border-light; border-radius: 12px; padding: 4px 12px 4px 4px; transition: border-color 0.12s, background 0.12s;
+  &.sel { border-color: $brand; background: rgba($brand-rgb, 0.04); } }
+.res-principal { flex: 1 1 320px; min-width: 0; display: flex; align-items: flex-start; gap: 12px; text-align: left; border: none; background: transparent; padding: 8px 8px; font-family: inherit; cursor: pointer; color: inherit; }
+.res-ico { flex: none; width: 28px; height: 28px; border-radius: 8px; display: inline-flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 800; background: rgba($brand-rgb, 0.12); color: $brand;
+  &.vista { background: transparent; border: 1.5px dashed $brand; } &.col { background: rgba(16, 185, 129, 0.14); color: #0f9d6b; } }
+.res-textos { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.res-nombre { font-size: 14px; font-weight: 700; overflow-wrap: anywhere; }
+.res-ruta { font-size: 11.5px; color: $brand-gray; }
+.res-desc { font-size: 12px; color: $brand-dark; opacity: 0.85; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.sin-borde { border-color: transparent; pointer-events: none; }
+.res-lugares { flex: 1 1 100%; padding: 4px 10px 12px 44px; }
+.lugares { list-style: none; margin: 0; padding: 0; columns: 2 300px; font-size: 12px; li { break-inside: avoid; padding: 3px 0; display: flex; gap: 8px; align-items: baseline; flex-wrap: wrap; } }
+.marca { display: inline-block; font-size: 9.5px; font-weight: 800; padding: 1px 6px; border-radius: 4px; font-family: 'JetBrains Mono', monospace; }
+.marca-pk { background: rgba(245, 158, 11, 0.18); color: #b45309; }
+
+// --- Credenciales personales ---
+.cred-pto { display: inline-block; width: 8px; height: 8px; margin-left: 8px; border-radius: 50%; background: #f59e0b; vertical-align: middle; &.ok { background: #10b981; } }
+.sin-cred { display: flex; align-items: center; justify-content: space-between; gap: 14px; flex-wrap: wrap; }

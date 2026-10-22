@@ -1,0 +1,348 @@
+<div class="repo-shell">
+  <div class="header-section">
+    <div>
+      <h1>Repositorio</h1>
+      <div class="selector-repositorio" *ngIf="(repositorios$ | async)?.length">
+        <label for="selectorRepositorio">Repositorio:</label>
+        <select
+          id="selectorRepositorio"
+          [value]="repositorioActual$ | async"
+          (change)="cambiarRepositorio($any($event.target).value)"
+        >
+          <option *ngFor="let repo of (repositorios$ | async)" [value]="repo.nombre">{{ repo.nombre }}</option>
+        </select>
+      </div>
+      <p *ngIf="respuesta">
+        {{ respuesta.organizacion }} / {{ respuesta.proyecto }} / {{ respuesta.repositorio }}
+        <span class="badge-rama">{{ respuesta.rama }}</span>
+      </p>
+    </div>
+    <div class="header-acciones">
+      <button type="button" class="btn-secondary" *ngIf="esAdminPod" (click)="abrirAccesos()" title="Elegir qué secciones y repositorios ve cada usuario"><app-ico n="candado"></app-ico>Accesos</button>
+      <button type="button" class="btn-secondary" *ngIf="esAdminPod" (click)="abrirConexion()" title="Tokens de acceso y datos de la conexión con Azure DevOps"><app-ico n="llave"></app-ico>Conexión</button>
+      <button class="btn-secondary" *ngIf="pestanaActiva === 'archivos' && ver('archivos')" (click)="recargar()" [disabled]="cargando"><app-ico n="refrescar"></app-ico>Actualizar</button>
+    </div>
+  </div>
+
+  <div class="aviso-acceso" *ngIf="accesoListo && sinSecciones">
+    <strong>No tienes secciones habilitadas en el Repositorio.</strong> Pídele al administrador (ADMIN_POD) que te asigne las que necesites.
+  </div>
+  <div class="aviso-acceso" *ngIf="accesoListo && !sinSecciones && sinRepositorios">
+    <strong>No tienes ningún repositorio habilitado.</strong> Las secciones de código (Resumen, Archivos, Commits, Pull Requests, Ramas y Buscar) no mostrarán información hasta que el administrador te asigne uno.
+  </div>
+
+  <app-azure-accesos *ngIf="accesosAbierto" (cerrar)="cerrarAccesos()"></app-azure-accesos>
+  <app-azure-conexion *ngIf="conexionAbierta && esAdminPod" (cerrar)="cerrarConexion($event)"></app-azure-conexion>
+
+  <!-- PESTAÑAS: todo el módulo es de solo lectura sobre Azure DevOps -->
+  <nav class="tabs-repo" aria-label="Secciones del repositorio">
+    <button type="button" *ngIf="ver('resumen')" [class.activa]="pestanaActiva === 'resumen'" (click)="cambiarPestana('resumen')"><app-ico n="resumen"></app-ico>Resumen</button>
+    <button type="button" *ngIf="ver('archivos')" [class.activa]="pestanaActiva === 'archivos'" (click)="cambiarPestana('archivos')"><app-ico n="carpeta"></app-ico>Archivos</button>
+    <button type="button" *ngIf="ver('commits')" [class.activa]="pestanaActiva === 'commits'" (click)="cambiarPestana('commits')"><app-ico n="reloj"></app-ico>Commits</button>
+    <button type="button" *ngIf="ver('pull-requests')" [class.activa]="pestanaActiva === 'pull-requests'" (click)="cambiarPestana('pull-requests')"><app-ico n="pull"></app-ico>Pull Requests</button>
+    <button type="button" *ngIf="ver('ramas')" [class.activa]="pestanaActiva === 'ramas'" (click)="cambiarPestana('ramas')"><app-ico n="rama"></app-ico>Ramas y tags</button>
+    <button type="button" *ngIf="ver('pipelines')" [class.activa]="pestanaActiva === 'pipelines'" (click)="cambiarPestana('pipelines')"><app-ico n="pipeline"></app-ico>Pipelines</button>
+    <button type="button" *ngIf="ver('releases')" [class.activa]="pestanaActiva === 'releases'" (click)="cambiarPestana('releases')"><app-ico n="cohete"></app-ico>Releases</button>
+    <button type="button" *ngIf="ver('boards')" [class.activa]="pestanaActiva === 'boards'" (click)="cambiarPestana('boards')"><app-ico n="tablero"></app-ico>Boards</button>
+    <button type="button" *ngIf="ver('wiki')" [class.activa]="pestanaActiva === 'wiki'" (click)="cambiarPestana('wiki')"><app-ico n="libro"></app-ico>Wiki</button>
+    <button type="button" *ngIf="ver('equipo')" [class.activa]="pestanaActiva === 'equipo'" (click)="cambiarPestana('equipo')"><app-ico n="equipo"></app-ico>Equipo</button>
+    <button type="button" *ngIf="ver('buscar')" [class.activa]="pestanaActiva === 'buscar'" (click)="cambiarPestana('buscar')"><app-ico n="buscar"></app-ico>Buscar</button>
+  </nav>
+
+  <!-- ==================== PESTAÑA: ARCHIVOS ==================== -->
+  <div class="repo-container" *ngIf="pestanaActiva === 'archivos' && ver('archivos')">
+
+  <!-- MIGAS DE PAN -->
+  <nav class="breadcrumbs">
+    <a (click)="cargarCarpeta('/')" [class.actual]="rutaActual === '/'"><app-ico n="inicio"></app-ico>Raíz</a>
+    <ng-container *ngFor="let miga of migasDePan; let last = last">
+      <span class="separador">/</span>
+      <a (click)="cargarCarpeta(miga.path)" [class.actual]="last">{{ miga.nombre }}</a>
+    </ng-container>
+  </nav>
+
+  <div class="empty-state text-center py-4" *ngIf="cargando">Cargando contenido del repositorio…</div>
+
+  <div class="error-state" *ngIf="!cargando && error">
+   <app-ico n="alerta"></app-ico>{{ error }}
+  </div>
+
+  <div class="tabla-items" *ngIf="!cargando && !error && respuesta">
+    <div class="fila-encabezado">
+      <span class="col-nombre">Nombre</span>
+      <span class="col-autor">Editor</span>
+      <span class="col-commit">Commit</span>
+      <span class="col-cambio">Último cambio</span>
+      <span class="col-acciones"></span>
+    </div>
+
+    <div *ngIf="!respuesta.items.length" class="vacio-carpeta">
+      Esta carpeta no tiene contenido.
+    </div>
+
+    <div
+      class="fila-item"
+      *ngFor="let item of respuesta.items"
+      (click)="abrirItem(item)"
+      [title]="item.esCarpeta ? 'Abrir carpeta' : 'Ver contenido del archivo'"
+    >
+      <span class="col-nombre">
+        <span class="icono" [class.carpeta]="item.esCarpeta"><app-ico [n]="item.esCarpeta ? 'carpeta' : 'archivo'" class="solo"></app-ico></span>
+        {{ item.nombre }}
+      </span>
+      <span class="col-autor">
+        <ng-container *ngIf="item.commit; else sinAutor">
+          <span class="avatar-autor" [title]="item.commit.autor">{{ inicialesAutor(item.commit.autor) }}</span>
+          <span class="nombre-autor">{{ item.commit.autor }}</span>
+        </ng-container>
+        <ng-template #sinAutor><span class="text-gray">—</span></ng-template>
+      </span>
+      <span class="col-commit">
+        <ng-container *ngIf="item.commit; else sinCommit">
+          <code>{{ item.commit.idCorto }}</code>
+          <span class="comentario-commit" [title]="item.commit.comentario">{{ item.commit.comentario || '(sin mensaje)' }}</span>
+        </ng-container>
+        <ng-template #sinCommit><span class="text-gray">Sin información de commit</span></ng-template>
+      </span>
+      <span class="col-cambio">{{ item.ultimoCambio ? (item.ultimoCambio | date:'dd/MM/yyyy HH:mm') : '—' }}</span>
+      <span class="col-acciones">
+        <button
+          type="button"
+          class="btn-icono"
+          title="Ver historial de commits"
+          (click)="verHistorial(item); $event.stopPropagation()"
+        ><app-ico n="reloj" class="solo"></app-ico></button>
+      </span>
+    </div>
+  </div>
+
+  <p class="nota-final">
+    Esta vista es de solo lectura: refleja el contenido y el historial de commits del repositorio en Azure DevOps.
+    Cualquier cambio real se hace directamente en Azure DevOps.
+  </p>
+  </div>
+  <!-- ==================== /PESTAÑA: ARCHIVOS ==================== -->
+
+  <!-- ==================== PESTAÑAS DE AZURE DEVOPS (solo lectura) ==================== -->
+  <ng-container *ngIf="!remontando">
+  <app-azure-resumen *ngIf="pestanaActiva === 'resumen' && ver('resumen')" (irA)="irA($event)"></app-azure-resumen>
+  <app-azure-commits *ngIf="pestanaActiva === 'commits' && ver('commits')"></app-azure-commits>
+  <app-azure-prs *ngIf="pestanaActiva === 'pull-requests' && ver('pull-requests')"></app-azure-prs>
+  <app-azure-ramas *ngIf="pestanaActiva === 'ramas' && ver('ramas')" (ramaSeleccionada)="usarRama($event)"></app-azure-ramas>
+  <app-azure-pipelines *ngIf="pestanaActiva === 'pipelines' && ver('pipelines')"></app-azure-pipelines>
+  <app-azure-releases *ngIf="pestanaActiva === 'releases' && ver('releases')"></app-azure-releases>
+  <app-azure-boards *ngIf="pestanaActiva === 'boards' && ver('boards')"></app-azure-boards>
+  <app-repo-wiki *ngIf="pestanaActiva === 'wiki' && ver('wiki')"></app-repo-wiki>
+  <app-azure-equipo *ngIf="pestanaActiva === 'equipo' && ver('equipo')"></app-azure-equipo>
+  <app-azure-buscar *ngIf="pestanaActiva === 'buscar' && ver('buscar')"></app-azure-buscar>
+  </ng-container>
+</div>
+
+<!-- PANEL DE HISTORIAL DE COMMITS (solo aplica a la pestaña Archivos) -->
+<div class="modal-overlay" *ngIf="historialAbierto" (click)="cerrarHistorial()">
+  <div class="modal-content" (click)="$event.stopPropagation()">
+    <header class="detail-header">
+      <div>
+        <h2>Historial de commits</h2>
+        <p class="ip-subtitle"><code>{{ historialPath }}</code></p>
+      </div>
+      <button class="btn-close" (click)="cerrarHistorial()"><app-ico n="cerrar" class="solo"></app-ico></button>
+    </header>
+
+    <div class="empty-state text-center py-4" *ngIf="historialCargando">Cargando historial…</div>
+    <div class="error-state" *ngIf="!historialCargando && historialError"><app-ico n="alerta"></app-ico>{{ historialError }}</div>
+
+    <div class="lista-commits" *ngIf="!historialCargando && !historialError">
+      <p class="vacio-carpeta" *ngIf="!historialCommits.length">No hay commits registrados para esta ruta.</p>
+      <div class="fila-commit" *ngFor="let c of historialCommits">
+        <div>
+          <code>{{ c.idCorto }}</code>
+          <strong>{{ c.autor }}</strong>
+          <span class="text-gray" *ngIf="c.fecha"> · {{ c.fecha | date:'dd/MM/yyyy HH:mm' }}</span>
+        </div>
+        <p class="comentario-commit-full">{{ c.comentario || '(sin mensaje)' }}</p>
+        <a *ngIf="c.url" [href]="c.url" target="_blank" rel="noopener" class="ver-en-azure">Ver en Azure DevOps<app-ico n="externo" class="fin"></app-ico></a>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- PANEL DE VISOR DE CONTENIDO (Excel/CSV, texto/código/XML, imagen, PDF) -->
+<div class="modal-overlay" *ngIf="visorAbierto" (click)="cerrarVisor()">
+  <div class="modal-content modal-content-ancho" (click)="$event.stopPropagation()">
+    <header class="detail-header">
+      <div>
+        <h2>{{ visorNombreArchivo }}</h2>
+        <p class="ip-subtitle"><code>{{ visorPath }}</code></p>
+      </div>
+      <div class="acciones-visor">
+        <button
+          type="button"
+          class="btn-secondary btn-descargar"
+          (click)="descargarArchivoActual()"
+          [disabled]="visorCargando || !!visorError"
+          title="Descargar archivo"
+        ><app-ico n="descargar"></app-ico>Descargar</button>
+        <button class="btn-close" (click)="cerrarVisor()"><app-ico n="cerrar" class="solo"></app-ico></button>
+      </div>
+    </header>
+
+    <div class="empty-state text-center py-4" *ngIf="visorCargando">Cargando contenido del archivo…</div>
+    <div class="error-state" *ngIf="!visorCargando && visorError"><app-ico n="alerta"></app-ico>{{ visorError }}</div>
+
+    <ng-container *ngIf="!visorCargando && !visorError">
+
+      <!-- Excel / CSV -->
+      <div class="visor-excel" *ngIf="visorTipo === 'excel'">
+        <div class="tabs-hojas" *ngIf="hojasParaPestanas.length > 1">
+          <button
+            type="button"
+            *ngFor="let hoja of hojasParaPestanas; let i = index"
+            class="tab-hoja"
+            [class.activa]="i === visorHojaActivaIndice"
+            (click)="seleccionarHoja(i)"
+          >{{ hoja.nombre }}</button>
+        </div>
+
+        <!-- Modo "con estilo" (.xlsx/.xlsm): reproduce colores, negrita,
+             bordes, celdas combinadas, ancho real de columnas e imágenes
+             incrustadas (ej. el logo del banco) -- ver procesarExcelConEstilo(). -->
+        <ng-container *ngIf="usaEstiloRico && hojaRicaActiva as hoja">
+          <p class="vacio-carpeta" *ngIf="!hoja.filas.length">Esta hoja está vacía.</p>
+
+          <div class="aviso-formas" *ngIf="hoja.tieneFormasNoSoportadas">
+            ℹ Esta hoja incluye un elemento del dibujo que no se pudo reproducir aquí tal cual (por ejemplo un
+            grupo de formas anidado, o un gráfico/SmartArt incrustado). El resto del diagrama sí se muestra abajo.
+            Descarga el archivo para ver el dibujo completo tal como está en Excel.
+          </div>
+
+          <div class="tabla-excel-rica-scroll" *ngIf="hoja.filas.length">
+            <div class="tabla-excel-rica-lienzo" [style.width.px]="hoja.anchoTotal" [style.height.px]="hoja.altoTotal">
+              <table class="tabla-excel-rica" [style.width.px]="hoja.anchoTotal">
+                <colgroup>
+                  <col *ngFor="let ancho of hoja.anchoColumnas" [style.width.px]="ancho">
+                </colgroup>
+                <tbody>
+                  <tr *ngFor="let fila of hoja.filas; let indiceFila = index" [style.height.px]="hoja.altoFilas[indiceFila]">
+                    <ng-container *ngFor="let celda of fila">
+                      <td
+                        *ngIf="!celda.oculta"
+                        [attr.rowspan]="celda.rowspan > 1 ? celda.rowspan : null"
+                        [attr.colspan]="celda.colspan > 1 ? celda.colspan : null"
+                        [style.background-color]="celda.estilo.backgroundColor"
+                        [style.color]="celda.estilo.color"
+                        [style.font-weight]="celda.estilo.bold ? 700 : null"
+                        [style.font-style]="celda.estilo.italic ? 'italic' : null"
+                        [style.text-decoration]="celda.estilo.underline ? 'underline' : null"
+                        [style.text-align]="celda.estilo.align"
+                        [style.vertical-align]="celda.estilo.valign || 'middle'"
+                        [style.font-size.px]="celda.estilo.fontSize ? celda.estilo.fontSize * 1.333 : null"
+                        [style.border-top]="celda.estilo.bordes?.top"
+                        [style.border-right]="celda.estilo.bordes?.right"
+                        [style.border-bottom]="celda.estilo.bordes?.bottom"
+                        [style.border-left]="celda.estilo.bordes?.left"
+                      >{{ celda.texto }}</td>
+                    </ng-container>
+                  </tr>
+                </tbody>
+              </table>
+              <div
+                class="imagen-hoja-excel"
+                *ngFor="let img of hoja.imagenes"
+                [style.top.px]="img.top"
+                [style.left.px]="img.left"
+                [style.width.px]="img.width"
+                [style.height.px]="img.height"
+              >
+                <img [src]="img.dataUrl" alt="">
+              </div>
+
+              <!-- Formas dibujadas a mano en Excel (rectángulos/óvalos de un diagrama de flujo, ej. las
+                   cajas de "Diagrama Servicio") -- ver extraerFormasHoja() en el componente. -->
+              <div
+                class="forma-hoja-excel"
+                *ngFor="let forma of hoja.formas"
+                [class.forma-ovalo]="forma.tipo === 'ellipse'"
+                [class.forma-redondeada]="forma.rounded"
+                [style.top.px]="forma.top"
+                [style.left.px]="forma.left"
+                [style.width.px]="forma.width"
+                [style.height.px]="forma.height"
+                [style.background-color]="forma.fill"
+                [style.border-color]="forma.strokeColor"
+                [style.border-width.px]="forma.strokeWidth"
+                [style.border-style]="forma.strokeDashed ? 'dashed' : 'solid'"
+                [style.transform]="forma.rotacion ? ('rotate(' + forma.rotacion + 'deg)') : null"
+              >{{ forma.texto }}</div>
+
+              <!-- Conectores/flechas del diagrama -- se dibujan como una línea SVG dentro de su propio
+                   recuadro (ver extraerFormasHoja()). -->
+              <svg
+                class="conector-hoja-excel"
+                *ngFor="let con of hoja.conectores; let iCon = index"
+                [style.top.px]="con.top"
+                [style.left.px]="con.left"
+                [style.width.px]="con.width"
+                [style.height.px]="con.height"
+                [attr.viewBox]="'0 0 ' + con.width + ' ' + con.height"
+              >
+                <defs>
+                  <marker
+                    [attr.id]="'flecha-conector-' + iCon"
+                    markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto"
+                  >
+                    <path d="M0,0 L6,3 L0,6 Z" [attr.fill]="con.strokeColor"></path>
+                  </marker>
+                </defs>
+                <line
+                  [attr.x1]="con.x1" [attr.y1]="con.y1" [attr.x2]="con.x2" [attr.y2]="con.y2"
+                  [attr.stroke]="con.strokeColor" [attr.stroke-width]="con.strokeWidth"
+                  [attr.marker-end]="con.conFlecha ? ('url(#flecha-conector-' + iCon + ')') : null"
+                ></line>
+              </svg>
+            </div>
+          </div>
+        </ng-container>
+
+        <!-- Modo simple (.xls/.csv, o respaldo si falla el parseo con estilo): solo valores. -->
+        <div class="tabla-excel-scroll" *ngIf="!usaEstiloRico && hojaActiva as hoja">
+          <p class="vacio-carpeta" *ngIf="!hoja.filas.length">Esta hoja está vacía.</p>
+          <table class="tabla-excel" *ngIf="hoja.filas.length">
+            <thead>
+              <tr>
+                <th *ngFor="let celda of hoja.filas[0]">{{ celda }}</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr *ngFor="let fila of hoja.filas.slice(1)">
+                <td *ngFor="let celda of fila">{{ celda }}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Imagen -->
+      <div class="visor-imagen" *ngIf="visorTipo === 'imagen'">
+        <img [src]="visorUrlObjeto" [alt]="visorNombreArchivo">
+      </div>
+
+      <!-- PDF -->
+      <div class="visor-pdf" *ngIf="visorTipo === 'pdf'">
+        <iframe [src]="visorUrlSegura" title="Vista previa del PDF"></iframe>
+      </div>
+
+      <!-- Texto / código / XML / JSON / etc -->
+      <div class="visor-codigo" *ngIf="visorTipo === 'codigo'">
+        <pre><code [innerHTML]="visorCodigoHtml"></code></pre>
+      </div>
+
+      <!-- Tipos sin vista previa -->
+      <div class="visor-no-soportado" *ngIf="visorTipo === 'no-soportado'">
+        <p><app-ico n="paquete"></app-ico>Este tipo de archivo no tiene vista previa disponible.</p>
+        <p class="text-gray">Usa el botón "Descargar" para guardarlo, o ábrelo directamente en Azure DevOps.</p>
+      </div>
+
+    </ng-container>
+  </div>
+</div>

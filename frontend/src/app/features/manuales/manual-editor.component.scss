@@ -1,0 +1,33 @@
+@use 'manuales-contenido' as *;
+
+// Estilos globales a propósito (ViewEncapsulation.None): el contenido del editor y el
+// de la vista de lectura lo crean Tiptap / innerHTML, no Angular, así que las reglas de
+// .man-contenido tienen que alcanzarlos desde cualquier componente.
+
+.ed { display: flex; flex-direction: column; min-width: 0; border: 1px solid var(--ax-border, #e2e8f0); border-radius: 12px; background: var(--ax-surface, #fff); overflow: visible; }
+.ed-barra { position: sticky; top: 0; z-index: 5; display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; padding: 8px 10px; background: var(--ax-surface-2, #f8fafc); border-bottom: 1px solid var(--ax-border, #e2e8f0); border-radius: 12px 12px 0 0; }
+.ed-grupo { display: inline-flex; align-items: center; gap: 2px; padding-right: 10px; border-right: 1px solid var(--ax-border, #e2e8f0); &:last-child { border-right: none; padding-right: 0; } }
+.ed-rel { position: relative; }
+.ed-b { min-width: 32px; height: 32px; padding: 0 8px; border: 1px solid transparent; border-radius: 8px; background: transparent; color: var(--ax-text, #1e293b); font: inherit; font-size: 14px; cursor: pointer; display: inline-flex; align-items: center; justify-content: center;
+  &:hover:not(:disabled) { background: rgba(var(--ax-brand-primary-rgb, 103, 58, 183), 0.1); }
+  &:focus-visible { outline: 2px solid var(--ax-brand-primary, #673ab7); outline-offset: 1px; }
+  &.on { background: rgba(var(--ax-brand-primary-rgb, 103, 58, 183), 0.16); color: var(--ax-brand-primary, #673ab7); border-color: rgba(var(--ax-brand-primary-rgb, 103, 58, 183), 0.35); }
+  &:disabled { opacity: 0.35; cursor: default; }
+  &.mono { font-family: 'JetBrains Mono', monospace; font-size: 12px; }
+  &.ed-txt { font-size: 12.5px; font-weight: 600; } }
+.ed-a { font-weight: 800; border-bottom: 3px solid #dc2626; line-height: 1; padding-bottom: 1px; }
+.ed-r { font-weight: 700; background: #fef08a; color: #1e293b; border-radius: 3px; padding: 0 3px; }
+.ed-sel { height: 32px; border: 1px solid var(--ax-border, #e2e8f0); border-radius: 8px; background: var(--ax-surface, #fff); color: var(--ax-text, #1e293b); font: inherit; font-size: 13px; padding: 0 8px; }
+.ed-et { font-size: 12px; font-weight: 600; color: var(--ax-text-muted, #64748b); margin-right: 4px; }
+.ed-pop { position: absolute; top: 38px; left: 0; z-index: 20; display: flex; align-items: center; flex-wrap: wrap; gap: 6px; padding: 8px; max-width: min(320px, 90vw); background: var(--ax-surface, #fff); border: 1px solid var(--ax-border, #e2e8f0); border-radius: 10px; box-shadow: 0 10px 28px rgba(0, 0, 0, 0.18);
+  input { flex: 1 1 180px; min-width: 0; font: inherit; font-size: 13px; padding: 6px 8px; border: 1px solid var(--ax-border, #e2e8f0); border-radius: 8px; background: var(--ax-surface-2, #f8fafc); color: var(--ax-text, #1e293b); }
+  button { font: inherit; font-size: 12px; font-weight: 600; padding: 6px 10px; border-radius: 8px; border: 1px solid var(--ax-border, #e2e8f0); background: var(--ax-surface-2, #f8fafc); color: var(--ax-text, #1e293b); cursor: pointer; &:hover { border-color: var(--ax-brand-primary, #673ab7); } }
+  .ed-col { width: 26px; height: 26px; padding: 0; border-radius: 50%; border: 2px solid var(--ax-surface, #fff); box-shadow: 0 0 0 1px var(--ax-border, #cbd5e1); }
+  .ed-ok { background: var(--ax-brand-primary, #673ab7); color: #fff; border-color: transparent; }
+  .ed-peligro { color: var(--ax-chart-danger, #ef4444); } }
+.ed-enlace { width: 320px; }
+.ed-area { padding: 6px 4px; min-height: 280px; cursor: text; }
+
+
+// Contenido del editor y botón «Copiar» (el HTML lo crea Tiptap: estilos sin encapsulación a propósito).
+@include contenido;

@@ -1,0 +1,182 @@
+<header class="page-header">
+  <div>
+    <h1>Informes · Servidores / Monitoreo</h1>
+    <p class="subtitle">Fase 2 del informe general del aplicativo — salud de la flota de Portainer en vivo y tendencia del periodo</p>
+  </div>
+</header>
+
+<!-- ===================================================
+     SELECTOR DE PERIODO
+==================================================== -->
+<section class="seccion-selector">
+  <div class="selector-periodo">
+    <button type="button" class="btn-periodo" [class.activo]="periodo === 'dia'" (click)="seleccionarPeriodo('dia')">Día</button>
+    <button type="button" class="btn-periodo" [class.activo]="periodo === 'semana'" (click)="seleccionarPeriodo('semana')">Semana</button>
+    <button type="button" class="btn-periodo" [class.activo]="periodo === 'mes'" (click)="seleccionarPeriodo('mes')">Mes</button>
+    <button type="button" class="btn-periodo" [class.activo]="periodo === 'rango'" (click)="seleccionarPeriodo('rango')">Rango personalizado</button>
+  </div>
+
+  <div class="rango-fechas" *ngIf="periodo === 'rango'">
+    <label>
+      Desde
+      <input type="date" [(ngModel)]="desde" [max]="hasta">
+    </label>
+    <label>
+      Hasta
+      <input type="date" [(ngModel)]="hasta" [min]="desde">
+    </label>
+    <button type="button" class="btn-sm" (click)="generarInforme()">Generar</button>
+  </div>
+
+  <div class="acciones-informe">
+    <button type="button" class="btn-sm" (click)="generarInforme()" [disabled]="cargando">↻ Actualizar</button>
+    <button type="button" class="btn-sm btn-pdf" (click)="descargarPdf()" [disabled]="generandoPdf">
+      {{ generandoPdf ? 'Generando PDF…' : '⬇ Descargar PDF' }}
+    </button>
+  </div>
+</section>
+
+<div class="mensaje-error mensaje-error-seccion" *ngIf="error">{{ error }}</div>
+<div class="mensaje-error mensaje-error-seccion" *ngIf="errorPdf">{{ errorPdf }}</div>
+
+<div class="loading-state" *ngIf="cargando">
+  <div class="spinner"></div>
+  <p>Generando informe...</p>
+</div>
+
+<ng-container *ngIf="!cargando && informe">
+  <p class="etiqueta-periodo-activo">Periodo: <strong>{{ etiquetaPeriodo }}</strong></p>
+
+  <div class="mensaje-error mensaje-error-seccion" *ngIf="!informe.portainerConfigurado">
+    Portainer todavía no está configurado en el backend — este informe solo puede mostrar la tendencia histórica ya guardada, sin snapshot en vivo de la flota.
+  </div>
+
+  <section class="centro-analitica">
+    <!-- ---------- Resumen actual (en vivo) ---------- -->
+    <h2 class="subtitulo-seccion">Resumen actual de la flota (en vivo)</h2>
+    <div class="kpis-grid">
+      <div class="kpi-card kpi-info" [ngClass]="informe.resumenActual.entornosArriba === informe.resumenActual.entornosTotal ? 'kpi-sano' : 'kpi-riesgo'">
+        <div class="kpi-texto">
+          <span class="kpi-valor">{{ informe.resumenActual.entornosArriba }}/{{ informe.resumenActual.entornosTotal }}</span>
+          <span class="kpi-label">Entornos arriba</span>
+        </div>
+      </div>
+      <div class="kpi-card kpi-info kpi-sano">
+        <div class="kpi-texto">
+          <span class="kpi-valor">{{ informe.resumenActual.contenedoresCorriendo }}</span>
+          <span class="kpi-label">Contenedores corriendo</span>
+        </div>
+      </div>
+      <div class="kpi-card kpi-info" [ngClass]="informe.resumenActual.contenedoresDetenidos ? 'kpi-critico' : 'kpi-sano'">
+        <div class="kpi-texto">
+          <span class="kpi-valor">{{ informe.resumenActual.contenedoresDetenidos }}</span>
+          <span class="kpi-label">Contenedores detenidos</span>
+        </div>
+      </div>
+      <div class="kpi-card kpi-info" [ngClass]="claseNivelUso(informe.resumenActual.cpuPromedioActual)">
+        <div class="kpi-texto">
+          <span class="kpi-valor">{{ informe.resumenActual.cpuPromedioActual }}%</span>
+          <span class="kpi-label">CPU en uso ahora</span>
+        </div>
+      </div>
+      <div class="kpi-card kpi-info kpi-sano">
+        <div class="kpi-texto">
+          <span class="kpi-valor">{{ informe.resumenActual.memUsadaActualGb }} <small>GB</small></span>
+          <span class="kpi-label">Memoria en uso ahora</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- ---------- Picos y promedios del periodo ---------- -->
+    <h2 class="subtitulo-seccion">Picos y promedios del periodo ({{ informe.picosPeriodo.totalCapturas }} capturas registradas)</h2>
+    <div class="kpis-grid">
+      <div class="kpi-card kpi-info kpi-riesgo">
+        <div class="kpi-texto">
+          <span class="kpi-valor">{{ informe.picosPeriodo.cpuPico }}%</span>
+          <span class="kpi-label">Pico de CPU promedio</span>
+        </div>
+      </div>
+      <div class="kpi-card kpi-info kpi-sano">
+        <div class="kpi-texto">
+          <span class="kpi-valor">{{ promedioCpuPeriodo !== null ? (promedioCpuPeriodo + '%') : '—' }}</span>
+          <span class="kpi-label">Promedio de CPU del periodo</span>
+        </div>
+      </div>
+      <div class="kpi-card kpi-info kpi-riesgo">
+        <div class="kpi-texto">
+          <span class="kpi-valor">{{ informe.picosPeriodo.memPico }} <small>GB</small></span>
+          <span class="kpi-label">Pico de memoria usada</span>
+        </div>
+      </div>
+      <div class="kpi-card kpi-info kpi-sano">
+        <div class="kpi-texto">
+          <span class="kpi-valor">{{ promedioMemPeriodo !== null ? promedioMemPeriodo : '—' }} <small>GB</small></span>
+          <span class="kpi-label">Promedio de memoria del periodo</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- ---------- Tendencia: contenedores ---------- -->
+    <div class="panel-analitica panel-analitica-ancho">
+      <h3>Tendencia — contenedores totales vs. corriendo</h3>
+      <p class="panel-atencion-subtitulo">Promedio diario de contenedores en toda la flota</p>
+      <app-line-chart [etiquetas]="etiquetasTendencia" [series]="serieContenedores"></app-line-chart>
+    </div>
+
+    <!-- ---------- Tendencia: CPU y memoria (ejes separados, nunca dual-axis) ---------- -->
+    <div class="analitica-paneles-secundarios">
+      <div class="panel-analitica">
+        <h3>Tendencia — CPU promedio</h3>
+        <app-line-chart [etiquetas]="etiquetasTendencia" [series]="serieCpu"></app-line-chart>
+      </div>
+      <div class="panel-analitica">
+        <h3>Tendencia — memoria usada</h3>
+        <app-line-chart [etiquetas]="etiquetasTendencia" [series]="serieMemoria"></app-line-chart>
+      </div>
+    </div>
+
+    <!-- ---------- Distribución actual ---------- -->
+    <div class="analitica-paneles-secundarios">
+      <div class="panel-analitica">
+        <h3>Contenedores — corriendo vs. detenidos</h3>
+        <app-donut-chart [segmentos]="segmentosContenedores" centroEtiqueta="Contenedores"></app-donut-chart>
+      </div>
+      <div class="panel-analitica">
+        <h3>Entornos — arriba vs. abajo</h3>
+        <app-donut-chart [segmentos]="segmentosEntornos" centroEtiqueta="Entornos"></app-donut-chart>
+      </div>
+      <div class="panel-analitica">
+        <h3>Mayor uso de CPU en el periodo</h3>
+        <app-bar-list [items]="topEntornosPorCpuBarList" colorVar="var(--ax-chart-series-1)"></app-bar-list>
+      </div>
+      <div class="panel-analitica">
+        <h3>Mayor uso de memoria en el periodo</h3>
+        <app-bar-list [items]="topEntornosPorMemoriaBarList" colorVar="var(--ax-chart-series-2)"></app-bar-list>
+      </div>
+    </div>
+
+    <!-- ---------- Tendencia diaria (detalle en tabla) ---------- -->
+    <div class="panel-analitica panel-atencion panel-analitica-ancho">
+      <h3>Tendencia diaria del periodo — detalle</h3>
+      <div class="tabla-atencion" *ngIf="informe.tendenciaDiaria.length; else sinTendencia">
+        <div class="tabla-atencion-header cols-5">
+          <span>Fecha</span>
+          <span>Contenedores (prom.)</span>
+          <span>Corriendo (prom.)</span>
+          <span>CPU prom.</span>
+          <span>Memoria prom.</span>
+        </div>
+        <div class="tabla-atencion-fila cols-5" *ngFor="let punto of informe.tendenciaDiaria; trackBy: trackTendencia">
+          <span>{{ formatoFechaCorta(punto.fecha) }}</span>
+          <span>{{ punto.contenedoresTotalProm }}</span>
+          <span>{{ punto.contenedoresCorriendoProm }}</span>
+          <span>{{ punto.cpuPromedio }}%</span>
+          <span>{{ punto.memUsadaGb }} GB</span>
+        </div>
+      </div>
+      <ng-template #sinTendencia>
+        <p class="sin-datos">Aún no hay suficiente histórico guardado en este periodo — las muestras se guardan cada 10 minutos.</p>
+      </ng-template>
+    </div>
+  </section>
+</ng-container>

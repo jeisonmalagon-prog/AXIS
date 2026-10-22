@@ -1,0 +1,41 @@
+@use '../../repositorio/azure/azure-base' as *;
+@include base;
+
+:host { display: block; min-width: 0; }
+.mono { font-family: 'JetBrains Mono', monospace; }
+.chico-v { padding: 20px 0; }
+.enlace-chico { border: none; background: transparent; padding: 0; font-family: inherit; font-size: 11.5px; font-weight: 700; color: $brand; cursor: pointer; &:hover { text-decoration: underline; } }
+.check-chico { display: flex; align-items: center; gap: 6px; font-size: 12px; color: $brand-dark; cursor: pointer; input { accent-color: var(--ax-brand-primary, #673ab7); } }
+
+.tb-cab { display: flex; align-items: flex-start; gap: 14px; flex-wrap: wrap; margin-bottom: 14px; }
+.tb-titulo { flex: 1 1 360px; min-width: 0; }
+.tb-ruta { margin: 0 0 2px; font-size: 12px; color: $brand-gray; }
+.tb-titulo h2 { margin: 0 0 8px; font-size: 24px; font-weight: 800; overflow-wrap: anywhere; letter-spacing: -0.3px; }
+.tb-chips { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 8px; }
+.tb-desc { margin: 0; font-size: 13.5px; line-height: 1.55; color: $brand-dark; max-width: 900px; overflow-wrap: anywhere; }
+.tb-sin-desc { color: $brand-gray; font-style: italic; font-size: 12.5px; }
+.tb-acciones { display: flex; gap: 8px; flex-wrap: wrap; }
+
+.tabla-tarjeta { padding: 0; overflow: hidden; }
+.tabla-wrap { max-height: 64vh; overflow: auto; }
+.dic { td { white-space: normal; vertical-align: top; } .td-defecto { max-width: 160px; overflow-wrap: anywhere; } .td-rel { min-width: 200px; } .td-desc { min-width: 220px; max-width: 420px; font-size: 12.5px; overflow-wrap: anywhere; } .col-nom { font-weight: 600; &.es-pk { font-weight: 800; } } }
+.rel { display: flex; gap: 6px; align-items: baseline; }
+.marca { display: inline-block; font-size: 9.5px; font-weight: 800; padding: 1px 6px; border-radius: 4px; margin-right: 4px; font-family: 'JetBrains Mono', monospace; }
+.marca-pk { background: rgba(245, 158, 11, 0.18); color: #b45309; }
+.marca-fk { background: rgba($brand-rgb, 0.14); color: $brand; }
+.marca-id { background: $surface-bg; color: $brand-gray; border: 1px solid $border-light; }
+.fila-lugares td { background: $surface-bg; }
+.lugares-tit { margin: 0 0 8px; font-size: 12px; color: $brand-gray; }
+.lugares { list-style: none; margin: 0; padding: 0; columns: 2 320px; font-size: 12px; li { break-inside: avoid; padding: 2px 0; display: flex; gap: 8px; align-items: baseline; flex-wrap: wrap; } }
+.grilla-rel { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 16px; margin-top: 16px; }
+.lista-rel { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; li { display: flex; justify-content: space-between; gap: 10px; align-items: baseline; flex-wrap: wrap; font-size: 12.5px; } .cols { font-size: 11px; } }
+.pie-nota { font-size: 12.5px; margin: 14px 0 0; line-height: 1.5; }
+
+.marca-q { background: rgba(20, 184, 166, 0.16); color: #0f766e; border: 1px solid rgba(20, 184, 166, 0.45); }
+.cnt { margin-left: 6px; font-size: 10.5px; font-weight: 800; background: $surface-bg; border: 1px solid $border-light; border-radius: 999px; padding: 0 7px; color: $brand-gray; }
+.q-grilla { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 14px; align-items: start; }
+.lista-q { list-style: none; margin: 0 0 8px; padding: 0; li { display: flex; align-items: center; gap: 8px; padding: 6px 0; border-bottom: 1px solid $border-light; &:last-child { border-bottom: 0; } } }
+.q-tit { flex: 1; min-width: 0; text-align: left; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rel-q { display: block; .rel-q-cab { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; } }
+.chip-mini { font-size: 10px; padding: 1px 7px; }
+.peq { font-size: 11.5px; }

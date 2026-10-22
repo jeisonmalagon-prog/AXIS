@@ -1,0 +1,85 @@
+<div class="overlay" (click)="cerrarSiLibre()">
+  <div class="modal" role="dialog" aria-modal="true" aria-label="Conexiones de BREB" (click)="$event.stopPropagation()">
+    <div class="modal__cab">
+      <div><h2>Conexiones de BREB</h2><p class="suave">Todo es de solo lectura. Las claves se guardan cifradas y no vuelven a mostrarse.</p></div>
+      <button type="button" class="cerrar" (click)="cerrarSiLibre()" aria-label="Cerrar">✕</button>
+    </div>
+
+    <nav class="pestanas" role="tablist" aria-label="Conexión a configurar">
+      @for (p of pestanas; track p.id) {
+        <button type="button" role="tab" class="pestana" [class.pestana--act]="actual === p.id" [attr.aria-selected]="actual === p.id" (click)="irA(p.id)">
+          <span class="punto" [class.punto--ok]="conexiones[p.id].configurada" [class.punto--mal]="!conexiones[p.id].configurada"></span>{{ p.texto }}
+        </button>
+      }
+    </nav>
+
+    <p class="suave">{{ pestana.ayuda }} <span class="origen">· {{ origenTexto }}</span></p>
+
+    <form class="form" (ngSubmit)="guardar()" autocomplete="off">
+      @if (actual === 'api') {
+        <label class="campo">Dirección del servicio (URL)
+          <input type="text" [(ngModel)]="api.url" name="url" placeholder="https://192.168.125.73:8001" autocomplete="off" required />
+        </label>
+        <label class="check"><input type="checkbox" [(ngModel)]="api.validarTls" name="validarTls" /> Validar el certificado TLS del servicio (desmárcalo si usa un certificado propio o autofirmado)</label>
+        <div class="dos">
+          <label class="campo">Ruta de «consultar llave» (opcional)
+            <input type="text" [(ngModel)]="api.rutaConsultar" name="rc" placeholder="Se descubre desde el Swagger" autocomplete="off" />
+          </label>
+          <label class="campo">Ruta de «resolver llave» (opcional)
+            <input type="text" [(ngModel)]="api.rutaResolver" name="rr" placeholder="/api/LlavesBreB/ResolverLLave" autocomplete="off" />
+          </label>
+        </div>
+        <p class="suave">Si dejas las rutas vacías, AXIS las busca en el Swagger del servicio. «Probar» solo lee ese Swagger: no consulta ninguna llave. Solo se hacen peticiones a estas dos rutas.</p>
+      } @else {
+        <label class="campo">{{ actual === 'sql' ? 'Servidor (host o host\\instancia)' : 'Servidor (host)' }}
+          <input type="text" [(ngModel)]="formBdActual.servidor" name="servidor" [placeholder]="actual === 'sql' ? 'FABOGDBBREB\\BREB' : 'host-de-mariadb'" autocomplete="off" required />
+        </label>
+        <div class="dos">
+          <label class="campo">Puerto
+            <input type="number" [(ngModel)]="formBdActual.puerto" name="puerto" min="1" max="65535" />
+          </label>
+          <label class="campo">Base de datos
+            <input type="text" [(ngModel)]="formBdActual.base" name="base" [placeholder]="actual === 'sql' ? 'BreB' : 'LogBre_B'" autocomplete="off" />
+          </label>
+        </div>
+        <div class="dos">
+          <label class="campo">Usuario
+            <input type="text" [(ngModel)]="formBdActual.usuario" name="usuario" autocomplete="off" required />
+          </label>
+          <label class="campo">Clave
+            <input type="password" [(ngModel)]="formBdActual.clave" name="clave" autocomplete="new-password" [placeholder]="placeholderClave" />
+          </label>
+        </div>
+        <label class="check"><input type="checkbox" [(ngModel)]="formBdActual.cifrado" name="cifrado" /> Cifrar la conexión ({{ actual === 'sql' ? 'Encrypt' : 'SSL' }})</label>
+        <label class="check"><input type="checkbox" [(ngModel)]="formBdActual.confiarCertificado" name="confiar" /> Confiar en el certificado del servidor</label>
+        @if (actual === 'sql') {
+          <label class="campo campo--corto">Código de la entidad propia (Finandina)
+            <input type="text" [(ngModel)]="sql.bancoPropio" name="propio" maxlength="10" placeholder="0063" autocomplete="off" />
+          </label>
+          <p class="suave">Con este código AXIS separa lo que el banco envía (saliente), recibe (entrante) o mueve entre sus propios clientes (interna).</p>
+        }
+      }
+
+      @if (error) { <div class="error-banner" role="alert">{{ error }}</div> }
+      @if (prueba[actual]; as p) {
+        <div class="prueba" [class.prueba--mal]="!p.ok" role="status">
+          @if (p.ok) {
+            <strong>Conexión correcta.</strong>
+            @if (actual === 'api') {
+              {{ p.url }} · consultar: {{ p.rutaConsultar || 'no encontrada' }} · resolver: {{ p.rutaResolver || 'no encontrada' }}
+              @if (p.aviso) { <br />{{ p.aviso }} }
+            } @else { {{ p.version }} · base {{ p.baseConectada }} }
+          } @else { <strong>No se pudo conectar.</strong> {{ p.error }} }
+        </div>
+      }
+      <div class="pie">
+        @if (guardadaEnApp) {
+          <button type="button" class="btn btn--peligro" (click)="quitar()" [disabled]="guardando">{{ confirmarQuitar ? 'Confirmar: quitar lo guardado' : 'Quitar lo guardado' }}</button>
+        }
+        <span class="espacio"></span>
+        <button type="button" class="btn" (click)="probar()" [disabled]="probando || guardando">{{ probando ? 'Probando…' : 'Probar conexión' }}</button>
+        <button type="submit" class="btn btn--marca" [disabled]="!puedeGuardar">{{ guardando ? 'Guardando…' : 'Guardar' }}</button>
+      </div>
+    </form>
+  </div>
+</div>

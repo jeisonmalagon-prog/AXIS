@@ -1,0 +1,582 @@
+<div class="overlay-probar" role="dialog" aria-modal="true" aria-label="Probar servicio">
+  <div class="probar-modal" [ngClass]="'modo-' + (modo === 'REST' ? 'rest' : 'soap')">
+    <div class="probar-header">
+      <div class="probar-titulo">
+        <span class="probar-icono">{{ iconoModo }}</span>
+        <div>
+          <h2>Consumo {{ modo }}</h2>
+          <p *ngIf="haySeleccion && !esLibre"><span class="mono">{{ servicio.Codigo }}</span> · {{ servicio.NombreServicio }}</p>
+          <p *ngIf="esLibre">{{ servicio.NombreServicio }} · fuera del inventario</p>
+          <p *ngIf="!haySeleccion">{{ modo === 'REST' ? 'APIs REST: Postman y cURL' : 'Servicios SOAP: WSDL y SoapUI' }}</p>
+        </div>
+      </div>
+      <div class="modo-switch" role="tablist" aria-label="Tipo de consumo">
+        <button type="button" role="tab" class="modo-soap-btn" [class.modo--on]="modo === 'SOAP'" [attr.aria-selected]="modo === 'SOAP'" (click)="cambiarModo('SOAP')">SOAP <span>{{ cantidades.SOAP }}</span></button>
+        <button type="button" role="tab" class="modo-rest-btn" [class.modo--on]="modo === 'REST'" [attr.aria-selected]="modo === 'REST'" (click)="cambiarModo('REST')">REST <span>{{ cantidades.REST }}</span></button>
+      </div>
+      <div class="probar-acciones">
+        <button type="button" class="btn-mini" *ngIf="haySeleccion && !eligiendo" (click)="abrirSelector()">Cambiar servicio</button>
+        <button type="button" class="btn-x" (click)="cerrarModal()" aria-label="Cerrar">✕</button>
+      </div>
+    </div>
+
+    <div class="probar-cuerpo">
+      <!-- ========== PETICIONES DISPONIBLES ========== -->
+      <aside class="panel-lateral">
+        <!-- ===== SELECTOR DE SERVICIO ===== -->
+        <ng-container *ngIf="eligiendo">
+          <p class="rotulo">Servicio {{ modo }} a consumir</p>
+          <input type="text" class="filtro" placeholder="Buscar por código, nombre o POD…" [(ngModel)]="busqueda" (ngModelChange)="recalcularServicios()" autofocus />
+          <div class="chips-filtro">
+            <button type="button" [class.chip--on]="!soloConPeticiones" (click)="elegirFiltro(false)">Todos {{ cantidades.todos }}</button>
+            <button type="button" [class.chip--on]="soloConPeticiones" (click)="elegirFiltro(true)" title="Servicios que ya tienen peticiones guardadas">Con peticiones {{ cantidades.peticiones }}</button>
+          </div>
+          <button type="button" class="servicio-fila servicio-fila--libre" *ngIf="libreDisponible" (click)="abrirLibre()" [class.servicio-fila--activa]="esLibre"
+            title="Prueba cualquier URL externa o servicio de un tercero, sin que esté registrado en Servicios">
+            <span class="servicio-linea">
+              <span class="servicio-codigo">🌐 Prueba libre</span>
+              <span class="tipo-chip" [class.tipo-chip--rest]="modo === 'REST'">{{ modo }}</span>
+            </span>
+            <span class="servicio-nombre">{{ modo === 'REST' ? 'API externa o de un tercero' : 'SOAP externo o de un tercero' }}</span>
+            <span class="servicio-guardado">
+              <span class="marca marca--si" *ngIf="cantidadLibres">{{ cantidadLibres }} {{ cantidadLibres === 1 ? 'petición guardada' : 'peticiones guardadas' }}</span>
+              <span class="marca marca--no" *ngIf="!cantidadLibres">sin peticiones</span>
+            </span>
+          </button>
+          <div class="lista-servicios">
+            <button type="button" class="servicio-fila" *ngFor="let s of listaServicios" (click)="seleccionar(s)" [class.servicio-fila--activa]="haySeleccion && servicio.Id === s.Id">
+              <span class="servicio-linea">
+                <span class="mono servicio-codigo">{{ s.Codigo }}</span>
+                <span class="tipo-chip" [class.tipo-chip--rest]="s.Tipo === 'REST'">{{ s.Tipo === 'REST' ? 'REST' : 'SOAP' }}</span>
+              </span>
+              <span class="servicio-nombre">{{ s.NombreServicio }}</span>
+              <span class="servicio-guardado">
+                <span class="marca marca--si" *ngIf="numPeticiones(s)" title="Peticiones guardadas en este servicio">{{ numPeticiones(s) }} {{ numPeticiones(s) === 1 ? 'petición' : 'peticiones' }}</span>
+                <span class="marca marca--no" *ngIf="!numPeticiones(s)" title="Todavía no tiene peticiones guardadas">sin peticiones</span>
+                <span class="marca marca--no" *ngIf="s.NumArchivos" title="Documentos adjuntos al servicio (proyecto SoapUI, colección…)">📎 {{ s.NumArchivos }}</span>
+              </span>
+            </button>
+            <p class="ayuda" *ngIf="!listaServicios.length">Ningún servicio coincide con la búsqueda o el filtro.</p>
+            <p class="ayuda" *ngIf="totalCoincidencias > listaServicios.length">Mostrando {{ listaServicios.length }} de {{ totalCoincidencias }}: escribe para acotar la búsqueda.</p>
+          </div>
+          <button type="button" class="btn-mini" *ngIf="haySeleccion" (click)="eligiendo = false">← Volver a {{ esLibre ? 'la prueba libre' : servicio.Codigo }}</button>
+        </ng-container>
+
+        <!-- ===== PETICIONES DEL SERVICIO ELEGIDO ===== -->
+        <ng-container *ngIf="!eligiendo && haySeleccion">
+          <div class="lat-cab">
+            <p class="rotulo">Peticiones <span class="contador" *ngIf="guardadas.length">{{ guardadas.length }}</span></p>
+            <div class="lat-acciones">
+              <button type="button" class="btn-mini btn-mini--prim" (click)="abrirImportar()" title="Cargar peticiones desde una colección, un archivo, una URL o un comando cURL">📥 Importar</button>
+              <button type="button" class="btn-mini" (click)="abrirExportar()" title="Descargar las peticiones como colección de Postman">⬇ Exportar</button>
+            </div>
+          </div>
+          <p class="aviso-guardado" *ngIf="avisoGuardado">{{ avisoGuardado }}</p>
+          <p class="error-importacion" *ngIf="!guardadasDisponibles">{{ guardadasMensaje }}</p>
+          <p class="error-importacion" *ngIf="guardadasDisponibles && guardadasMensaje">{{ guardadasMensaje }}</p>
+
+          <div class="item-fila" *ngFor="let p of guardadas">
+            <button type="button" class="item-peticion" (click)="aplicarGuardada(p)" [class.item-peticion--activa]="esGuardadaActiva(p)" [title]="p.Url || 'Usa la URL que elijas arriba'">
+              <span class="item-nombre"><span class="verbo verbo--{{ p.Metodo }}">{{ p.Metodo }}</span> {{ p.Nombre }}</span>
+            </button>
+            <button type="button" class="btn-quitar" *ngIf="puedeGuardarPropios" (click)="eliminarGuardada(p, $event)" aria-label="Eliminar petición guardada" title="Eliminar">🗑</button>
+          </div>
+          <button type="button" class="item-peticion" *ngIf="!guardadas.length && servicio.RequestEjemplo" (click)="usarRequestDelServicio()" [class.item-peticion--activa]="nombreSolicitud === 'Request de ejemplo del servicio'">
+            <span class="item-nombre">Request de ejemplo</span>
+            <span class="item-sub">Usa «Guardar» para pasarlo a peticiones</span>
+          </button>
+          <p class="vacio-lista" *ngIf="!guardadas.length && !servicio.RequestEjemplo && !cargandoGuardadas && guardadasDisponibles && !origenCargado">
+            Sin peticiones guardadas. Usa «Importar» o arma una a la derecha y pulsa «Guardar».
+          </p>
+
+          <!-- Lo que se acaba de importar y aún no está guardado -->
+          <ng-container *ngIf="origenCargado">
+            <div class="rotulo-fila lat-importadas">
+              <p class="origen" [title]="origenCargado">Importadas · {{ solicitudes.length }}</p>
+              <button type="button" class="enlace" *ngIf="puedeGuardarPropios && cargadasSinGuardar.length" (click)="guardarTodasLasCargadas()" [title]="'Guardar las ' + cargadasSinGuardar.length + ' que aún no están guardadas'">Guardar todas ({{ cargadasSinGuardar.length }})</button>
+            </div>
+            <p class="error-importacion" *ngIf="errorImportacion">{{ errorImportacion }}</p>
+            <p class="aviso-importacion" *ngFor="let av of avisosImportacion">{{ av }}</p>
+            <input type="text" class="filtro" placeholder="Filtrar…" [(ngModel)]="filtro" (ngModelChange)="recalcularGrupos()" *ngIf="solicitudes.length > 6" />
+            <div class="grupo" *ngFor="let g of grupos">
+              <p class="grupo-nombre" *ngIf="grupos.length > 1">{{ g.nombre }}</p>
+              <div class="item-fila" *ngFor="let s of g.items">
+                <button type="button" class="item-peticion" (click)="aplicarSolicitud(s)" [class.item-peticion--activa]="esActiva(s)" [title]="s.url">
+                  <span class="item-nombre"><span class="verbo verbo--{{ s.metodo }}">{{ s.metodo }}</span> {{ s.nombre }}</span>
+                </button>
+                <span class="guardada-ok" *ngIf="yaGuardada(s)" title="Ya está guardada">✓</span>
+                <button type="button" class="btn-guardar-item" *ngIf="puedeGuardarPropios && !yaGuardada(s)" (click)="guardarCargada(s, $event)" title="Guardar esta petición" aria-label="Guardar esta petición">＋</button>
+              </div>
+            </div>
+          </ng-container>
+        </ng-container>
+      </aside>
+
+      <!-- ========== EDITOR + RESPUESTA ========== -->
+      <section class="panel-principal vacio-principal" *ngIf="!haySeleccion">
+        <div class="vacio-caja">
+          <button type="button" class="btn-libre-grande" *ngIf="libreDisponible" (click)="abrirLibre()">🌐 Abrir prueba libre</button>
+          <p class="ayuda ayuda--libre" *ngIf="libreDisponible">Para una URL externa o un servicio de un tercero que no está en el inventario.</p>
+          <p class="vacio-titulo">{{ libreDisponible ? 'O elige un servicio' : 'Elige un servicio' }}</p>
+          <p class="ayuda">{{ modo === 'REST' ? 'Búscalo en el panel de la izquierda.' : 'Búscalo en el panel de la izquierda.' }}</p>
+        </div>
+      </section>
+
+      <section class="panel-principal" *ngIf="haySeleccion">
+        <p class="aviso-libre" *ngIf="esLibre" title="El destino no está en el inventario de Servicios: solo llega a servidores públicos (las redes internas requieren estar en el inventario). Tus peticiones se guardan en este navegador, sin credenciales.">🌐 Prueba libre · fuera del inventario · se guarda en este navegador</p>
+        <div class="linea-peticion">
+          <select class="metodo-sel verbo--{{ metodo }}" [(ngModel)]="metodo" aria-label="Método HTTP" *ngIf="esRest">
+            <option *ngFor="let m of metodos" [value]="m">{{ m }}</option>
+          </select>
+          <span class="metodo-fijo" *ngIf="!esRest" title="SOAP siempre se envía por POST">POST</span>
+          <div class="url-combo" [class.url-combo--abierto]="listaUrlsAbierta">
+            <span class="amb" *ngIf="ambienteActual" [ngClass]="'amb--' + ambienteActual">{{ ambienteActual }}</span>
+            <input type="text" class="url-input mono" [(ngModel)]="url" (ngModelChange)="alEscribirUrl()" (focus)="abrirListaUrlsSiVacia()" placeholder="Elige una URL del servicio o escribe otra" spellcheck="false" (keydown.enter)="enviar()" (keydown.escape)="listaUrlsAbierta = false" />
+            <button type="button" class="url-flecha" (click)="alternarListaUrls()" aria-label="Ver URLs del servicio" title="Ver las URLs del servicio por ambiente">▾</button>
+            <div class="url-lista" *ngIf="listaUrlsAbierta">
+              <ng-container *ngFor="let g of gruposUrls">
+                <p class="url-grupo">{{ g.titulo }}</p>
+                <button type="button" class="url-opcion" *ngFor="let o of g.items" (click)="elegirUrl(o)" [class.url-opcion--activa]="o.url === url.trim()">
+                  <span class="amb" [ngClass]="'amb--' + o.ambiente">{{ o.ambiente }}</span>
+                  <span class="url-opcion-txt">
+                    <span class="url-bus">{{ o.bus }}</span>
+                    <span class="mono url-valor">{{ o.url }}</span>
+                  </span>
+                </button>
+              </ng-container>
+              <p class="ayuda url-vacio" *ngIf="!gruposUrls.length">Este servicio no tiene URLs registradas: escribe la URL a mano.</p>
+            </div>
+          </div>
+          <button type="button" class="btn-enviar" (click)="enviar()" [disabled]="!puedeEnviar">
+            {{ enviando ? 'Enviando…' : 'Enviar' }}
+          </button>
+          <div class="guardar-wrap" *ngIf="puedeGuardarPropios">
+            <button type="button" class="btn-guardar" (click)="dialogoGuardar ? dialogoGuardar = false : abrirDialogoGuardar()" title="Guardar esta petición en el servicio">💾 Guardar</button>
+            <div class="guardar-pop" *ngIf="dialogoGuardar" role="dialog" aria-label="Guardar petición">
+              <p class="rotulo">Guardar petición</p>
+              <label class="campo">Nombre (por ejemplo, la operación)
+                <input type="text" [(ngModel)]="guardarNombre" (keydown.enter)="peticionActual ? actualizarActual() : guardarComoNueva()" placeholder="consultarCliente" spellcheck="false" />
+              </label>
+              <label class="check check--chico" *ngIf="!esLibre"><input type="checkbox" [(ngModel)]="guardarConUrl" /> Guardar también la URL (si no, usará la del ambiente que elijas)</label>
+              <p class="ayuda">Se guarda método, cabeceras y cuerpo. Las credenciales (autorización, cookies, API keys) nunca se guardan.</p>
+              <p class="error-envio" *ngIf="guardarError">{{ guardarError }}</p>
+              <div class="guardar-botones">
+                <button type="button" class="btn-mini btn-mini--prim" *ngIf="peticionActual" (click)="actualizarActual()" [disabled]="guardandoPeticion">Actualizar «{{ peticionActual.Nombre }}»</button>
+                <button type="button" class="btn-mini" [class.btn-mini--prim]="!peticionActual" (click)="guardarComoNueva()" [disabled]="guardandoPeticion">{{ peticionActual ? 'Guardar como nueva' : 'Guardar' }}</button>
+                <button type="button" class="btn-mini" (click)="dialogoGuardar = false">Cancelar</button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="fila-seguridad">
+          <span class="conexion-etiqueta">🔒 Certificado</span>
+          <ng-container *ngIf="certificadosCliente.length; else sinCertificado">
+            <select class="cert-sel" [ngModel]="certificadoId" (ngModelChange)="alElegirCertificado($event)" aria-label="Certificado de cliente">
+              <option [ngValue]="null">Ninguno</option>
+              <option *ngFor="let c of certificadosCliente" [ngValue]="c.Id">{{ c.Nombre }}</option>
+            </select>
+          </ng-container>
+          <ng-template #sinCertificado>
+            <button type="button" class="btn-mini btn-mini--prim" (click)="abrirPanelCertificados()">＋ Subir certificado (PFX)</button>
+          </ng-template>
+          <button type="button" class="enlace" *ngIf="certificados.length" (click)="abrirPanelCertificados()">Administrar</button>
+          <span class="aviso-cert" *ngIf="avisoCert">✓ {{ avisoCert }}</span>
+          <span class="espaciador"></span>
+          <label class="check check--chico" title="Por defecto AXIS confía en el certificado del servidor, como SoapUI. Márcalo si quieres que se valide contra las CA registradas en «Administrar»">
+            <input type="checkbox" [(ngModel)]="verificarTls" /> Validar certificado del servidor
+          </label>
+        </div>
+
+        <p class="error-envio" *ngIf="errorEnvio">{{ errorEnvio }}</p>
+
+        <div class="pestanas">
+          <ng-container *ngIf="esRest">
+            <button type="button" [class.activa]="pestana === 'params'" (click)="pestana = 'params'">Parámetros</button>
+            <button type="button" [class.activa]="pestana === 'auth'" (click)="pestana = 'auth'">Autorización</button>
+            <button type="button" [class.activa]="pestana === 'cabeceras'" (click)="pestana = 'cabeceras'">Cabeceras <span class="contador">{{ cabeceras.length }}</span></button>
+            <button type="button" [class.activa]="pestana === 'cuerpo'" (click)="pestana = 'cuerpo'">Cuerpo</button>
+          </ng-container>
+          <ng-container *ngIf="!esRest">
+            <button type="button" [class.activa]="pestana === 'cuerpo'" (click)="pestana = 'cuerpo'">Sobre SOAP</button>
+            <button type="button" [class.activa]="pestana === 'cabeceras'" (click)="pestana = 'cabeceras'">Cabeceras <span class="contador">{{ cabeceras.length }}</span></button>
+            <button type="button" [class.activa]="pestana === 'auth'" (click)="pestana = 'auth'">Autorización</button>
+          </ng-container>
+          <button type="button" [class.activa]="pestana === 'variables'" (click)="pestana = 'variables'">Variables <span class="contador" *ngIf="variables.length">{{ variables.length }}</span></button>
+          <button type="button" [class.activa]="pestana === 'opciones'" (click)="pestana = 'opciones'">Opciones</button>
+        </div>
+
+        <div class="contenido-pestana">
+          <ng-container [ngSwitch]="pestana">
+            <div *ngSwitchCase="'cuerpo'">
+              <p class="ayuda" *ngIf="sinCuerpo">Una petición {{ metodo }} no lleva cuerpo.</p>
+              <div class="barra-cuerpo" *ngIf="!sinCuerpo">
+                <select class="tipo-cuerpo-sel" *ngIf="esRest" [ngModel]="tipoCuerpoActual" (ngModelChange)="cambiarTipoCuerpo($event)" aria-label="Tipo de cuerpo" title="Tipo de contenido que se envía (cabecera Content-Type)">
+                  <option *ngFor="let t of tiposCuerpo" [value]="t.id">{{ t.etiqueta }}</option>
+                </select>
+                <button type="button" class="btn-mini" (click)="darFormatoCuerpo()" title="Ordenar el JSON o XML para leerlo mejor">Dar formato</button>
+                <span class="ayuda" *ngIf="avisoFormato">{{ avisoFormato }}</span>
+              </div>
+              <div class="editor-wrap" [class.editor-wrap--color]="cuerpoPeticionHtml !== null && !sinCuerpo">
+                <pre class="editor-capa mono" #capa aria-hidden="true" [hidden]="cuerpoPeticionHtml === null || sinCuerpo" [innerHTML]="cuerpoPeticionHtml || ''"></pre>
+                <textarea class="editor mono" wrap="off" [(ngModel)]="cuerpo" [disabled]="sinCuerpo" spellcheck="false" [placeholder]="placeholderCuerpo" (scroll)="sincronizarScroll($event, capa)"></textarea>
+              </div>
+            </div>
+
+            <div *ngSwitchCase="'params'">
+              <p class="ayuda">Se agregan a la URL después del «?». Puedes usar variables como <span class="mono">{{ '{{id}}' }}</span>.</p>
+              <div class="fila-par" *ngFor="let p of parametros; let i = index">
+                <input type="checkbox" [(ngModel)]="p.activo" (ngModelChange)="alCambiarParametros()" aria-label="Usar parámetro" />
+                <input type="text" class="mono" [(ngModel)]="p.nombre" (ngModelChange)="alCambiarParametros()" placeholder="Nombre" />
+                <input type="text" class="mono" [(ngModel)]="p.valor" (ngModelChange)="alCambiarParametros()" placeholder="Valor" />
+                <button type="button" class="btn-quitar" (click)="quitarParametro(i)" aria-label="Quitar">✕</button>
+              </div>
+              <div class="acciones-pestana"><button type="button" class="btn-mini" (click)="agregarParametro()">+ Parámetro</button></div>
+            </div>
+
+            <div *ngSwitchCase="'cabeceras'">
+              <div class="fila-par" *ngFor="let c of cabeceras; let i = index">
+                <input type="checkbox" [(ngModel)]="c.activo" aria-label="Usar cabecera" />
+                <input type="text" class="mono" [(ngModel)]="c.nombre" placeholder="Nombre" />
+                <input type="text" class="mono" [(ngModel)]="c.valor" placeholder="Valor" />
+                <button type="button" class="btn-quitar" (click)="quitarCabecera(i)" aria-label="Quitar">✕</button>
+              </div>
+              <div class="acciones-pestana">
+                <button type="button" class="btn-mini" (click)="agregarCabecera()">+ Cabecera</button>
+                <button type="button" class="btn-mini" (click)="restaurarCabeceras()">Restaurar cabeceras {{ servicio.Tipo }}</button>
+              </div>
+            </div>
+
+            <div *ngSwitchCase="'auth'">
+              <label class="campo">Tipo
+                <select [(ngModel)]="auth.tipo">
+                  <option value="ninguna">Sin autorización</option>
+                  <option value="basic">Basic (usuario y contraseña)</option>
+                  <option value="bearer">Bearer token</option>
+                  <option value="apikey" *ngIf="esRest">API Key (cabecera)</option>
+                </select>
+              </label>
+              <ng-container *ngIf="auth.tipo === 'basic'">
+                <label class="campo">Usuario <input type="text" [(ngModel)]="auth.usuario" autocomplete="off" /></label>
+                <label class="campo">Contraseña <input type="password" [(ngModel)]="auth.clave" autocomplete="new-password" /></label>
+              </ng-container>
+              <ng-container *ngIf="auth.tipo === 'apikey'">
+                <label class="campo">Nombre de la cabecera <input type="text" [(ngModel)]="auth.claveNombre" placeholder="X-API-Key" autocomplete="off" /></label>
+                <label class="campo">Valor <input type="password" [(ngModel)]="auth.claveValor" autocomplete="off" /></label>
+              </ng-container>
+              <label class="campo" *ngIf="auth.tipo === 'bearer'">Token <input type="password" [(ngModel)]="auth.token" autocomplete="off" /></label>
+              <p class="ayuda">Las credenciales solo viajan en esta petición: AXIS no las guarda ni las registra en la auditoría. Puedes usar variables como <span class="mono">{{ '{{usuario}}' }}</span>.</p>
+            </div>
+
+            <div *ngSwitchCase="'variables'">
+              <p class="ayuda">Los textos <span class="mono">{{ '{{nombre}}' }}</span> en la URL, cabeceras, cuerpo o autorización se reemplazan por el valor de esta tabla al enviar.</p>
+              <div class="fila-par" *ngFor="let v of variables; let i = index">
+                <input type="checkbox" [(ngModel)]="v.activo" aria-label="Usar variable" />
+                <input type="text" class="mono" [(ngModel)]="v.nombre" placeholder="nombre" />
+                <input type="text" class="mono" [(ngModel)]="v.valor" placeholder="valor" />
+                <button type="button" class="btn-quitar" (click)="quitarVariable(i)" aria-label="Quitar">✕</button>
+              </div>
+              <div class="acciones-pestana"><button type="button" class="btn-mini" (click)="agregarVariable()">+ Variable</button></div>
+            </div>
+
+            <div *ngSwitchCase="'opciones'">
+              <label class="campo">Tiempo máximo de espera (segundos)
+                <input type="number" min="1" max="120" [(ngModel)]="timeoutSegundos" />
+              </label>
+              <p class="ayuda">La petición sale desde el servidor de AXIS, que debe tener ruta de red hasta el servicio.</p>
+            </div>
+          </ng-container>
+        </div>
+
+        <!-- ========== RESPUESTA ========== -->
+        <div class="respuesta" *ngIf="respuesta || enviando">
+          <div class="respuesta-barra">
+            <span class="rotulo">Respuesta</span>
+            <ng-container *ngIf="respuesta && !enviando">
+              <span class="estado" [ngClass]="claseEstado">
+                {{ respuesta.estado !== undefined ? respuesta.estado + ' ' + respuesta.estadoTexto : 'Sin respuesta' }}
+              </span>
+              <span class="meta">{{ respuesta.duracionMs }} ms</span>
+              <span class="meta" *ngIf="respuesta.tamanoBytes !== undefined">{{ formatoTamano(respuesta.tamanoBytes) }}</span>
+              <span class="meta" *ngIf="respuesta.produccion">PRODUCCIÓN</span>
+            </ng-container>
+            <span class="meta" *ngIf="enviando">Esperando respuesta…</span>
+          </div>
+
+          <ng-container *ngIf="respuesta && !enviando">
+            <div class="error-red" *ngIf="respuesta.errorRed">
+              <p><strong>{{ respuesta.errorRed.codigo }}:</strong> {{ respuesta.errorRed.mensaje }}</p>
+              <div class="acciones-error" *ngIf="errorEsDeCertificado">
+                <button type="button" class="btn-mini btn-mini--prim" (click)="reintentarSinVerificar()">Confiar en el servidor y reintentar</button>
+                <button type="button" class="btn-mini" *ngIf="puedeGuardarPropios" (click)="abrirPanelCertificados()">Registrar la CA…</button>
+              </div>
+            </div>
+
+            <ng-container *ngIf="!respuesta.errorRed">
+              <div class="pestanas pestanas--chicas">
+                <button type="button" [class.activa]="pestanaRespuesta === 'resumen'" (click)="pestanaRespuesta = 'resumen'" *ngIf="interpretacion" title="La respuesta explicada en palabras simples">Resumen</button>
+                <button type="button" [class.activa]="pestanaRespuesta === 'cuerpo'" (click)="pestanaRespuesta = 'cuerpo'">Cuerpo</button>
+                <button type="button" [class.activa]="pestanaRespuesta === 'cabeceras'" (click)="pestanaRespuesta = 'cabeceras'">Cabeceras <span class="contador">{{ respuesta.headers?.length || 0 }}</span></button>
+                <span class="espaciador"></span>
+                <ng-container *ngIf="pestanaRespuesta === 'resumen' && interpretacion">
+                  <label class="check check--chico" *ngIf="interpretacion.hayTecnicos" title="Identificadores internos como el RqUID"><input type="checkbox" [checked]="mostrarTecnicos" (change)="alternarTecnicos()" /> Mostrar datos técnicos</label>
+                  <button type="button" class="btn-mini" (click)="copiarResumen()">{{ resumenCopiado ? '✓ Copiado' : 'Copiar resumen' }}</button>
+                </ng-container>
+                <ng-container *ngIf="pestanaRespuesta === 'cuerpo' && respuesta.esTexto">
+                  <label class="check check--chico"><input type="checkbox" [(ngModel)]="verFormateado" /> Formatear ({{ tipoCuerpoRespuesta }})</label>
+                  <button type="button" class="btn-mini" (click)="copiarRespuesta()">{{ copiado ? '✓ Copiado' : 'Copiar' }}</button>
+                  <button type="button" class="btn-mini" (click)="descargarRespuesta()">Descargar</button>
+                </ng-container>
+              </div>
+
+              <div class="resumen" *ngIf="pestanaRespuesta === 'resumen' && interpretacion as i">
+                <div class="rs-estado" [ngClass]="'rs-estado--' + i.estado.nivel" role="status">
+                  <span class="rs-icono" aria-hidden="true">{{ i.estado.nivel === 'ok' ? '✓' : i.estado.nivel === 'error' ? '✕' : i.estado.nivel === 'aviso' ? '!' : 'i' }}</span>
+                  <div class="rs-estado-txt">
+                    <strong>{{ i.estado.titulo }}</strong>
+                    <span *ngIf="i.estado.detalle">{{ i.estado.detalle }}</span>
+                    <span class="rs-meta">
+                      <ng-container *ngIf="respuesta.estado !== undefined">Código HTTP {{ respuesta.estado }}</ng-container>
+                      <ng-container *ngIf="i.estado.codigo"> · Código del servicio {{ i.estado.codigo }}</ng-container>
+                      · Respondió en {{ respuesta.duracionMs }} ms
+                    </span>
+                  </div>
+                </div>
+                <p class="aviso-importacion" *ngIf="i.nota">{{ i.nota }}</p>
+                <ng-container *ngIf="vistaResumen as raiz">
+                  <p class="rs-contenido">{{ i.contenido }} <span class="rs-origen" *ngIf="i.origenRaiz" [title]="'Bloque «' + i.origenRaiz + '» del cuerpo'">Bloque: {{ i.origenRaiz }}</span></p>
+                  <ng-container *ngTemplateOutlet="tplSeccion; context: { $implicit: raiz, nivel: 0 }"></ng-container>
+                </ng-container>
+                <p class="ayuda rs-pie">Es una traducción automática del {{ i.formato === 'TEXTO' ? 'texto' : i.formato }} que devolvió el servicio; los nombres se adaptan a lenguaje simple. El detalle exacto está en la pestaña «Cuerpo».</p>
+              </div>
+
+              <ng-container *ngIf="pestanaRespuesta === 'cuerpo'">
+                <p class="aviso-importacion" *ngIf="respuesta.truncado">La respuesta superaba 2 MB: solo se muestra el inicio.</p>
+                <p class="ayuda" *ngIf="!respuesta.esTexto">La respuesta no es texto (contenido binario de {{ formatoTamano(respuesta.tamanoBytes) }}).</p>
+                <p class="ayuda" *ngIf="respuesta.esTexto && !(respuesta.cuerpo || '').length">La respuesta no trae cuerpo.</p>
+                <pre class="salida mono" [class.salida--ajustada]="!verFormateado" *ngIf="respuesta.esTexto && (respuesta.cuerpo || '').length && cuerpoRespuestaHtml !== null" [innerHTML]="cuerpoRespuestaHtml"></pre>
+                <pre class="salida mono" [class.salida--ajustada]="!verFormateado" *ngIf="respuesta.esTexto && (respuesta.cuerpo || '').length && cuerpoRespuestaHtml === null">{{ cuerpoRespuestaMostrado }}</pre>
+              </ng-container>
+
+              <table class="tabla-headers" *ngIf="pestanaRespuesta === 'cabeceras'">
+                <tr *ngFor="let h of respuesta.headers"><th class="mono">{{ h.nombre }}</th><td class="mono">{{ h.valor }}</td></tr>
+              </table>
+            </ng-container>
+          </ng-container>
+        </div>
+      </section>
+    </div>
+
+    <div class="probar-pie">
+      <span class="ayuda">Se ejecuta desde el servidor de AXIS y queda en la auditoría (sin cabeceras ni cuerpo).</span>
+      <button type="button" class="btn-cerrar" (click)="cerrarModal()">Cerrar</button>
+    </div>
+  </div>
+
+  <!-- ========== PLANTILLA DEL RESUMEN (recursiva) ========== -->
+  <ng-template #tplSeccion let-s let-nivel="nivel">
+    <section class="rs-seccion" [class.rs-seccion--anidada]="nivel > 0">
+      <h4 class="rs-titulo" *ngIf="nivel > 0" [title]="s.original">{{ s.titulo }}</h4>
+      <dl class="rs-campos" *ngIf="s.campos.length">
+        <ng-container *ngFor="let c of s.campos">
+          <dt [title]="c.original">{{ c.etiqueta }}</dt>
+          <dd [class.rs-vacio]="c.valor === '—'">{{ c.valor }}</dd>
+        </ng-container>
+      </dl>
+      <div class="rs-tabla" *ngFor="let t of s.tablas">
+        <h4 class="rs-titulo" [title]="t.original">{{ t.titulo }} <span class="rs-cuenta">{{ t.total }}</span></h4>
+        <div class="rs-scroll">
+          <table>
+            <thead><tr><th *ngFor="let col of t.columnas" [title]="col.original">{{ col.etiqueta }}</th></tr></thead>
+            <tbody><tr *ngFor="let f of t.filas"><td *ngFor="let v of f" [class.rs-vacio]="v === '—'">{{ v }}</td></tr></tbody>
+          </table>
+        </div>
+        <p class="ayuda" *ngIf="t.total > t.filas.length">Se muestran los primeros {{ t.filas.length }} de {{ t.total }} registros; el resto está en la pestaña «Cuerpo».</p>
+      </div>
+      <ng-container *ngFor="let sub of s.secciones">
+        <ng-container *ngTemplateOutlet="tplSeccion; context: { $implicit: sub, nivel: nivel + 1 }"></ng-container>
+      </ng-container>
+    </section>
+  </ng-template>
+
+  <!-- ========== IMPORTAR PETICIONES ========== -->
+  <div class="overlay-cert" *ngIf="dialogoImportar && haySeleccion" role="dialog" aria-modal="true" aria-label="Importar peticiones" (click)="cerrarSiFondo($event, 'importar')">
+    <div class="cert-modal import-modal">
+      <div class="probar-header">
+        <div class="probar-titulo">
+          <span class="probar-icono">📥</span>
+          <div><h2>Importar peticiones</h2><p>{{ esRest ? 'Desde Postman o un comando cURL' : 'Desde un WSDL o un proyecto SoapUI' }}</p></div>
+        </div>
+        <button type="button" class="btn-x" (click)="dialogoImportar = false" aria-label="Cerrar">✕</button>
+      </div>
+      <div class="cert-cuerpo">
+        <div class="import-grid">
+          <ng-container *ngIf="esRest">
+            <label class="fuente-item" title="Colección de Postman exportada (.json, v2.x)">
+              <span class="fuente-icono">📥</span><span class="fuente-txt"><strong>Colección de Postman</strong><small>Archivo .json</small></span>
+              <input type="file" accept=".json" (change)="abrirArchivoLocal($event)" hidden />
+            </label>
+            <label class="fuente-item" title="Variables de un entorno de Postman (Environments → Export)">
+              <span class="fuente-icono">🔑</span><span class="fuente-txt"><strong>Entorno de Postman</strong><small>Solo las variables</small></span>
+              <input type="file" accept=".json" (change)="abrirArchivoLocal($event)" hidden />
+            </label>
+            <button type="button" class="fuente-item" [class.fuente-item--on]="fuente === 'curl'" (click)="alternarFuente('curl')">
+              <span class="fuente-icono">📋</span><span class="fuente-txt"><strong>Pegar cURL</strong><small>Desde el navegador o Postman</small></span>
+            </button>
+          </ng-container>
+          <ng-container *ngIf="!esRest">
+            <button type="button" class="fuente-item" [class.fuente-item--on]="fuente === 'wsdl'" (click)="alternarFuente('wsdl')">
+              <span class="fuente-icono">🌐</span><span class="fuente-txt"><strong>WSDL desde una URL</strong><small>Una petición por operación</small></span>
+            </button>
+            <label class="fuente-item" title="Proyecto de SoapUI exportado (.xml)">
+              <span class="fuente-icono">📥</span><span class="fuente-txt"><strong>Proyecto SoapUI</strong><small>Archivo .xml</small></span>
+              <input type="file" accept=".xml" (change)="abrirArchivoLocal($event)" hidden />
+            </label>
+            <label class="fuente-item" title="Archivo WSDL de tu equipo">
+              <span class="fuente-icono">📥</span><span class="fuente-txt"><strong>WSDL (archivo)</strong><small>.wsdl o .xml</small></span>
+              <input type="file" accept=".wsdl,.xml" (change)="abrirArchivoLocal($event)" hidden />
+            </label>
+          </ng-container>
+          <button type="button" class="fuente-item" *ngIf="!esLibre && archivos.length" [class.fuente-item--on]="fuente === 'archivos'" (click)="alternarFuente('archivos')">
+            <span class="fuente-icono">📎</span><span class="fuente-txt"><strong>Adjuntos del servicio</strong><small>{{ archivos.length }} archivo(s) en AXIS</small></span>
+          </button>
+        </div>
+
+        <div class="fuente-panel" *ngIf="fuente === 'archivos'">
+          <div class="archivo-fila" *ngFor="let a of archivos">
+            <span class="archivo-info">
+              <span class="archivo-clase">{{ a.ClaseEtiqueta }}</span>
+              <span class="archivo-nombre" [title]="a.NombreOriginal">{{ a.NombreOriginal }}</span>
+            </span>
+            <button type="button" class="btn-mini" (click)="cargarArchivo(a)" [disabled]="cargandoArchivo !== null || !esLegible(a)">
+              {{ !esLegible(a) ? 'No legible' : (cargandoArchivo === a.Id ? 'Leyendo…' : 'Cargar') }}
+            </button>
+          </div>
+        </div>
+        <div class="fuente-panel" *ngIf="fuente === 'wsdl' && !esRest">
+          <input type="text" class="filtro mono" [(ngModel)]="wsdlUrl" placeholder="https://servidor/servicio?wsdl" spellcheck="false" (keydown.enter)="leerWsdlDesdeUrl()" />
+          <button type="button" class="btn-mini btn-mini--prim" (click)="leerWsdlDesdeUrl()" [disabled]="leyendoWsdl || !wsdlUrl.trim()">{{ leyendoWsdl ? 'Leyendo…' : 'Leer WSDL' }}</button>
+          <p class="ayuda">Usa el certificado elegido en la pantalla.</p>
+        </div>
+        <div class="fuente-panel" *ngIf="fuente === 'curl'">
+          <textarea class="filtro mono curl-area" [(ngModel)]="curlTexto" rows="5" spellcheck="false" placeholder="curl -X POST 'https://servidor/api/recurso' -H 'Content-Type: application/json' -d '{&quot;campo&quot;:&quot;valor&quot;}'"></textarea>
+          <button type="button" class="btn-mini btn-mini--prim" (click)="leerCurl()" [disabled]="!curlTexto.trim()">Importar cURL</button>
+        </div>
+        <p class="error-importacion" *ngIf="errorImportacion">{{ errorImportacion }}</p>
+        <p class="error-importacion" *ngIf="archivosMensaje">{{ archivosMensaje }}</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- ========== EXPORTAR COLECCIÓN POSTMAN ========== -->
+  <div class="overlay-cert" *ngIf="dialogoExportar" role="dialog" aria-modal="true" aria-label="Exportar colección de Postman" (click)="cerrarSiFondo($event, 'exportar')">
+    <div class="cert-modal export-modal">
+      <div class="probar-header">
+        <div class="probar-titulo">
+          <span class="probar-icono">⬇</span>
+          <div><h2>Exportar colección de Postman</h2><p>Elige qué peticiones incluir; luego impórtala en Postman</p></div>
+        </div>
+        <button type="button" class="btn-x" (click)="dialogoExportar = false" aria-label="Cerrar">✕</button>
+      </div>
+      <div class="cert-cuerpo">
+        <label class="campo">Nombre de la colección <input type="text" [(ngModel)]="exportNombre" /></label>
+        <label class="campo">URL para las peticiones que no traen una propia
+          <select [(ngModel)]="exportUrlId">
+            <option *ngFor="let d of destinos" [value]="d.id">{{ d.etiqueta }} — {{ d.url }}</option>
+            <option value="">Dejar la variable {{ '{{url}}' }} para completar en Postman</option>
+          </select>
+        </label>
+
+        <div class="export-grupo" *ngFor="let g of exportGrupos">
+          <div class="rotulo-fila">
+            <p class="rotulo">{{ g.titulo }}</p>
+            <span class="export-todos"><button type="button" class="enlace" (click)="marcarGrupo(g, true)">Todas</button> · <button type="button" class="enlace" (click)="marcarGrupo(g, false)">Ninguna</button></span>
+          </div>
+          <label class="check export-item" *ngFor="let i of g.items"><input type="checkbox" [(ngModel)]="i.marcado" /> <span>{{ i.dato.metodo }} · {{ i.nombre }}</span></label>
+        </div>
+
+        <p class="ayuda">Las variables <span class="mono">{{ '{{nombre}}' }}</span> quedan en la colección sin valor y SoapUI <span class="mono">${{ '{=java.util.UUID.randomUUID()}' }}</span> pasa a <span class="mono">{{ '{{$guid}}' }}</span>. Los certificados y credenciales no se exportan: configúralos en Postman.</p>
+        <button type="button" class="btn-enviar btn-guardar-cert" (click)="descargarColeccion()" [disabled]="!exportMarcadas">Descargar colección ({{ exportMarcadas }})</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ========== CERTIFICADOS ========== -->
+  <div class="overlay-cert" *ngIf="panelCertificados" role="dialog" aria-modal="true" aria-label="Certificados" (click)="cerrarPanelSiFondo($event)">
+    <div class="cert-modal">
+      <div class="probar-header">
+        <div class="probar-titulo">
+          <span class="probar-icono">🔒</span>
+          <div><h2>Certificados</h2><p>Los subes una vez y los eliges al enviar</p></div>
+        </div>
+        <button type="button" class="btn-x" (click)="panelCertificados = false" aria-label="Cerrar">✕</button>
+      </div>
+      <div class="cert-cuerpo">
+        <p class="error-importacion" *ngIf="!certificadosDisponibles">{{ certificadosMensaje }}</p>
+
+        <ng-container *ngIf="certificadosDisponibles">
+          <ng-container *ngIf="certificadosClienteTodos.length">
+            <p class="rotulo">De cliente</p>
+            <ul class="cert-lista">
+              <li *ngFor="let c of certificadosClienteTodos" class="cert-item" [class.cert-item--uso]="certificadoId === c.Id">
+                <div class="cert-info">
+                  <span class="cert-nombre">{{ c.Nombre }}</span>
+                  <span class="cert-detalle" *ngIf="c.Sujeto">Para <strong>{{ cn(c.Sujeto) }}</strong><ng-container *ngIf="c.Emisor"> · emitido por {{ cn(c.Emisor) }}</ng-container></span>
+                  <span class="cert-detalle">
+                    {{ c.Formato }}<ng-container *ngIf="c.VenceEn"> · vence {{ c.VenceEn | date: 'dd/MM/yyyy' }}</ng-container>
+                    · solo tuyo
+                  </span>
+                  <span class="marca marca--rojo" *ngIf="c.Vencido">Vencido</span>
+                  <span class="marca marca--ambar" *ngIf="venceProximo(c)">Vence pronto</span>
+                </div>
+                <div class="cert-acciones">
+                  <span class="marca marca--si" *ngIf="certificadoId === c.Id">En uso</span>
+                  <button type="button" class="btn-mini btn-mini--prim" *ngIf="certificadoId !== c.Id && !c.Vencido" (click)="usarCertificado(c)">Usar</button>
+                  <button type="button" class="btn-quitar" *ngIf="puedeGuardarPropios" (click)="eliminarCertificado(c)" aria-label="Eliminar" title="Eliminar">🗑</button>
+                </div>
+              </li>
+            </ul>
+          </ng-container>
+
+          <ng-container *ngIf="certificadosCa.length">
+            <p class="rotulo rotulo--sec">CA de confianza</p>
+            <ul class="cert-lista">
+              <li *ngFor="let c of certificadosCa" class="cert-item">
+                <div class="cert-info">
+                  <span class="cert-nombre">{{ c.Nombre }}</span>
+                  <span class="cert-detalle"><ng-container *ngIf="c.Sujeto"><strong>{{ cn(c.Sujeto) }}</strong> · </ng-container>AXIS confía en ella al validar el servidor</span>
+                </div>
+                <div class="cert-acciones">
+                  <button type="button" class="btn-quitar" *ngIf="puedeGuardarPropios" (click)="eliminarCertificado(c)" aria-label="Eliminar" title="Eliminar">🗑</button>
+                </div>
+              </li>
+            </ul>
+          </ng-container>
+
+          <ng-container *ngIf="puedeGuardarPropios">
+            <p class="rotulo" [class.rotulo--sec]="certificados.length">Subir un certificado</p>
+            <label class="zona-subida" [class.zona-subida--sobre]="arrastrando" (dragover)="alArrastrar($event, true)" (dragleave)="alArrastrar($event, false)" (drop)="alSoltar($event)">
+              <input type="file" multiple accept=".pfx,.p12,.pem,.crt,.cer,.key" (change)="elegirArchivosCert($event)" hidden />
+              <strong>Elegir archivo</strong>
+              <span>o arrástralo aquí · <span class="mono">.pfx / .p12</span>, o <span class="mono">.crt/.pem</span> + <span class="mono">.key</span> · una CA se sube sola</span>
+            </label>
+            <ul class="cert-archivos" *ngIf="certArchivos.length">
+              <li *ngFor="let a of certArchivos; let i = index"><span class="mono">{{ a.nombreOriginal }}</span> <button type="button" class="btn-quitar" (click)="quitarArchivoCert(i)" aria-label="Quitar">✕</button></li>
+            </ul>
+            <ng-container *ngIf="certArchivos.length">
+              <div class="fila-campos">
+                <label class="campo">Nombre <input type="text" [(ngModel)]="certNombre" /></label>
+                <label class="campo">Contraseña (si la pide) <input type="password" [(ngModel)]="certClave" autocomplete="new-password" /></label>
+              </div>
+              <p class="error-envio" *ngIf="errorCert">{{ errorCert }}</p>
+              <button type="button" class="btn-enviar btn-guardar-cert" (click)="guardarCertificado()" [disabled]="guardandoCert">{{ guardandoCert ? 'Guardando…' : 'Guardar' }}</button>
+            </ng-container>
+            <p class="error-envio" *ngIf="errorCert && !certArchivos.length">{{ errorCert }}</p>
+            <p class="ayuda">Se guardan cifrados; las llaves nunca se muestran ni se descargan.</p>
+          </ng-container>
+          <p class="ayuda">Tus certificados son solo tuyos: nadie más los ve ni los puede usar (tampoco un administrador).<ng-container *ngIf="!puedeEditar"> Con tu rol de Consulta, lo que subes, borras o pruebas (incluida producción) queda registrado en la auditoría y se avisa al administrador cuando es crítico.</ng-container></p>
+        </ng-container>
+      </div>
+    </div>
+  </div>
+</div>

@@ -1,0 +1,743 @@
+// ==========================================
+// Variables de la Paleta Corporativa
+// ==========================================
+$brand-light: var(--ax-brand-soft, #ede9fe);
+$brand-dark:    var(--ax-text, #0f172a);
+$brand-gray:    var(--ax-text-muted, #64748b);
+$surface-bg:    var(--ax-surface-2, #f8fafc);
+$border-light:  var(--ax-border, #e2e8f0);
+
+* { box-sizing: border-box; }
+
+:host {
+  display: block;
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  color: $brand-dark;
+}
+
+// ==========================================
+// Cabecera, Títulos y Buscador
+// ==========================================
+.page-header {
+  display: flex; justify-content: space-between; align-items: flex-start;
+  margin-bottom: 28px;
+
+  h1 { font-size: 30px; font-weight: 800; color: $brand-dark; margin: 0; letter-spacing: -0.6px; }
+  .subtitle { color: $brand-gray; margin-top: 5px; font-size: 14.5px; }
+}
+
+.header-actions { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+
+.search-box {
+  position: relative; display: flex; align-items: center;
+  svg { position: absolute; left: 14px; width: 17px; height: 17px; stroke: #94a3b8; }
+  input {
+    padding: 10px 14px 10px 40px; border: 1px solid $border-light; border-radius: 10px;
+    font-size: 13.5px; width: 280px; transition: all 0.2s ease; color: $brand-dark; background: var(--ax-surface, white);
+    &::placeholder { color: #94a3b8; }
+    &:focus { outline: none; border-color: var(--ax-brand-primary, #673ab7); box-shadow: 0 0 0 3px rgba(var(--ax-brand-primary-rgb, 103, 58, 183), 0.12); }
+  }
+}
+
+// Filtro dedicado por servidor de despliegue, junto al buscador de texto libre.
+.filtro-servidor {
+  width: 240px;
+}
+
+// ==========================================
+// Botones Universales
+// ==========================================
+.btn {
+  font-family: 'Inter', sans-serif; display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+  padding: 9px 16px; border-radius: 9px; font-size: 13px; font-weight: 600;
+  border: 1px solid transparent; background: transparent; color: $brand-gray; cursor: pointer; transition: all 0.15s ease;
+  &:hover { background: $surface-bg; color: $brand-dark; }
+  &.btn-sm { padding: 6px 12px; font-size: 12px; }
+}
+
+.btn-primary {
+  background: var(--ax-brand-primary, #673ab7); color: white; box-shadow: 0 4px 12px rgba(var(--ax-brand-primary-rgb, 103, 58, 183), 0.25);
+  &:hover { background: var(--ax-brand-primary-hover, #5a33a0); color: white; transform: translateY(-1px); box-shadow: 0 6px 16px rgba(var(--ax-brand-primary-rgb, 103, 58, 183), 0.35); }
+}
+
+.btn-danger {
+  color: #b91c1c; background: transparent;
+  &:hover { background: rgba(220, 38, 38, 0.1); color: #dc2626; }
+}
+
+.btn-outline-purple {
+  color: var(--ax-brand-primary, #673ab7); background: rgba(var(--ax-brand-primary-rgb, 103, 58, 183), 0.06);
+  &:hover { background: rgba(var(--ax-brand-primary-rgb, 103, 58, 183), 0.12); color: var(--ax-brand-primary-hover, #5a33a0); }
+}
+
+// ==========================================
+// Panel Principal
+// ==========================================
+.panel {
+  background: transparent;
+  padding: 0;
+}
+
+.mono { font-family: 'JetBrains Mono', monospace; font-size: 12px; }
+.empty {
+  color: $brand-gray; padding: 60px 0; text-align: center; font-weight: 500;
+  background: var(--ax-surface, #fff); border: 1px solid $border-light; border-radius: 16px;
+}
+
+// ==========================================
+// TARJETA DE APLICACIÓN
+// ==========================================
+.app-card-row {
+  background: var(--ax-surface, #ffffff);
+  border: 1px solid $border-light;
+  border-radius: 16px;
+  margin-bottom: 16px;
+  padding: 20px 24px 22px;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.03);
+  transition: box-shadow 0.2s ease, border-color 0.2s ease;
+
+  &:hover {
+    border-color: var(--ax-border-2, #d9d2ee);
+    box-shadow: 0 8px 20px rgba(var(--ax-brand-primary-rgb, 103, 58, 183), 0.1);
+    transform: translateY(-1px);
+  }
+}
+
+.app-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding-bottom: 16px;
+  margin-bottom: 16px;
+  border-bottom: 1px solid var(--ax-border, #f1f5f9);
+  flex-wrap: wrap;
+  gap: 14px;
+
+  .app-info {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    min-width: 0;
+  }
+
+  .app-icon {
+    position: relative;
+    flex-shrink: 0;
+    width: 40px;
+    height: 40px;
+    border-radius: 10px;
+    background: linear-gradient(135deg, var(--ax-brand-primary, #673ab7), var(--ax-brand-primary-claro, #8b5cf6));
+    color: #fff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 700;
+    font-size: 15px;
+    overflow: hidden;
+    border: 1px solid rgba(15, 23, 42, 0.04);
+
+    img {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      object-fit: contain;
+      background: var(--ax-surface, #ffffff);
+      padding: 4px;
+    }
+
+    .app-icon-fallback {
+      // Sin position: al ser un elemento no-posicionado, el navegador
+      // siempre lo pinta detrás del <img> (que sí está posicionado con
+      // position:absolute), sin importar el orden en el DOM.
+    }
+    // La <img> va después en el DOM y con position:absolute cubre la letra;
+    // si la imagen falla (onError la oculta), la letra vuelve a quedar visible.
+  }
+
+  .app-info-text {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    min-width: 0;
+  }
+
+  .app-name {
+    margin: 0;
+    font-size: 16.5px;
+    font-weight: 700;
+    color: $brand-dark;
+    letter-spacing: -0.2px;
+    overflow-wrap: anywhere;
+  }
+
+  .server-count-badge {
+    align-self: flex-start;
+    background: $brand-light;
+    color: var(--ax-brand-primary, #673ab7);
+    font-size: 11px;
+    font-weight: 700;
+    padding: 2px 9px;
+    border-radius: 20px;
+  }
+
+  .app-actions {
+    display: flex;
+    gap: 2px;
+    flex-shrink: 0;
+  }
+}
+
+// Grilla de servidores — envuelve, sin scroll horizontal forzado
+.server-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+  gap: 12px;
+}
+
+// Nodo Servidor
+.server-node {
+  background: $surface-bg;
+  border: 1px solid var(--ax-border, #eef0f4);
+  border-radius: 12px;
+  padding: 13px 15px 15px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  transition: all 0.15s ease;
+  min-width: 0;
+
+  &:hover {
+    background: var(--ax-surface, #ffffff);
+    border-color: var(--ax-border-2, #dcdfe6);
+    box-shadow: 0 6px 16px rgba(15, 23, 42, 0.08);
+    transform: translateY(-1px);
+  }
+
+  &.empty-node {
+    align-items: center;
+    justify-content: center;
+    background: transparent;
+    border: 1.5px dashed var(--ax-border-2, #d8dce3);
+    color: var(--ax-text-muted, #94a3b8);
+    font-size: 12.5px;
+    min-height: 70px;
+  }
+
+  .node-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 8px;
+
+    .node-host {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      font-weight: 700;
+      color: $brand-dark;
+      font-size: 12.5px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      min-width: 0;
+
+      .node-icon {
+        width: 14px;
+        height: 14px;
+        color: var(--ax-text-muted, #94a3b8);
+        flex-shrink: 0;
+      }
+    }
+
+    .node-ip {
+      flex-shrink: 0;
+      background: var(--ax-surface-2, #eef2f6);
+      color: var(--ax-text-muted, #475569);
+      padding: 2px 7px;
+      border-radius: 6px;
+      font-size: 10.5px;
+      font-weight: 600;
+    }
+  }
+
+  .node-tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 5px;
+  }
+
+  .node-empty {
+    color: var(--ax-text-muted, #a3aab8);
+    font-size: 11.5px;
+    font-style: italic;
+  }
+}
+
+// ==========================================
+// TAGS DE ROL — color por tipo de componente
+// Cada categoría reconocida tiene su propio color;
+// solo "tag-otro" (sin match) queda neutro/gris.
+// ==========================================
+%tag-base {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 10.5px;
+  font-weight: 600;
+  line-height: 1.3;
+  padding: 3px 9px;
+  border-radius: 999px;
+  border: none;
+  word-break: break-word;
+
+  &::before {
+    content: '';
+    width: 5px;
+    height: 5px;
+    border-radius: 50%;
+    background: currentColor;
+    flex-shrink: 0;
+  }
+}
+
+.tag-chip { @extend %tag-base; }
+
+.tag-api          { background: #e0f2fe; color: #0369a1; } // azul — APIs, nodos, mensajería
+.tag-ms           { background: #ecfccb; color: #3f6212; } // verde lima — Microservicios (distinto del verde de "suscriptor")
+.tag-gateway      { background: #ffedd5; color: #c2410c; } // naranja — Gateways (antes iba mezclado con "api")
+.tag-orquestador  { background: #fef3c7; color: #b45309; } // ámbar
+.tag-suscriptor   { background: #dcfce7; color: #15803d; } // verde
+.tag-kafka        { background: #f3e8ff; color: #7e22ce; } // morado
+.tag-logs         { background: #fee2e2; color: #b91c1c; } // rojo/vino — distinto de "otro"
+.tag-docs         { background: #fce7f3; color: #be185d; } // rosa
+.tag-balanceador  { background: #ffe4e6; color: #be123c; } // rosa-rojo
+.tag-job          { background: #e0e7ff; color: #4338ca; } // índigo
+.tag-db           { background: #cffafe; color: #0e7490; } // cyan
+.tag-otro         { background: var(--ax-surface-2, #f1f5f9); color: var(--ax-text-muted, #64748b); } // gris — único comodín real
+
+// Sufijo de puerto dentro del chip (o aviso de que todavía no tiene uno) —
+// aplica tanto a los chips de solo lectura (.tag-chip) como a los del modal
+// de edición (.chip-rol), ya que ambos comparten %tag-base.
+.tag-puerto {
+  font-family: 'JetBrains Mono', monospace;
+  opacity: 0.8;
+  font-weight: 700;
+}
+.tag-sin-puerto {
+  opacity: 0.65;
+  font-weight: 500;
+  font-style: italic;
+  font-size: 9.5px;
+}
+
+// ==========================================
+// MODAL ESTILO STICKY FOOTER
+// ==========================================
+.overlay {
+  position: fixed; inset: 0; background: rgba(15, 23, 42, 0.55); backdrop-filter: blur(4px);
+  display: flex; align-items: center; justify-content: center; z-index: 9999; padding: 20px;
+}
+
+.modal {
+  background: var(--ax-surface, #ffffff); border-radius: 18px; width: 100%; max-width: 780px; max-height: 94vh;
+  display: flex; flex-direction: column; box-shadow: 0 25px 50px rgba(0, 0, 0, 0.25); overflow: hidden;
+
+  .modal-header {
+    padding: 22px 28px 14px;
+    border-bottom: 1px solid $border-light;
+    h2 { margin: 0; font-size: 20px; color: $brand-dark; font-weight: 800; }
+  }
+
+  .modal-body {
+    padding: 18px 28px;
+    overflow-y: auto;
+    flex: 1;
+    &::-webkit-scrollbar { width: 6px; }
+    &::-webkit-scrollbar-thumb { background: var(--ax-border-2, #cbd5e1); border-radius: 4px; }
+  }
+
+  .modal-footer {
+    padding: 14px 28px 22px;
+    border-top: 1px solid $border-light;
+    background: var(--ax-surface-2, #f8fafc);
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
+    flex-shrink: 0;
+  }
+}
+
+.form-label { display: block; margin-bottom: 6px; font-size: 12.5px; color: $brand-gray; font-weight: 600; }
+
+.form-input {
+  width: 100%; padding: 10px 14px; margin-bottom: 18px; border: 1px solid var(--ax-border-2, #cbd5e1); border-radius: 8px;
+  font-size: 13.5px; color: $brand-dark;
+  &:focus { outline: none; border-color: var(--ax-brand-primary, #673ab7); box-shadow: 0 0 0 3px rgba(var(--ax-brand-primary-rgb, 103, 58, 183), 0.15); }
+}
+
+.image-input-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 18px;
+
+  .image-url-input {
+    margin-bottom: 0;
+    flex: 1;
+  }
+}
+
+.image-preview {
+  position: relative;
+  flex-shrink: 0;
+  width: 44px;
+  height: 44px;
+  border-radius: 10px;
+  background: linear-gradient(135deg, var(--ax-brand-primary, #673ab7), var(--ax-brand-primary-claro, #8b5cf6));
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  font-size: 16px;
+  overflow: hidden;
+  border: 1px solid $border-light;
+
+  img {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    background: var(--ax-surface, #ffffff);
+    padding: 5px;
+  }
+}
+
+.server-search-input {
+  margin-bottom: 10px;
+}
+
+.server-list-container {
+  border: 1px solid var(--ax-border, #e2e8f0); border-radius: 10px; padding: 10px; background: var(--ax-surface-2, #f8fafc);
+  max-height: 280px;
+  overflow-y: auto;
+}
+
+.sin-resultados-servidores {
+  margin: 6px 4px; font-size: 12.5px; color: $brand-gray; text-align: center;
+}
+
+.server-item {
+  padding: 8px 6px; border-radius: 8px;
+  margin-bottom: 4px;
+  transition: background 0.15s ease;
+  &:hover { background: var(--ax-glass-bg, rgba(255, 255, 255, 0.7)); }
+}
+
+.checkbox-line {
+  display: flex; align-items: center; gap: 10px; font-size: 12.5px;
+  input { width: 15px; height: 15px; cursor: pointer; accent-color: var(--ax-brand-primary, #673ab7); }
+  span {
+    color: $brand-dark; font-weight: 600;
+    small { color: $brand-gray; font-weight: 400; }
+  }
+}
+
+.roles-section {
+  margin-top: 8px;
+  margin-left: 10px;
+
+  .chips-added {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-bottom: 8px;
+  }
+
+  .chip-rol {
+    @extend %tag-base;
+    padding-right: 6px;
+    border: 1px solid transparent;
+
+    .chip-edit-btn {
+      background: none;
+      border: none;
+      color: inherit;
+      cursor: pointer;
+      font-size: 11px;
+      line-height: 1;
+      padding: 0;
+      opacity: 0.55;
+      &:hover { opacity: 1; }
+    }
+
+    button {
+      background: none;
+      border: none;
+      color: inherit;
+      cursor: pointer;
+      font-size: 14px;
+      line-height: 1;
+      padding: 0;
+      font-weight: bold;
+      opacity: 0.6;
+      &:hover { opacity: 1; }
+    }
+  }
+
+  .chip-editing {
+    padding: 2px 4px;
+    background: var(--ax-surface, #fff);
+    border: 1px solid var(--ax-brand-primary, #673ab7) !important;
+
+    &::before { display: none; } // sin punto de color mientras se edita
+
+    .chip-edit-input {
+      border: none;
+      outline: none;
+      background: transparent;
+      font-size: 10.5px;
+      font-weight: 600;
+      color: $brand-dark;
+      min-width: 60px;
+      padding: 2px 4px;
+      font-family: inherit;
+    }
+
+    // Puerto editable junto al nombre — separado por una línea sutil para
+    // distinguirlo del campo de texto sin agregar otro contenedor.
+    .chip-edit-puerto {
+      border: none;
+      border-left: 1px solid $border-light;
+      outline: none;
+      background: transparent;
+      font-size: 10.5px;
+      font-weight: 600;
+      font-family: 'JetBrains Mono', monospace;
+      color: $brand-gray;
+      width: 56px;
+      padding: 2px 4px 2px 6px;
+      -moz-appearance: textfield;
+      &::-webkit-outer-spin-button, &::-webkit-inner-spin-button { margin: 0; }
+    }
+  }
+
+  .input-add-group {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+
+    // Selector manual del "tipo" de componente (ver tiposRol en el .ts) —
+    // define el prefijo/color con el que se agrega el próximo rol.
+    .tipo-rol-select {
+      flex: 1 1 150px;
+      min-width: 130px;
+      max-width: 190px;
+      padding: 7px 6px;
+      font-size: 11.5px;
+      font-weight: 600;
+      border: 1px solid var(--ax-border-2, #cbd5e1);
+      border-radius: 6px;
+      background: var(--ax-surface, #fff);
+      cursor: pointer;
+      &:focus { outline: none; border-color: var(--ax-brand-primary, #673ab7); }
+    }
+
+    .autocomplete-wrap {
+      position: relative;
+      flex: 2 1 180px;
+      min-width: 160px;
+    }
+
+    input {
+      width: 100%;
+      padding: 7px 9px;
+      font-size: 12.5px;
+      border: 1px solid var(--ax-border-2, #cbd5e1);
+      border-radius: 6px;
+      background: var(--ax-surface, #fff);
+      &:focus { outline: none; border-color: var(--ax-brand-primary, #673ab7); }
+    }
+
+    // Puerto del próximo rol a agregar — se deja pequeño y aparte de los
+    // demás inputs (que sí ocupan 100% de su contenedor).
+    .puerto-rol-input {
+      flex: 0 0 90px;
+      width: 90px;
+      font-family: 'JetBrains Mono', monospace;
+    }
+
+    .btn-sm {
+      padding: 7px 12px;
+      font-size: 12px;
+      background: var(--ax-surface, white);
+      border: 1px solid var(--ax-border-2, #cbd5e1);
+      color: $brand-gray;
+      align-self: flex-start;
+    }
+  }
+
+  // Desplegable de autocompletado — aparece bajo el campo mientras se escribe
+  .autocomplete-dropdown {
+    position: absolute;
+    top: calc(100% + 4px);
+    left: 0;
+    right: 0;
+    background: var(--ax-surface, #ffffff);
+    border: 1px solid $border-light;
+    border-radius: 9px;
+    box-shadow: 0 10px 24px rgba(15, 23, 42, 0.14);
+    max-height: 220px;
+    overflow-y: auto;
+    z-index: 20;
+    padding: 4px;
+
+    &::-webkit-scrollbar { width: 5px; }
+    &::-webkit-scrollbar-thumb { background: var(--ax-border-2, #cbd5e1); border-radius: 4px; }
+  }
+
+  .autocomplete-opcion {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    row-gap: 4px;
+    column-gap: 8px;
+    width: 100%;
+    padding: 7px 8px;
+    border: none;
+    background: none;
+    border-radius: 6px;
+    cursor: pointer;
+    text-align: left;
+    font-family: inherit;
+
+    & + & { margin-top: 1px; }
+
+    &:hover,
+    &:focus-visible {
+      background: $brand-light;
+      outline: none;
+    }
+
+    .autocomplete-dot {
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: currentColor !important;
+      flex-shrink: 0;
+    }
+
+    // Sin ellipsis ni nowrap: el nombre del rol siempre se ve completo,
+    // partiéndose en varias líneas si el espacio disponible es angosto,
+    // en vez de recortarse a unos pocos caracteres.
+    .autocomplete-texto {
+      flex: 1 1 100px;
+      min-width: 100px;
+      font-size: 12.5px;
+      font-weight: 600;
+      color: $brand-dark;
+      overflow-wrap: anywhere;
+      white-space: normal;
+
+      .autocomplete-puerto {
+        font-family: 'JetBrains Mono', monospace;
+        font-weight: 700;
+        color: $brand-gray;
+        margin-left: 2px;
+      }
+    }
+
+    // Insignia "en <aplicación>": se empuja a la derecha cuando hay espacio
+    // y baja a su propia línea cuando no lo hay, en vez de cortarse.
+    .autocomplete-tag {
+      flex-shrink: 0;
+      margin-left: auto;
+      max-width: 100%;
+      overflow-wrap: anywhere;
+      white-space: normal;
+      font-size: 9px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.03em;
+      color: var(--ax-brand-primary, #673ab7);
+      background: $brand-light;
+      padding: 2px 6px;
+      border-radius: 999px;
+    }
+  }
+}
+
+// ==========================================
+// Media Queries para Móviles
+// ==========================================
+@media (max-width: 640px) {
+  .page-header { flex-direction: column; gap: 14px; }
+  .header-actions { width: 100%; flex-direction: column-reverse; align-items: stretch; }
+  .search-box { width: 100%; input { width: 100%; } }
+  .filtro-servidor { width: 100%; }
+
+  .app-card-header {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+  .app-card-header .app-actions {
+    width: 100%;
+    justify-content: space-between;
+    .btn { flex: 1; font-size: 12px; padding: 8px 4px; }
+  }
+
+  .server-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .roles-section .input-add-group {
+    .tipo-rol-select {
+      flex: 1 1 100%;
+      max-width: 100%;
+    }
+    .autocomplete-wrap {
+      flex: 1 1 100%;
+      min-width: 0;
+    }
+    .puerto-rol-input {
+      flex: 1 1 100%;
+      width: 100%;
+    }
+    .btn-sm {
+      flex: 1 1 100%;
+    }
+  }
+}
+
+// ==========================================
+// Sub-aplicativos dentro de una aplicación de negocio
+// ==========================================
+.tag-chip--link {
+  cursor: pointer; font-family: inherit; border: none;
+  &:hover { filter: brightness(0.95); text-decoration: underline; }
+}
+
+.sub-ayuda { margin: 4px 0 8px; font-size: 12.5px; color: var(--ax-text-muted, #64748b); line-height: 1.45; }
+.sub-link {
+  background: none; border: none; padding: 0; cursor: pointer; font: inherit; font-weight: 700;
+  color: var(--ax-brand-primary, #673ab7); text-decoration: underline;
+}
+
+.sub-elegidos {
+  display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin: 6px 0 10px;
+  .sub-elegidos__titulo { font-size: 12px; font-weight: 700; color: var(--ax-text-muted, #64748b); margin-right: 4px; }
+  .sub-host { opacity: 0.7; margin-left: 4px; }
+}
+
+.sub-grupo-titulo { font-weight: 700; font-size: 13px; margin-bottom: 4px; small { color: var(--ax-text-muted, #64748b); font-weight: 500; } }
+.sub-fila {
+  display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 5px 8px; border-radius: 8px; cursor: pointer; font-size: 13px;
+  &:hover { background: var(--ax-surface-2, #f8fafc); }
+  &--marcada { background: rgba(var(--ax-brand-primary-rgb, 103, 58, 183), 0.08); }
+  input[type='checkbox'] { width: 15px; height: 15px; margin: 0; flex: none; }
+  .sub-nombre { font-weight: 600; overflow-wrap: anywhere; }
+  .sub-puerto { font-family: 'JetBrains Mono', monospace; font-size: 12px; color: var(--ax-text-muted, #64748b); }
+  .sub-otras { margin-left: auto; font-size: 11.5px; color: var(--ax-brand-ink, #4338ca); background: var(--ax-brand-soft, #eef2ff); padding: 1px 8px; border-radius: 99px; }
+}

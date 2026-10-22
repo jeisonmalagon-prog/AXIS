@@ -1,0 +1,5 @@
+@use './azure-base' as *;
+@include base;
+.pie { font-size: 12px; margin: 10px 0 0; }
+.kpis-4-mini { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; margin-bottom: 14px; @media (max-width: 700px) { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .kpi { padding: 10px 12px; box-shadow: none; background: $surface-bg; .kpi-v { font-size: 20px; } } }

@@ -1,0 +1,17 @@
+@use '../../repositorio/azure/azure-base' as *;
+@include base;
+
+.ia { display: flex; flex-direction: column; gap: 4px; }
+.etiqueta { display: block; margin: 14px 0 5px; font-size: 12px; font-weight: 700; color: $brand-gray; }
+.entrada { width: 100%; font-family: inherit; font-size: 13px; padding: 9px 11px; border: 1px solid $border-light; border-radius: 8px; background: $surface-bg; color: $brand-dark; box-sizing: border-box; resize: vertical; line-height: 1.5; &:focus { outline: none; border-color: $brand; } }
+.ia-ejemplos { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; margin-top: 8px; }
+.ia-chip { cursor: pointer; border: none; font-family: inherit; text-align: left; &:hover { filter: brightness(0.95); } }
+.check { display: flex; align-items: center; gap: 8px; margin-top: 12px; font-size: 13px; cursor: pointer; input { accent-color: var(--ax-brand-primary, #673ab7); } }
+.ia-acciones { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-top: 12px; }
+.ia-resultado { margin-top: 16px; }
+.ia-cab { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; h3 { margin: 0; font-size: 15px; } }
+.ia-explica { margin: 10px 0 0; font-size: 13px; line-height: 1.5; }
+.ia-adv { font-size: 12.5px; margin: 2px 0; }
+.ia-sql { margin-top: 12px; background: #1b1f2a !important; color: #e4e8f1 !important; border: 1px solid #2b3142 !important; border-radius: 12px !important; padding: 14px 16px !important; line-height: 1.65; font-size: 12.5px; line-height: 1.55; white-space: pre; overflow: auto; }
+.ia-contexto { margin-top: 14px; padding-top: 10px; border-top: 1px solid $border-light; display: flex; flex-direction: column; gap: 6px; font-size: 12px; .chip { margin: 0 4px 4px 0; } }
+.ia-rel { display: inline-block; margin-right: 12px; font-size: 11.5px; }

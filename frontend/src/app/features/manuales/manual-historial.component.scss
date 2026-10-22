@@ -1,0 +1,21 @@
+@use '../../repositorio/azure/azure-base' as *;
+@use 'manuales-contenido' as mc;
+@include base;
+:host ::ng-deep { @include mc.contenido; }
+
+.modal-card.hist { max-width: 1180px; width: 100%; }
+.sub { margin: 2px 0 0; font-size: 13px; }
+.peq { font-size: 12px; }
+.min0 { min-width: 0; }
+.hist-cuerpo { display: grid; grid-template-columns: 260px minmax(0, 1fr); gap: 16px; min-height: 380px; }
+.hist-lista { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; max-height: 66vh; overflow-y: auto;
+  button { width: 100%; text-align: left; display: flex; flex-direction: column; gap: 2px; padding: 9px 12px; border: 1px solid $border-light; border-radius: 10px; background: $surface-bg; color: $brand-dark; font-family: inherit; font-size: 13px; cursor: pointer;
+    span { font-size: 11.5px; }
+    &:hover { border-color: $brand; }
+    &.sel { border-color: $brand; background: rgba($brand-rgb, 0.1); } } }
+.hist-vista { min-width: 0; border: 1px solid $border-light; border-radius: 12px; overflow: hidden; display: flex; flex-direction: column; }
+.hist-barra { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; padding: 10px 14px; background: $surface-bg; border-bottom: 1px solid $border-light; }
+.hist-tit { font-weight: 800; font-size: 15px; overflow-wrap: anywhere; }
+.confirma { display: inline-flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.hist-contenido { padding: 14px 18px; overflow: auto; max-height: 58vh; }
+@media (max-width: 760px) { .hist-cuerpo { grid-template-columns: minmax(0, 1fr); } .hist-lista { max-height: 180px; } }

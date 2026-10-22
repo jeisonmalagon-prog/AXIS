@@ -1,0 +1,78 @@
+<header class="page-header">
+  <div>
+    <h1>Histórico</h1>
+    <p class="subtitle">Registro de altas, ajustes y renovaciones de certificados, con quién los hizo</p>
+  </div>
+  
+  <div class="header-actions">
+    <div class="search-box">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <circle cx="11" cy="11" r="8"></circle>
+        <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+      </svg>
+      <input 
+        type="text" 
+        [(ngModel)]="terminoBusqueda" 
+        placeholder="Buscar por aplicación, servidor o CN..." 
+      />
+    </div>
+  </div>
+</header>
+
+<section class="panel">
+  <table *ngIf="historicosFiltrados.length; else vacio" class="tabla-historico">
+    <thead>
+      <tr>
+        <th class="col-fecha">Fecha</th>
+        <th class="col-accion">Acción</th>
+        <th class="col-cert">Certificado</th>
+        <th class="col-vig">Vigencia anterior</th>
+        <th class="col-vig">Vigencia nueva</th>
+        <th class="col-usuario">Usuario</th>
+        <th class="col-detalle">Detalle</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr *ngFor="let h of historicosFiltrados">
+        <td class="col-fecha" data-label="Fecha">
+          <span class="fecha-dia">{{ (h.FechaCambio || h.FechaRegistro) | date:'dd/MM/yyyy' }}</span>
+          <span class="fecha-hora">{{ (h.FechaCambio || h.FechaRegistro) | date:'HH:mm' }}</span>
+        </td>
+        <td class="col-accion" data-label="Acción">
+          <span class="status-pill" [class.status-vigente]="h.Accion === 'ALTA'" [class.status-por-vencer]="h.Accion !== 'ALTA'">{{ h.Accion || 'ACTUALIZACIÓN' }}</span>
+        </td>
+        <td class="col-cert" data-label="Certificado">
+          <span class="cert-cn mono">{{ h.NombreComun || '—' }}</span>
+          <span class="cert-sub">{{ h.Aplicacion || '—' }}<ng-container *ngIf="h.Hostname"> · <span class="mono">{{ h.Hostname }}</span></ng-container></span>
+        </td>
+        <td class="col-vig mono" data-label="Vigencia anterior">
+          <ng-container *ngIf="h.FechaInicioAnterior || h.FechaFinAnterior; else sinAnterior">
+            <span class="v-ini">{{ h.FechaInicioAnterior | date:'dd/MM/yyyy' }}</span><span class="v-fin"><span class="sep">→</span>{{ h.FechaFinAnterior | date:'dd/MM/yyyy' }}</span>
+          </ng-container>
+          <ng-template #sinAnterior>—</ng-template>
+        </td>
+        <td class="col-vig mono nueva" data-label="Vigencia nueva">
+          <ng-container *ngIf="h.FechaInicioNueva || h.FechaFinNueva; else sinNueva">
+            <span class="v-ini">{{ h.FechaInicioNueva | date:'dd/MM/yyyy' }}</span><span class="v-fin"><span class="sep">→</span>{{ h.FechaFinNueva | date:'dd/MM/yyyy' }}</span>
+          </ng-container>
+          <ng-template #sinNueva>—</ng-template>
+        </td>
+        <td class="col-usuario" data-label="Usuario">{{ h.UsuarioSistema || '—' }}</td>
+        <td class="detalle col-detalle" data-label="Detalle" [title]="h.Observaciones || ''">{{ h.Observaciones || '—' }}</td>
+      </tr>
+    </tbody>
+  </table>
+  
+  <ng-template #vacio>
+    <div class="empty">
+      <p *ngIf="cargando">Cargando histórico…</p>
+      <p *ngIf="!cargando && errorCarga" class="error-carga" style="color:#c0392b">
+        {{ errorCarga }} <button type="button" (click)="cargar()">Reintentar</button>
+      </p>
+      <p *ngIf="!cargando && !errorCarga && historicos.length === 0; else noResultados">Todavía no hay movimientos registrados en el histórico.</p>
+      <ng-template #noResultados>
+        <p *ngIf="!cargando && !errorCarga">No se encontraron registros que coincidan con "<strong>{{ terminoBusqueda }}</strong>".</p>
+      </ng-template>
+    </div>
+  </ng-template>
+</section>

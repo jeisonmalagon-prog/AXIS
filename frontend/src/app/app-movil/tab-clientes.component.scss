@@ -1,0 +1,6 @@
+@use './tablero-comun';
+$suave: var(--ax-text-muted, #64748b);
+.suave { color: $suave; }
+.aviso-rango { background: var(--f-warn-soft); color: var(--f-warn-ink); border: 1px solid var(--f-warn-line); border-radius: 12px; padding: 10px 14px; font-size: 12.5px; font-weight: 600; margin: 0 0 14px; }
+.subpestanas--compactas { margin-top: 4px; }
+a.btn-detalle { text-decoration: none; display: inline-block; }

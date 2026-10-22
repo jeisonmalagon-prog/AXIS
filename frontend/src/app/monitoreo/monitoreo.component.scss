@@ -1,0 +1,1803 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap');
+
+$brand-dark: var(--ax-text, #1e293b);
+$brand-gray: #64748b;
+$border-light: var(--ax-border, #e2e8f0);
+$state-ok: #10b981;
+$state-warn: #f59e0b;
+$state-danger: #ef4444;
+$font-ui: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+$font-mono: 'JetBrains Mono', 'Courier New', monospace;
+// Tono morado derivado del morado de marca, para el detalle de CPU/Mem de
+// cada contenedor — reemplaza el celeste anterior, que desentonaba con el
+// resto de la paleta (morado, verde, ámbar, rojo). Más oscuro que un lavanda
+// pastel porque el fondo de la tarjeta ahora es claro, no oscuro.
+$accent-recursos: #7c4dbd;
+
+:host {
+  display: block;
+  font-family: $font-ui;
+}
+
+// Iconos propios en SVG (sin emojis): heredan el color del texto que los
+// rodea y se centran solos dentro de su contenedor.
+.icono-svg {
+  display: block;
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+}
+
+.page-header {
+  margin-bottom: 20px;
+  h1 { font-size: 24px; font-weight: 800; color: $brand-dark; margin: 0; }
+  h2 { font-size: 19px; font-weight: 800; color: $brand-dark; margin: 0; }
+  .subtitle { color: var(--ax-text-muted, #64748b); margin-top: 4px; font-size: 14px; }
+
+  &.page-header-ssh {
+    margin-top: 32px;
+    padding-top: 24px;
+    border-top: 1px solid $border-light;
+  }
+}
+
+// ==========================================
+// ENTORNOS PORTAINER: reutiliza casi todas las clases de las tarjetas SSH
+// (.tarjeta-servidor, .seccion-docker, .fila-contenedor, etc.) — sólo hacen
+// falta un par de clases propias para el encabezado de la sección.
+// ==========================================
+.seccion-portainer {
+  margin-bottom: 32px;
+
+  .seccion-portainer-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin-bottom: 14px;
+
+    h2 { font-size: 19px; font-weight: 800; color: $brand-dark; margin: 0; }
+  }
+
+  .portainer-resumen {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+}
+
+// Compuesto (.grid-tarjetas.grid-tarjetas-portainer, no sólo
+// .grid-tarjetas-portainer) a propósito: así gana siempre sobre
+// .grid-tarjetas sin importar el orden de declaración en este archivo.
+//
+// Se probó un layout tipo mampostería (CSS multi-column) para evitar los
+// huecos en blanco de tarjetas con distinta cantidad de contenedores, pero
+// ese modo reordena las tarjetas en el DOM por columna (llena la columna 1
+// completa antes de pasar a la 2ª) en vez de fila por fila — se veía
+// "salteado" y perdía el orden de lectura izquierda-a-derecha. Se vuelve a
+// una grilla normal, pero con "stretch" (el default de CSS Grid, en vez del
+// "start" que tenía el resto del sitio): así TODAS las tarjetas de una
+// misma fila quedan con la misma altura (la de la más alta), y el espacio
+// sobrante en las tarjetas con menos contenedores queda contenido DENTRO de
+// su propio borde en vez de dejar un hueco por fuera antes de la fila
+// siguiente — mismo criterio que usa la propia Portainer.
+.grid-tarjetas.grid-tarjetas-portainer {
+  align-items: stretch;
+  margin-top: 0;
+}
+
+.panel-agregar {
+  background: var(--ax-surface, white);
+  border: 1px solid $border-light;
+  border-radius: 12px;
+  padding: 16px;
+  margin-bottom: 20px;
+
+  label { display: block; font-size: 13px; font-weight: 600; color: var(--ax-text-muted, #64748b); margin-bottom: 8px; }
+
+  .fila-agregar {
+    display: flex;
+    gap: 12px;
+
+    select {
+      flex: 1;
+      padding: 10px 14px;
+      border: 1px solid var(--ax-border-2, #cbd5e1);
+      border-radius: 8px;
+      font-size: 14px;
+    }
+  }
+}
+
+.btn {
+  padding: 10px 18px;
+  border-radius: 8px;
+  border: none;
+  font-weight: 700;
+  cursor: pointer;
+  font-size: 14px;
+  &.btn-primary { background: var(--ax-brand-primary, #673ab7); color: white; &:hover { opacity: 0.9; } }
+}
+
+.loading-state, .empty {
+  text-align: center;
+  padding: 40px 0;
+  color: var(--ax-text-muted, #64748b);
+
+  .btn { margin-top: 6px; }
+}
+
+.spinner {
+  width: 28px; height: 28px; margin: 0 auto 12px;
+  border: 3px solid $border-light; border-top-color: var(--ax-brand-primary, #673ab7);
+  border-radius: 50%; animation: spin 1s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+.mono { font-family: $font-mono; }
+
+// ==========================================
+// CENTRO DE ANALÍTICA
+// ==========================================
+.centro-analitica {
+  background: var(--ax-surface, white);
+  border: 1px solid $border-light;
+  border-radius: 14px;
+  padding: 22px 24px;
+  margin-bottom: 20px;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+}
+
+.analitica-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 14px;
+  margin-bottom: 20px;
+
+  h2 { font-size: 18px; font-weight: 800; color: $brand-dark; margin: 0; }
+}
+
+.analitica-subtitulo {
+  color: var(--ax-text-muted, #64748b);
+  font-size: 12.5px;
+  margin-top: 4px;
+}
+
+.salud-badge {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2px;
+  background: var(--ax-surface-2, #f8fafc);
+  border: 1px solid $border-light;
+  border-radius: 10px;
+  padding: 8px 16px;
+
+  &-label {
+    font-size: 9.5px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    color: var(--ax-text-muted, #64748b);
+  }
+
+  &-valor {
+    font-size: 22px;
+    font-weight: 800;
+    font-family: $font-mono;
+  }
+}
+
+// KPIs: son <button> reales (no <span>) para que además de mostrar el
+// conteo funcionen como filtro rápido — un clic filtra la grilla de abajo
+// por ese estado, otro clic la vuelve a mostrar completa.
+.kpis-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 12px;
+  margin-bottom: 20px;
+}
+
+.kpi-card {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: var(--ax-surface-2, #f8fafc);
+  border: 1.5px solid transparent;
+  border-radius: 12px;
+  padding: 14px 16px;
+  cursor: pointer;
+  text-align: left;
+  font-family: inherit;
+  transition: background 0.15s, border-color 0.15s, transform 0.15s;
+
+  &:hover { transform: translateY(-1px); }
+
+  .kpi-icono {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 38px;
+    height: 38px;
+    border-radius: 10px;
+    flex-shrink: 0;
+
+    .icono-svg { width: 19px; height: 19px; }
+  }
+
+  .kpi-texto {
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+    min-width: 0;
+  }
+
+  .kpi-valor {
+    font-size: 20px;
+    font-weight: 800;
+    font-family: $font-mono;
+    color: $brand-dark;
+    line-height: 1.1;
+  }
+
+  .kpi-label {
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--ax-text-muted, #64748b);
+  }
+
+  &.kpi-sano .kpi-icono { background: rgba($state-ok, 0.12); color: $state-ok; }
+  &.kpi-riesgo .kpi-icono { background: rgba($state-warn, 0.14); color: $state-warn; }
+  &.kpi-critico .kpi-icono { background: rgba($state-danger, 0.12); color: $state-danger; }
+  &.kpi-error .kpi-icono { background: rgba($brand-gray, 0.14); color: var(--ax-text-muted, #64748b); }
+
+  &.kpi-sano.kpi-activo { border-color: rgba($state-ok, 0.5); background: rgba($state-ok, 0.06); }
+  &.kpi-riesgo.kpi-activo { border-color: rgba($state-warn, 0.5); background: rgba($state-warn, 0.07); }
+  &.kpi-critico.kpi-activo { border-color: rgba($state-danger, 0.5); background: rgba($state-danger, 0.06); }
+  &.kpi-error.kpi-activo { border-color: rgba($brand-gray, 0.5); background: rgba($brand-gray, 0.08); }
+}
+
+.analitica-paneles {
+  display: grid;
+  grid-template-columns: minmax(260px, 1fr) minmax(300px, 1.6fr);
+  gap: 14px;
+  margin-bottom: 14px;
+}
+
+.panel-analitica {
+  background: var(--ax-surface-2, #f8fafc);
+  border: 1px solid $border-light;
+  border-radius: 12px;
+  padding: 16px 18px;
+
+  h3 {
+    font-size: 12.5px;
+    font-weight: 700;
+    color: $brand-dark;
+    margin: 0 0 14px;
+  }
+}
+
+.panel-dona {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.dona-contenedor {
+  position: relative;
+  width: 160px;
+  height: 160px;
+}
+
+.dona-svg {
+  width: 100%;
+  height: 100%;
+  transform: rotate(-90deg);
+}
+
+.dona-fondo {
+  fill: none;
+  stroke: $border-light;
+  stroke-width: 12;
+}
+
+.dona-segmento {
+  fill: none;
+  stroke-width: 12;
+  stroke-linecap: butt;
+  transition: stroke-dasharray 0.3s, stroke-dashoffset 0.3s;
+}
+
+.dona-centro {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+
+.dona-total {
+  font-size: 26px;
+  font-weight: 800;
+  font-family: $font-mono;
+  color: $brand-dark;
+  line-height: 1.1;
+}
+
+.dona-total-label {
+  font-size: 10.5px;
+  color: var(--ax-text-muted, #64748b);
+  font-weight: 600;
+}
+
+.dona-leyenda {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  margin-top: 16px;
+  width: 100%;
+}
+
+.leyenda-item {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 12px;
+  color: var(--ax-text-muted, #64748b);
+
+  b { margin-left: auto; color: $brand-dark; font-family: $font-mono; }
+}
+
+.leyenda-punto {
+  width: 9px; height: 9px; border-radius: 50%; flex-shrink: 0;
+
+  &.punto-sano { background: $state-ok; }
+  &.punto-riesgo { background: $state-warn; }
+  &.punto-critico { background: $state-danger; }
+  &.punto-sinconexion { background: $brand-gray; }
+}
+
+.barra-item {
+  margin-bottom: 12px;
+  &:last-child { margin-bottom: 0; }
+
+  &-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    margin-bottom: 5px;
+  }
+
+  &-nombre {
+    font-size: 12px;
+    font-weight: 600;
+    color: $brand-dark;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  &-valor {
+    font-size: 12px;
+    font-weight: 700;
+    font-family: $font-mono;
+    flex-shrink: 0;
+  }
+}
+
+.barra-fondo {
+  height: 7px;
+  border-radius: 999px;
+  background: $border-light;
+  overflow: hidden;
+}
+
+.barra-relleno {
+  height: 100%;
+  border-radius: 999px;
+  transition: width 0.3s;
+
+  &.valor-ok { background: $state-ok; }
+  &.valor-warn { background: $state-warn; }
+  &.valor-danger { background: $state-danger; }
+}
+
+.sin-datos {
+  color: var(--ax-text-muted, #64748b);
+  font-size: 12px;
+  font-style: italic;
+  margin: 0;
+}
+
+.panel-nota {
+  color: var(--ax-text-muted, #64748b);
+  font-size: 11px;
+  margin: 10px 0 0;
+}
+
+// ==========================================
+// SEGUNDA FILA: memoria, tendencia de CPU, contenedores y discos del
+// grupo completo (no de un solo servidor).
+// ==========================================
+.analitica-paneles-secundarios {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+  gap: 14px;
+  margin-bottom: 14px;
+}
+
+.sparkline-header {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.sparkline-valor {
+  font-size: 22px;
+  font-weight: 800;
+  font-family: $font-mono;
+}
+
+.sparkline-tendencia {
+  display: flex;
+  align-items: center;
+
+  .icono-svg { width: 15px; height: 15px; }
+
+  &.tendencia-subiendo { color: $state-danger; }
+  &.tendencia-bajando { color: $state-ok; }
+  &.tendencia-estable { color: var(--ax-text-muted, #64748b); }
+}
+
+.sparkline-svg {
+  width: 100%;
+  height: 44px;
+  display: block;
+}
+
+.sparkline-linea {
+  fill: none;
+  stroke: var(--ax-brand-primary, #673ab7);
+  stroke-width: 2.2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  vector-effect: non-scaling-stroke;
+}
+
+.stats-fila {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.stat-bloque {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1;
+
+  .stat-valor {
+    font-size: 19px;
+    font-weight: 800;
+    font-family: $font-mono;
+    color: $brand-dark;
+  }
+
+  .stat-label {
+    font-size: 10px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    color: var(--ax-text-muted, #64748b);
+  }
+}
+
+.disco-alerta-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 7px 0;
+  border-bottom: 1px solid $border-light;
+  font-size: 12px;
+
+  &:last-of-type { border-bottom: none; }
+}
+
+.disco-alerta-info {
+  display: flex;
+  align-items: baseline;
+  gap: 7px;
+  min-width: 0;
+}
+
+.disco-alerta-servidor {
+  color: $brand-dark;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.disco-alerta-punto {
+  color: var(--ax-text-muted, #64748b);
+  font-size: 11px;
+  flex-shrink: 0;
+}
+
+.disco-alerta-valor {
+  font-weight: 700;
+  font-family: $font-mono;
+  flex-shrink: 0;
+}
+
+.panel-atencion {
+  &-subtitulo {
+    color: var(--ax-text-muted, #64748b);
+    font-size: 11.5px;
+    margin: -10px 0 12px;
+  }
+}
+
+.tabla-atencion {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-height: 260px;
+  overflow-y: auto;
+  padding-right: 4px;
+
+  &::-webkit-scrollbar { width: 6px; }
+  &::-webkit-scrollbar-thumb { background: rgba(15, 23, 42, 0.15); border-radius: 999px; }
+}
+
+.tabla-atencion-header, .tabla-atencion-fila {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 0.9fr) minmax(0, 1.6fr) minmax(0, 0.7fr);
+  gap: 10px;
+  align-items: center;
+  padding: 8px 10px;
+}
+
+.tabla-atencion-header {
+  font-size: 9.5px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: var(--ax-text-muted, #64748b);
+}
+
+.tabla-atencion-fila {
+  background: var(--ax-surface, white);
+  border: 1px solid $border-light;
+  border-radius: 8px;
+  font-size: 12px;
+
+  span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+}
+
+.tabla-atencion-problemas { color: $brand-dark; }
+
+.col-derecha { text-align: right; justify-self: end; }
+
+.chip-estado {
+  display: inline-block;
+  font-size: 10.5px;
+  font-weight: 700;
+  padding: 3px 9px;
+  border-radius: 999px;
+
+  &-critico { background: rgba($state-danger, 0.12); color: $state-danger; }
+  &-error { background: rgba($brand-gray, 0.14); color: var(--ax-text-muted, #64748b); }
+}
+
+// Las tarjetas KPI del Análisis Estadístico son informativas, no filtros
+// clicables (a diferencia del comentario original de .kpi-card) — se les
+// quita el cursor de botón para no sugerir una interacción que no existe.
+.kpi-card.kpi-info { cursor: default; &:hover { transform: none; } }
+
+// Variante de 3 columnas de .tabla-atencion-header/-fila, para las mini
+// tablas de "Top consumidores" (Contenedor / Entorno / Valor) del Análisis
+// Estadístico, que no necesitan la 4ª columna que sí usa Bitácora.
+.tabla-atencion-header.cols-3, .tabla-atencion-fila.cols-3 {
+  grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr) minmax(0, 0.8fr);
+}
+
+// Variante de 4 columnas para la tabla "Consumo por servidor" — la primera
+// columna (nombre + IP) necesita más espacio que las 3 de valores.
+.tabla-atencion-header.cols-4-servidores, .tabla-atencion-fila.cols-4-servidores {
+  grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr) minmax(0, 1.1fr) minmax(0, 0.8fr);
+}
+
+// Panel que ocupa todo el ancho de .analitica-paneles-secundarios en vez de
+// una sola columna del grid — para "Consumo por servidor", que necesita más
+// espacio horizontal que un panel angosto.
+.panel-analitica-ancho {
+  grid-column: 1 / -1;
+}
+
+// Color de texto para los valores de CPU/memoria de "Consumo por servidor",
+// mismos umbrales/colores que .barra-relleno.
+.texto-valor-ok { color: $state-ok; }
+.texto-valor-warn { color: $state-warn; font-weight: 700; }
+.texto-valor-danger { color: $state-danger; font-weight: 700; }
+
+// Segunda serie de sparkline (memoria) con un color distinto al de CPU para
+// poder distinguir ambos paneles de un vistazo.
+.sparkline-linea-mem { stroke: #2563eb; }
+
+// ==========================================
+// BARRA DE FILTROS
+// ==========================================
+.barra-filtros {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-bottom: 18px;
+}
+
+.filtro-busqueda {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--ax-surface, white);
+  border: 1px solid $border-light;
+  border-radius: 9px;
+  padding: 9px 12px;
+  flex: 1 1 260px;
+  min-width: 200px;
+  max-width: 360px;
+
+  .icono-svg { color: var(--ax-text-muted, #64748b); }
+
+  input {
+    border: none;
+    outline: none;
+    font-size: 13px;
+    font-family: $font-ui;
+    color: $brand-dark;
+    flex: 1;
+    min-width: 0;
+    background: transparent;
+
+    &::placeholder { color: #94a3b8; }
+  }
+}
+
+// Variante compacta de .filtro-busqueda para el buscador de contenedores
+// dentro de la fila de metadatos de cada tarjeta (mismo lenguaje visual,
+// menos espacio).
+.filtro-busqueda-mini {
+  padding: 5px 10px;
+  flex: 0 1 200px;
+  min-width: 150px;
+  max-width: 220px;
+
+  input { font-size: 12px; }
+  .icono-svg { width: 14px; height: 14px; }
+}
+
+.filtro-limpiar-texto {
+  display: flex;
+  background: none;
+  border: none;
+  color: var(--ax-text-muted, #64748b);
+  cursor: pointer;
+  padding: 0;
+  flex-shrink: 0;
+
+  .icono-svg { width: 13px; height: 13px; }
+  &:hover { color: $state-danger; }
+}
+
+.filtro-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.chip-filtro {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: var(--ax-surface, white);
+  border: 1px solid $border-light;
+  border-radius: 999px;
+  padding: 7px 14px;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--ax-text-muted, #64748b);
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s, color 0.15s;
+
+  b { font-family: $font-mono; font-weight: 700; }
+
+  &:hover { background: var(--ax-surface-2, #f8fafc); }
+
+  &-activo {
+    color: var(--ax-brand-primary, #673ab7);
+    border-color: rgba(var(--ax-brand-primary-rgb, 103, 58, 183), 0.4);
+    background: rgba(var(--ax-brand-primary-rgb, 103, 58, 183), 0.06);
+  }
+
+  &.chip-filtro-sano.chip-filtro-activo { color: $state-ok; border-color: rgba($state-ok, 0.45); background: rgba($state-ok, 0.08); }
+  &.chip-filtro-riesgo.chip-filtro-activo { color: $state-warn; border-color: rgba($state-warn, 0.45); background: rgba($state-warn, 0.09); }
+  &.chip-filtro-critico.chip-filtro-activo { color: $state-danger; border-color: rgba($state-danger, 0.45); background: rgba($state-danger, 0.08); }
+  &.chip-filtro-error.chip-filtro-activo { color: var(--ax-text-muted, #64748b); border-color: rgba($brand-gray, 0.5); background: rgba($brand-gray, 0.1); }
+}
+
+// ==========================================
+// GRID DE TARJETAS
+// ==========================================
+// "auto-fit" (no "auto-fill"): con auto-fill, cuando hay pocas tarjetas el
+// grid sigue reservando columnas vacías invisibles y la(s) tarjeta(s) real(es)
+// se quedan angostas con un hueco enorme al lado. Con auto-fit, las columnas
+// vacías colapsan a 0 y la tarjeta real se estira para usar el espacio.
+.grid-tarjetas {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(380px, 1fr));
+  gap: 18px;
+  align-items: start;
+}
+
+.tarjeta-servidor {
+  background: var(--ax-surface, white);
+  border: 1px solid $border-light;
+  border-radius: 14px;
+  padding: 20px 22px;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04), 0 8px 20px rgba(15, 23, 42, 0.04);
+  transition: transform 0.2s, box-shadow 0.2s;
+
+  &:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 10px 28px rgba(15, 23, 42, 0.09);
+  }
+
+  &.tarjeta-error {
+    background: #fef2f2;
+    border: 1px solid rgba($state-danger, 0.3);
+  }
+}
+
+.tarjeta-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-bottom: 14px;
+  margin-bottom: 14px;
+  border-bottom: 1px solid $border-light;
+
+  &-info {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-width: 0;
+  }
+}
+
+.punto-estado {
+  width: 8px; height: 8px; border-radius: 50%;
+  background: $state-ok;
+  box-shadow: 0 0 8px rgba($state-ok, 0.7);
+  flex-shrink: 0;
+  animation: pulso 2s infinite;
+
+  &.punto-error {
+    background: $state-danger;
+    box-shadow: 0 0 8px rgba($state-danger, 0.7);
+  }
+}
+@keyframes pulso {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+
+.nombre-servidor {
+  color: $brand-dark;
+  font-weight: 700;
+  font-size: 15px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.ip-servidor {
+  color: var(--ax-text-muted, #64748b);
+  font-size: 12px;
+  flex-shrink: 0;
+}
+
+.btn-quitar {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--ax-surface-2, #f1f5f9);
+  border: none;
+  color: var(--ax-text-muted, #64748b);
+  width: 26px; height: 26px;
+  border-radius: 7px;
+  cursor: pointer;
+  flex-shrink: 0;
+
+  .icono-svg { width: 13px; height: 13px; }
+
+  &:hover { background: rgba($state-danger, 0.1); color: $state-danger; }
+}
+
+// ==========================================
+// MÉTRICAS PRINCIPALES
+// ==========================================
+.metricas-principales {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(135px, 1fr));
+  gap: 10px;
+  margin-bottom: 18px;
+}
+
+// Barras de "CPU en uso" / "Memoria en uso" de cada tarjeta — reutiliza
+// .barra-item/.barra-fondo/.barra-relleno del Análisis Estadístico, sólo se
+// ajusta el espaciado para que quepan dos una junto a otra en la tarjeta.
+.metricas-uso {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 12px 20px;
+  margin-bottom: 18px;
+
+  .barra-item { margin-bottom: 0; }
+}
+
+.metrica {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: var(--ax-surface-2, #f8fafc);
+  border-radius: 10px;
+  padding: 11px 12px;
+  transition: background 0.15s;
+
+  &:hover { background: var(--ax-surface-2, #f1f5f9); }
+
+  &-icono {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    opacity: 0.85;
+    width: 20px;
+    flex-shrink: 0;
+    color: var(--ax-text-muted, #64748b);
+  }
+
+  &-texto {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+  }
+
+  &-valor {
+    color: $brand-dark;
+    font-weight: 800;
+    font-size: 15px;
+    font-family: $font-mono;
+
+    small { font-size: 11px; font-weight: 600; color: var(--ax-text-muted, #64748b); }
+  }
+
+  &-label {
+    font-size: 10px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    color: var(--ax-text-muted, #64748b);
+  }
+}
+
+.red-valor { font-size: 12px !important; }
+
+.valor-ok { color: $state-ok !important; }
+.valor-warn { color: $state-warn !important; }
+.valor-danger { color: $state-danger !important; }
+
+// ==========================================
+// CHIPS DE DISCOS
+// ==========================================
+.bloque-discos {
+  margin-bottom: 16px;
+}
+
+.discos-titulo {
+  display: block;
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: var(--ax-text-muted, #64748b);
+  margin-bottom: 6px;
+}
+
+.fila-discos {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+// Fondo neutro y translúcido (igual criterio que .chip-espacio más abajo),
+// no relleno sólido de color — así el chip se integra con el resto del tema
+// oscuro de la tarjeta y sólo el valor/porcentaje lleva el color de estado.
+.chip-disco {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 10px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-family: $font-mono;
+  font-weight: 700;
+  background: var(--ax-surface-2, #f1f5f9);
+  border: 1px solid $border-light;
+  color: $state-ok;
+
+  &.valor-warn { color: $state-warn; }
+  &.valor-danger { color: $state-danger; border-color: rgba($state-danger, 0.3); }
+
+  &-punto { color: var(--ax-text-muted, #64748b); opacity: 0.9; font-weight: 600; }
+}
+
+.mensaje-error {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: $state-danger;
+  font-size: 13px;
+  font-weight: 600;
+  padding: 8px 0;
+
+  .icono-svg { color: $state-danger; }
+
+  &.mensaje-error-seccion {
+    background: rgba($state-danger, 0.08);
+    border: 1px solid rgba($state-danger, 0.25);
+    border-radius: 10px;
+    padding: 14px 16px;
+  }
+}
+
+// ==========================================
+// SECCIÓN DOCKER (CONTENEDORES)
+// ==========================================
+.seccion-docker {
+  margin-top: 16px;
+  padding-top: 14px;
+  border-top: 1px solid $border-light;
+}
+
+// Dos filas separadas a propósito (antes eran un único flex-wrap donde las
+// 6 pestañas y los chips de resumen se mezclaban al envolver, quedando
+// desordenado) — arriba SIEMPRE las pestañas, abajo sólo el resumen que
+// aplica a la pestaña activa.
+.docker-header {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.docker-header-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.docker-resumen {
+  display: flex;
+  gap: 6px;
+}
+
+.chip-resumen {
+  font-size: 11px;
+  font-weight: 700;
+  padding: 3px 9px;
+  border-radius: 999px;
+  background: rgba($brand-gray, 0.12);
+  color: var(--ax-text-muted, #64748b);
+
+  &-ok { background: rgba($state-ok, 0.14); color: $state-ok; }
+  &-danger { background: rgba($state-danger, 0.14); color: $state-danger; }
+}
+
+.toggle-filtro {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11px;
+  color: var(--ax-text-muted, #64748b);
+  cursor: pointer;
+  user-select: none;
+
+  input { accent-color: var(--ax-brand-primary, #673ab7); cursor: pointer; }
+}
+
+// Fila de títulos de columna, fuera del área con scroll para que quede
+// siempre visible arriba de la lista. Reutiliza las mismas clases de grid
+// que una fila de datos (.fila-contenedor / .contenedor-linea-inferior) para
+// que sus columnas queden garantizadas alineadas con las de abajo.
+.fila-contenedor-header {
+  background: transparent;
+  padding: 0 10px 6px;
+  margin-bottom: 2px;
+
+  &:hover {
+    background: transparent;
+    border-color: transparent;
+  }
+}
+
+.punto-contenedor-header {
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+.header-label {
+  font-size: 9.5px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--ax-text-muted, #64748b);
+
+  &-derecha { text-align: right; }
+}
+
+.lista-contenedores {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  max-height: 300px;
+  overflow-y: auto;
+  margin-bottom: 14px;
+  padding-right: 4px;
+
+  &::-webkit-scrollbar { width: 6px; }
+  &::-webkit-scrollbar-thumb { background: rgba(15, 23, 42, 0.15); border-radius: 999px; }
+}
+
+// Cada contenedor ocupa DOS líneas: arriba el nombre + estado (lo que
+// importa a simple vista), abajo la imagen, los recursos en vivo y los
+// puertos (información secundaria) — en vez de apretar todo en una sola
+// fila, que quedaba muy comprimida y con texto cortado.
+.fila-contenedor {
+  display: grid;
+  grid-template-columns: 8px minmax(0, 1fr);
+  align-items: start;
+  gap: 10px;
+  padding: 9px 10px;
+  border-radius: 9px;
+  background: var(--ax-surface-2, #f8fafc);
+  border: 1px solid transparent;
+  font-size: 12px;
+  transition: background 0.15s, border-color 0.15s;
+
+  &:hover {
+    background: var(--ax-surface-2, #f1f5f9);
+    border-color: $border-light;
+  }
+}
+
+.punto-contenedor {
+  width: 7px; height: 7px; border-radius: 50%;
+  flex-shrink: 0;
+  margin-top: 5px;
+
+  &.contenedor-ok { background: $state-ok; box-shadow: 0 0 6px rgba($state-ok, 0.7); }
+  &.contenedor-warn { background: $state-warn; box-shadow: 0 0 6px rgba($state-warn, 0.7); }
+  &.contenedor-danger { background: $state-danger; }
+  &.contenedor-neutro { background: #64748b; }
+}
+
+.contenedor-cuerpo {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+
+.contenedor-linea-superior {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+// Grid (no flex) a propósito: imagen, recursos y puertos usan *ngIf y no
+// siempre los tres están presentes en cada contenedor. Con flexbox, el ancho
+// de cada uno se recalculaba según qué hermanos existían en ESA fila, así que
+// las columnas quedaban desalineadas entre una fila y otra (lo que se veía
+// "flotando" en cualquier posición). Con grid-template-columns fijo + cada
+// clase anclada a su columna, la posición es siempre la misma sin importar
+// qué esté presente en cada contenedor puntual.
+.contenedor-linea-inferior {
+  display: grid;
+  // La columna de recursos necesita ancho fijo suficiente para "CPU 100.00% ·
+  // Mem 100.00%" en fuente monoespaciada sin recortarse (antes 130px se
+  // quedaba corto y el texto se cortaba en "Mem ...").
+  grid-template-columns: minmax(0, 1.3fr) minmax(0, 190px) minmax(0, 1fr);
+  align-items: center;
+  column-gap: 8px;
+  min-width: 0;
+}
+
+.contenedor-nombre {
+  color: $brand-dark;
+  font-weight: 600;
+  font-size: 12.5px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+}
+
+.contenedor-imagen {
+  grid-column: 1;
+  color: var(--ax-text-muted, #64748b);
+  font-size: 10.5px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+}
+
+.contenedor-recursos {
+  grid-column: 2;
+  color: $accent-recursos;
+  font-size: 10.5px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+
+  &::before {
+    content: '·';
+    margin-right: 8px;
+    color: rgba(15, 23, 42, 0.18);
+  }
+}
+
+.contenedor-estado-texto {
+  font-size: 10.5px;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 45%;
+  flex-shrink: 0;
+  text-align: right;
+
+  &.contenedor-ok { color: $state-ok; }
+  &.contenedor-warn { color: $state-warn; }
+  &.contenedor-danger { color: $state-danger; }
+  &.contenedor-neutro { color: var(--ax-text-muted, #64748b); }
+}
+
+.contenedor-puertos {
+  grid-column: 3;
+  display: none;
+  color: var(--ax-text-muted, #64748b);
+  font-size: 10.5px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+
+  @media (min-width: 460px) {
+    display: block;
+
+    &::before {
+      content: '·';
+      margin-right: 8px;
+      color: rgba(15, 23, 42, 0.18);
+    }
+  }
+}
+
+.sin-contenedores {
+  color: var(--ax-text-muted, #64748b);
+  font-size: 12px;
+  font-style: italic;
+  padding: 8px 4px;
+}
+
+// Distingue de dónde salió la sección de Docker de este servidor: Portainer
+// (más detalle por contenedor) o el parseo clásico por SSH.
+.chip-origen-docker {
+  font-size: 10px;
+  font-weight: 700;
+  padding: 3px 8px;
+  border-radius: 999px;
+  white-space: nowrap;
+}
+
+.chip-origen-portainer {
+  background: rgba(#0ea5e9, 0.14);
+  color: #0369a1;
+}
+
+.chip-origen-ssh {
+  background: rgba(15, 23, 42, 0.06);
+  color: var(--ax-text-muted, #64748b);
+}
+
+// Filas de contenedores que vienen de Portainer se pueden expandir para ver
+// más detalle (comando, redes, volúmenes) — las de SSH no tienen ese cursor
+// porque no hay nada extra que mostrar.
+.fila-contenedor-clic {
+  cursor: pointer;
+}
+
+.chevron-detalle {
+  color: var(--ax-text-muted, #64748b);
+  font-size: 10px;
+  flex-shrink: 0;
+  margin: 0 2px;
+}
+
+// (El detalle de "Detalle"/inspect ahora vive en el modal — ver
+// .detalle-grid / .contenedor-detalle-fila más abajo. .contenedor-detalle-
+// volumenes se reutiliza tal cual dentro de ese modal.)
+.contenedor-detalle-volumenes {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+// ==========================================
+// ACCIONES SOBRE UN CONTENEDOR (Start/Stop/Restart/Pause/Resume/Kill/Remove)
+// ==========================================
+.contenedor-acciones {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding-bottom: 8px;
+  margin-bottom: 8px;
+  border-bottom: 1px solid $border-light;
+}
+
+.btn-accion {
+  font-family: $font-ui;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 5px 11px;
+  border-radius: 6px;
+  border: 1px solid $border-light;
+  background: var(--ax-surface, white);
+  color: $brand-dark;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
+
+  &:hover:not(:disabled) { background: var(--ax-surface-2, #f1f5f9); }
+  &:disabled { opacity: 0.55; cursor: not-allowed; }
+
+  &-start, &-unpause { border-color: rgba($state-ok, 0.4); color: darken($state-ok, 10%); }
+  &-stop, &-pause { border-color: rgba($state-warn, 0.45); color: darken($state-warn, 12%); }
+  &-restart { border-color: rgba(var(--ax-brand-primary-rgb, 103, 58, 183), 0.4); color: var(--ax-brand-primary, #673ab7); }
+  &-kill, &-remove {
+    border-color: rgba($state-danger, 0.45);
+    color: $state-danger;
+    &:hover:not(:disabled) { background: rgba($state-danger, 0.08); }
+  }
+}
+
+.contenedor-pestanas {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 8px;
+}
+
+.pestana-btn {
+  font-family: $font-ui;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 4px 12px;
+  border-radius: 999px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--ax-text-muted, #64748b);
+  cursor: pointer;
+
+  &:hover { color: $brand-dark; }
+
+  &.pestana-activa {
+    background: var(--ax-surface, white);
+    border-color: $border-light;
+    color: var(--ax-brand-primary, #673ab7);
+  }
+}
+
+.pestana-contenido {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.logs-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 6px;
+}
+
+.logs-nota {
+  font-size: 10px;
+  color: var(--ax-text-muted, #64748b);
+}
+
+.logs-contenido {
+  background: #0f172a;
+  color: #e2e8f0;
+  font-family: $font-mono;
+  font-size: 12px;
+  line-height: 1.6;
+  padding: 14px 16px;
+  border-radius: 8px;
+  // Antes 320px — el modal se veía apretado para revisar un log real; ahora
+  // crece con el modal (ver .modal-contenedor) y dentro de éste ocupa casi
+  // todo el alto disponible del body, en vez de quedar como un recuadro
+  // chico dentro de una ventana grande.
+  max-height: 60vh;
+  overflow: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+  margin: 0;
+}
+
+.btn-sm {
+  font-family: $font-ui;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 4px 10px;
+  border-radius: 6px;
+  border: 1px solid $border-light;
+  background: var(--ax-surface, white);
+  color: $brand-dark;
+  cursor: pointer;
+
+  &:hover { background: var(--ax-surface-2, #f1f5f9); }
+}
+
+.seccion-docker-vacio {
+  margin-top: 16px;
+  padding-top: 14px;
+  border-top: 1px solid $border-light;
+}
+
+.mensaje-sin-docker {
+  display: block;
+  color: var(--ax-text-muted, #64748b);
+  font-size: 12px;
+  font-style: italic;
+}
+
+.mensaje-sin-docker-detalle {
+  display: block;
+  color: var(--ax-text-muted, #64748b);
+  font-size: 11px;
+  margin-top: 4px;
+}
+
+// ==========================================
+// ESPACIO EN DISCO DE DOCKER
+// ==========================================
+.bloque-espacio-docker {
+  margin-top: 4px;
+}
+
+.espacio-docker-titulo {
+  display: block;
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: var(--ax-text-muted, #64748b);
+  margin-bottom: 6px;
+}
+
+.fila-espacio-docker {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.chip-espacio {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 10px;
+  border-radius: 8px;
+  background: var(--ax-surface-2, #f8fafc);
+  border: 1px solid $border-light;
+  font-size: 10px;
+
+  &-tipo { color: var(--ax-text-muted, #64748b); font-weight: 700; text-transform: uppercase; letter-spacing: 0.02em; }
+  &-valor { color: $brand-dark; font-weight: 700; font-family: $font-mono; }
+  &-detalle { color: var(--ax-text-muted, #64748b); }
+}
+
+// ==========================================
+// FASE 2/3: PESTAÑAS DE ENTORNO (Contenedores/Imágenes/Redes/Volúmenes/
+// Eventos/Host) Y LISTAS DE RECURSOS — reutilizan .pestana-btn/
+// .lista-contenedores/.btn-accion ya definidos arriba para que se vean
+// consistentes con el resto de la tarjeta de entorno.
+//
+// Con 6 pestañas, un flex-wrap simple envolvía de forma impredecible según
+// el ancho de la tarjeta (a veces 4+2, a veces mezclado con los chips de la
+// fila de abajo) y se veía desordenado. Un grid fijo de 3 columnas siempre
+// arma exactamente 2 filas parejas de 3 — se ve como un selector segmentado
+// en vez de una lista de botones sueltos que se acomodan como pueden.
+// ==========================================
+.entorno-tabs {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 3px;
+  background: var(--ax-surface-2, #f1f5f9);
+  border-radius: 10px;
+  padding: 3px;
+
+  // Botones más compactos que los del modal (que sólo tienen 2, Detalle/
+  // Logs, y les sobra espacio) — aquí son 6 repartidos en 3 columnas, así
+  // que el texto va centrado y sin salto de línea, con elipsis como
+  // salvavidas si una tarjeta queda muy angosta.
+  .pestana-btn {
+    text-align: center;
+    padding: 6px 4px;
+    font-size: 10px;
+    border-radius: 7px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+
+    &.pestana-activa {
+      box-shadow: 0 1px 2px rgba(15, 23, 42, 0.08);
+    }
+  }
+}
+
+.pestana-recurso {
+  margin-top: 2px;
+}
+
+.recurso-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+
+.fila-recurso {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 9px 10px;
+  border-radius: 9px;
+  background: var(--ax-surface-2, #f8fafc);
+  border: 1px solid transparent;
+  font-size: 12px;
+  transition: background 0.15s, border-color 0.15s;
+
+  &:hover {
+    background: var(--ax-surface-2, #f1f5f9);
+    border-color: $border-light;
+  }
+
+  .btn-accion { flex-shrink: 0; }
+}
+
+.recurso-cuerpo {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+  flex: 1;
+}
+
+.recurso-linea-superior {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.recurso-nombre {
+  color: $brand-dark;
+  font-weight: 600;
+  font-size: 12.5px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+}
+
+.recurso-linea-inferior {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.recurso-meta {
+  color: var(--ax-text-muted, #64748b);
+  font-size: 10.5px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 260px;
+
+  &::before {
+    content: '·';
+    margin-right: 8px;
+    color: rgba(15, 23, 42, 0.18);
+  }
+
+  &:first-child::before { content: none; margin-right: 0; }
+}
+
+// ==========================================
+// FASE 3: EVENTOS (selector de rango + filas de evento) — el detalle de
+// Host reutiliza .detalle-grid/.contenedor-detalle-fila (definidos junto al
+// modal, más abajo), no necesita clases propias.
+// ==========================================
+.selector-rango {
+  font-family: $font-ui;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 4px 8px;
+  border-radius: 6px;
+  border: 1px solid $border-light;
+  background: var(--ax-surface, white);
+  color: $brand-dark;
+  cursor: pointer;
+}
+
+.fila-evento {
+  display: grid;
+  grid-template-columns: 120px 90px minmax(0, 90px) minmax(0, 1fr);
+  align-items: center;
+  gap: 10px;
+  padding: 7px 10px;
+  border-radius: 8px;
+  background: var(--ax-surface-2, #f8fafc);
+  font-size: 11px;
+  transition: background 0.15s;
+
+  &:hover { background: var(--ax-surface-2, #f1f5f9); }
+}
+
+.evento-tiempo {
+  color: var(--ax-text-muted, #64748b);
+  white-space: nowrap;
+}
+
+.evento-tipo {
+  justify-self: start;
+  text-transform: capitalize;
+}
+
+.evento-accion {
+  color: $brand-dark;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.evento-recurso {
+  color: var(--ax-text-muted, #64748b);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+}
+
+// ==========================================
+// MODAL DE DETALLE DE CONTENEDOR
+// Vive fuera de la grilla con scroll/poll de entornos a propósito (ver nota
+// en el HTML) — aquí sólo el look & feel: overlay centrado, tarjeta amplia
+// con su propio scroll interno, y bastante más aire que el panel inline
+// anterior (que el cliente reportó como "muy agrupado y saturado").
+// ==========================================
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.55);
+  backdrop-filter: blur(1px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  z-index: 1000;
+  animation: aparecer-overlay 0.15s ease-out;
+}
+@keyframes aparecer-overlay {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.modal-contenedor {
+  background: var(--ax-surface, white);
+  border-radius: 16px;
+  width: 100%;
+  // Antes 640px/720px — se sentía chico sobre todo para leer logs reales
+  // (líneas largas de stack traces, por ejemplo). Se agranda para
+  // aprovechar mejor pantallas de escritorio; en pantallas angostas sigue
+  // acotado por el 92vw/92vh para no desbordar.
+  max-width: min(920px, 92vw);
+  max-height: min(860px, 92vh);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  box-shadow: 0 20px 50px rgba(15, 23, 42, 0.25), 0 2px 8px rgba(15, 23, 42, 0.08);
+  animation: aparecer-modal 0.18s ease-out;
+
+  // .contenedor-acciones y .contenedor-pestanas quedan como hijos directos
+  // (entre el header y .modal-body) — sólo necesitan el padding horizontal
+  // que el resto del modal ya tiene, para no quedar pegados al borde.
+  > .contenedor-acciones {
+    margin: 0;
+    padding: 16px 24px 12px;
+    border-bottom: none;
+  }
+
+  > .contenedor-pestanas {
+    margin: 0 24px 0;
+    padding-top: 4px;
+    border-bottom: 1px solid $border-light;
+  }
+}
+@keyframes aparecer-modal {
+  from { opacity: 0; transform: translateY(8px) scale(0.98); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+.modal-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 22px 24px 18px;
+  border-bottom: 1px solid $border-light;
+  flex-shrink: 0;
+}
+
+.modal-header-info {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  min-width: 0;
+}
+
+.modal-punto {
+  margin-top: 6px;
+}
+
+.modal-header-texto {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+
+  h3 {
+    margin: 0;
+    font-size: 16px;
+    font-weight: 800;
+    color: $brand-dark;
+    word-break: break-word;
+  }
+}
+
+.modal-subtitulo {
+  color: var(--ax-text-muted, #64748b);
+  font-size: 12.5px;
+}
+
+.modal-cerrar {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 9px;
+  border: none;
+  background: var(--ax-surface-2, #f1f5f9);
+  color: var(--ax-text-muted, #64748b);
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: background 0.15s, color 0.15s;
+
+  .icono-svg { width: 15px; height: 15px; }
+
+  &:hover { background: rgba($state-danger, 0.1); color: $state-danger; }
+}
+
+.modal-body {
+  padding: 20px 24px 24px;
+  overflow-y: auto;
+  flex: 1;
+  min-height: 0;
+
+  &::-webkit-scrollbar { width: 7px; }
+  &::-webkit-scrollbar-thumb { background: rgba(15, 23, 42, 0.15); border-radius: 999px; }
+}
+
+.modal-sin-datos {
+  padding: 32px 4px;
+  text-align: center;
+}
+
+// Grid de campos de "Detalle" (inspect): dos columnas cómodas en vez de una
+// sola lista apretada — cada fila del grid es su propia celda con más aire
+// alrededor que el `.contenedor-detalle` compacto original.
+.detalle-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 14px 24px;
+}
+
+.contenedor-detalle-fila {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  align-items: flex-start;
+  font-size: 12.5px;
+
+  span:not(.contenedor-detalle-etiqueta) {
+    color: $brand-dark;
+    word-break: break-word;
+  }
+}
+
+.contenedor-detalle-etiqueta {
+  color: var(--ax-text-muted, #64748b);
+  font-weight: 700;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.contenedor-detalle-fila-ancha {
+  grid-column: 1 / -1;
+}
+
+// Volúmenes / Etiquetas: separados del grid de arriba con su propio título,
+// en vez de mezclarse en la misma lista vertical.
+.detalle-bloque {
+  margin-top: 22px;
+  padding-top: 18px;
+  border-top: 1px solid $border-light;
+}
+
+.detalle-bloque-titulo {
+  display: block;
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: var(--ax-text-muted, #64748b);
+  margin-bottom: 10px;
+}
+
+// Pestañas de la pantalla (Entornos / Salud / Stacks / Higiene)
+.vistas-monitoreo {
+  display: flex; gap: 4px; border-bottom: 1px solid var(--ax-border, #e2e8f0); margin: 0 0 22px; flex-wrap: wrap;
+  button {
+    border: none; background: transparent; padding: 10px 18px; font-size: 14px; font-weight: 700; font-family: inherit; color: var(--ax-text-muted, #64748b);
+    cursor: pointer; border-bottom: 3px solid transparent; margin-bottom: -1px;
+    &:hover { color: var(--ax-text, #1e293b); }
+    &.activa { color: var(--ax-brand-ink, #5b21b6); border-bottom-color: var(--ax-brand-primary, #673ab7); }
+  }
+}

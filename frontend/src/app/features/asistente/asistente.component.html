@@ -1,0 +1,105 @@
+<header class="page-header">
+  <div>
+    <h1>Asistente IA</h1>
+    <p class="subtitle" *ngIf="modo === 'axis'">Ollama local con los datos de AXIS · responde solo según los módulos que tienes habilitados</p>
+    <p class="subtitle" *ngIf="modo === 'general'">Modelos de IA de uso general · no consulta la base de datos de AXIS</p>
+  </div>
+
+  <div class="tabs-modo" role="tablist">
+    <button type="button" role="tab" class="tab-modo" [class.activa]="modo === 'axis'" [attr.aria-selected]="modo === 'axis'" (click)="cambiarModo('axis')">
+      Asistente AXIS
+    </button>
+    <button type="button" role="tab" class="tab-modo" [class.activa]="modo === 'general'" [attr.aria-selected]="modo === 'general'" (click)="cambiarModo('general')">
+      Modelos generales
+    </button>
+  </div>
+</header>
+
+<div class="asistente-layout">
+  <!-- Panel lateral: lista de conversaciones (como el historial de chats de Claude/GPT) -->
+  <aside class="conversaciones-panel glass-panel">
+    <button class="btn-nueva-conversacion" (click)="nuevaConversacion()">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <line x1="12" y1="5" x2="12" y2="19"></line>
+        <line x1="5" y1="12" x2="19" y2="12"></line>
+      </svg>
+      Nueva conversación
+    </button>
+
+    <div class="conversaciones-lista">
+      <p class="conversaciones-vacio" *ngIf="!est.cargandoConversaciones && est.conversaciones.length === 0">
+        Todavía no tienes conversaciones guardadas.
+      </p>
+      <button
+        *ngFor="let conv of est.conversaciones"
+        class="conversacion-item"
+        [class.activa]="conv.conversacionId === est.conversacionActualId"
+        (click)="abrirConversacion(conv.conversacionId)">
+        <span class="conversacion-titulo">{{ conv.titulo }}</span>
+        <span class="conversacion-fecha">{{ conv.fechaUltimoMensaje | date:'d MMM, HH:mm' }}</span>
+      </button>
+    </div>
+  </aside>
+
+  <div class="chat-wrapper glass-panel">
+    <!-- Barra del modelo (solo en Modelos generales) -->
+    <div class="barra-modelo" *ngIf="modo === 'general'">
+      <label for="modeloGeneral">Modelo</label>
+      <select id="modeloGeneral" [(ngModel)]="modeloSeleccionado" (ngModelChange)="guardarModelo()" [disabled]="cargandoModelos || !modelos.length || est.cargando">
+        <option *ngIf="cargandoModelos" value="">Cargando modelos…</option>
+        <option *ngFor="let m of modelos" [value]="m.id">{{ m.nombre }}</option>
+      </select>
+      <button type="button" class="btn-recargar-modelos" (click)="cargarModelos()" [disabled]="cargandoModelos" title="Volver a consultar los modelos disponibles">↻</button>
+      <span class="error-modelos" *ngIf="errorModelos">⚠ {{ errorModelos }}</span>
+    </div>
+
+    <!-- Área de historial de mensajes -->
+    <div class="chat-history" #chatContainer>
+      <div class="message-row" *ngFor="let msg of est.mensajes" [class.is-user]="msg.emisor === 'usuario'">
+
+        <!-- Avatar de la IA (solo se muestra si el emisor es la IA) -->
+        <div class="avatar ai-avatar" *ngIf="msg.emisor === 'ia'">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/>
+          </svg>
+        </div>
+
+        <!-- Burbuja de texto -->
+        <div class="message-bubble" [class.user-bubble]="msg.emisor === 'usuario'" [class.ai-bubble]="msg.emisor === 'ia'">
+          <p *ngIf="msg.emisor === 'usuario'">{{ msg.texto }}</p>
+          <p *ngIf="msg.emisor === 'ia'" [innerHTML]="formatear(msg.texto)"></p>
+          <span class="time">{{ msg.fecha | date:'HH:mm' }}</span>
+        </div>
+      </div>
+
+      <!-- Indicador animado de "Escribiendo..." mientras el backend responde -->
+      <div class="message-row" *ngIf="est.cargando">
+        <div class="avatar ai-avatar">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/>
+          </svg>
+        </div>
+        <div class="message-bubble ai-bubble typing-indicator">
+          <span></span><span></span><span></span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Caja de texto para escribir -->
+    <div class="chat-input-area">
+      <textarea
+        [(ngModel)]="est.pregunta"
+        (keydown)="onKeyDown($event)"
+        [placeholder]="placeholder"
+        rows="1"
+        [disabled]="est.cargando">
+      </textarea>
+      <button class="btn btn-primary send-btn" (click)="enviarMensaje()" [disabled]="!puedeEnviar()" title="Enviar">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <line x1="22" y1="2" x2="11" y2="13"></line>
+          <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
+        </svg>
+      </button>
+    </div>
+  </div>
+</div>

@@ -1,0 +1,166 @@
+<header class="page-header">
+  <div>
+    <h1>Informes · Bitácora de Apuntamientos</h1>
+    <p class="subtitle">Fase 2 del informe general del aplicativo — altas, ajustes e incidencias registradas por periodo</p>
+  </div>
+</header>
+
+<!-- ===================================================
+     SELECTOR DE PERIODO
+==================================================== -->
+<section class="seccion-selector">
+  <div class="selector-periodo">
+    <button type="button" class="btn-periodo" [class.activo]="periodo === 'dia'" (click)="seleccionarPeriodo('dia')">Día</button>
+    <button type="button" class="btn-periodo" [class.activo]="periodo === 'semana'" (click)="seleccionarPeriodo('semana')">Semana</button>
+    <button type="button" class="btn-periodo" [class.activo]="periodo === 'mes'" (click)="seleccionarPeriodo('mes')">Mes</button>
+    <button type="button" class="btn-periodo" [class.activo]="periodo === 'rango'" (click)="seleccionarPeriodo('rango')">Rango personalizado</button>
+  </div>
+
+  <div class="rango-fechas" *ngIf="periodo === 'rango'">
+    <label>
+      Desde
+      <input type="date" [(ngModel)]="desde" [max]="hasta">
+    </label>
+    <label>
+      Hasta
+      <input type="date" [(ngModel)]="hasta" [min]="desde">
+    </label>
+    <button type="button" class="btn-sm" (click)="generarInforme()">Generar</button>
+  </div>
+
+  <div class="acciones-informe">
+    <button type="button" class="btn-sm" (click)="generarInforme()" [disabled]="cargando">↻ Actualizar</button>
+    <button type="button" class="btn-sm btn-pdf" (click)="descargarPdf()" [disabled]="generandoPdf">
+      {{ generandoPdf ? 'Generando PDF…' : '⬇ Descargar PDF' }}
+    </button>
+  </div>
+</section>
+
+<div class="mensaje-error mensaje-error-seccion" *ngIf="error">{{ error }}</div>
+<div class="mensaje-error mensaje-error-seccion" *ngIf="errorPdf">{{ errorPdf }}</div>
+
+<div class="loading-state" *ngIf="cargando">
+  <div class="spinner"></div>
+  <p>Generando informe...</p>
+</div>
+
+<ng-container *ngIf="!cargando && informe">
+  <p class="etiqueta-periodo-activo">
+    Periodo: <strong>{{ etiquetaPeriodo }}</strong>
+    <span class="etiqueta-comparacion-vs" *ngIf="comparacionPeriodoAnteriorDesde && comparacionPeriodoAnteriorHasta">· comparado contra {{ formatoFecha(comparacionPeriodoAnteriorDesde) }} — {{ formatoFecha(comparacionPeriodoAnteriorHasta) }}</span>
+  </p>
+
+  <section class="centro-analitica">
+    <!-- ---------- Resumen actual ---------- -->
+    <h2 class="subtitulo-seccion">Resumen general (estado actual)</h2>
+    <div class="kpis-grid">
+      <div class="kpi-card kpi-info kpi-sano">
+        <div class="kpi-texto">
+          <span class="kpi-valor">{{ informe.resumenActual.total }}</span>
+          <span class="kpi-label">Total apuntamientos</span>
+        </div>
+      </div>
+      <div class="kpi-card kpi-info" [ngClass]="informe.resumenActual.sinApuntamiento ? 'kpi-riesgo' : 'kpi-sano'">
+        <div class="kpi-texto">
+          <span class="kpi-valor">{{ informe.resumenActual.sinApuntamiento }}</span>
+          <span class="kpi-label">Sin apuntamiento</span>
+        </div>
+      </div>
+      <div class="kpi-card kpi-info kpi-sano">
+        <div class="kpi-texto">
+          <span class="kpi-valor">{{ informe.resumenActual.ace }}</span>
+          <span class="kpi-label">ACE</span>
+        </div>
+      </div>
+      <div class="kpi-card kpi-info kpi-sano">
+        <div class="kpi-texto">
+          <span class="kpi-valor">{{ informe.resumenActual.busIntegracion10 }}</span>
+          <span class="kpi-label">Bus de Integración 10</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- ---------- Actividad del periodo ---------- -->
+    <h2 class="subtitulo-seccion">Actividad del periodo</h2>
+    <div class="kpis-grid">
+      <div class="kpi-card kpi-info kpi-sano">
+        <div class="kpi-texto">
+          <span class="kpi-valor">{{ informe.altasEnPeriodo }}</span>
+          <span class="kpi-label">Altas en el periodo</span>
+        </div>
+        <span class="pill-comparacion" [ngClass]="claseComparacion(cambioAltas)">
+          {{ textoComparacion(cambioAltas) }}
+        </span>
+      </div>
+      <div class="kpi-card kpi-info kpi-sano">
+        <div class="kpi-texto">
+          <span class="kpi-valor">{{ informe.ajustesEnPeriodo }}</span>
+          <span class="kpi-label">Ajustes registrados</span>
+        </div>
+        <span class="pill-comparacion" [ngClass]="claseComparacion(cambioAjustes)">
+          {{ textoComparacion(cambioAjustes) }}
+        </span>
+      </div>
+      <div class="kpi-card kpi-info" [ngClass]="informe.incidenciasEnPeriodo.length ? 'kpi-critico' : 'kpi-sano'">
+        <div class="kpi-texto">
+          <span class="kpi-valor">{{ informe.incidenciasEnPeriodo.length }}</span>
+          <span class="kpi-label">Incidencias (con error/TRANDID)</span>
+        </div>
+        <span class="pill-comparacion" [ngClass]="claseComparacion(cambioIncidencias, true)">
+          {{ textoComparacion(cambioIncidencias) }}
+        </span>
+      </div>
+    </div>
+
+    <!-- ---------- Tendencia ---------- -->
+    <div class="panel-analitica panel-analitica-ancho">
+      <h3>Tendencia — altas, ajustes e incidencias</h3>
+      <p class="panel-atencion-subtitulo">Evolución por periodo (el tamaño de cada cubeta se ajusta automáticamente a la ventana de tiempo seleccionada)</p>
+      <app-line-chart [etiquetas]="etiquetasTendencia" [series]="seriesTendencia"></app-line-chart>
+    </div>
+
+    <!-- ---------- Distribución actual + rankings ---------- -->
+    <div class="analitica-paneles-secundarios">
+      <div class="panel-analitica">
+        <h3>Con apuntamiento vs. sin apuntamiento</h3>
+        <app-donut-chart [segmentos]="segmentosApuntamiento" centroEtiqueta="Apuntamientos"></app-donut-chart>
+      </div>
+      <div class="panel-analitica">
+        <h3>Distribución por categoría</h3>
+        <app-donut-chart [segmentos]="segmentosCategoria" centroEtiqueta="Apuntamientos"></app-donut-chart>
+      </div>
+      <div class="panel-analitica">
+        <h3>Servicios con más incidencias</h3>
+        <app-bar-list [items]="informe.topServiciosPorIncidencias" colorVar="var(--ax-chart-series-1)"></app-bar-list>
+      </div>
+      <div class="panel-analitica">
+        <h3>Aplicaciones con más incidencias</h3>
+        <app-bar-list [items]="informe.topAplicacionesPorIncidencias" colorVar="var(--ax-chart-series-2)"></app-bar-list>
+      </div>
+    </div>
+
+    <!-- ---------- Incidencias del periodo ---------- -->
+    <div class="panel-analitica panel-atencion panel-analitica-ancho">
+      <h3>Incidencias registradas en el periodo</h3>
+      <div class="tabla-atencion" *ngIf="informe.incidenciasEnPeriodo.length; else sinIncidencias">
+        <div class="tabla-atencion-header cols-5">
+          <span>Fecha</span>
+          <span>Servicio</span>
+          <span>Aplicación</span>
+          <span>TRANDID</span>
+          <span>Descripción</span>
+        </div>
+        <div class="tabla-atencion-fila cols-5" *ngFor="let inc of informe.incidenciasEnPeriodo; trackBy: trackIncidencia">
+          <span>{{ formatoFecha(inc.FechaCambio) }}</span>
+          <span [title]="inc.ServicioNuevoNombre || ''">{{ inc.ServicioNuevoNombre || 'Sin asignar' }}</span>
+          <span [title]="inc.AplicacionNuevoNombre || ''">{{ inc.AplicacionNuevoNombre || 'Sin asignar' }}</span>
+          <span>{{ inc.TrandId || '-' }}</span>
+          <span [title]="inc.ErrorDescripcion || ''">{{ inc.ErrorDescripcion || '-' }}</span>
+        </div>
+      </div>
+      <ng-template #sinIncidencias>
+        <p class="sin-datos">No se registraron incidencias en este periodo.</p>
+      </ng-template>
+    </div>
+  </section>
+</ng-container>

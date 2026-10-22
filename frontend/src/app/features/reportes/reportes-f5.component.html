@@ -1,0 +1,565 @@
+<header class="page-header">
+  <div>
+    <h1>Informes · Balanceador F5</h1>
+    <p class="subtitle">Estado en vivo, disponibilidad, tráfico por nodo y transacciones HTTP de los Virtual Servers, por periodo</p>
+  </div>
+</header>
+
+<!-- ===================================================
+     SELECTOR DE PERIODO + ACCIONES
+==================================================== -->
+<section class="seccion-selector">
+  <div class="selector-periodo">
+    <button type="button" class="btn-periodo" [class.activo]="periodo === 'dia'" (click)="seleccionarPeriodo('dia')">Día</button>
+    <button type="button" class="btn-periodo" [class.activo]="periodo === 'semana'" (click)="seleccionarPeriodo('semana')">Semana</button>
+    <button type="button" class="btn-periodo" [class.activo]="periodo === 'mes'" (click)="seleccionarPeriodo('mes')">Mes</button>
+    <button type="button" class="btn-periodo" [class.activo]="periodo === 'rango'" (click)="seleccionarPeriodo('rango')">Rango personalizado</button>
+  </div>
+
+  <div class="rango-fechas" *ngIf="periodo === 'rango'">
+    <label>
+      Desde
+      <input type="date" [(ngModel)]="desde" [max]="hasta">
+    </label>
+    <label>
+      Hasta
+      <input type="date" [(ngModel)]="hasta" [min]="desde">
+    </label>
+    <button type="button" class="btn-sm" (click)="generarInforme()">Generar</button>
+  </div>
+
+  <div class="acciones-informe">
+    <button type="button" class="btn-sm" (click)="generarInforme()" [disabled]="cargando">↻ Actualizar</button>
+    <button type="button" class="btn-sm btn-pdf" (click)="descargarPdf()" [disabled]="generandoPdf">
+      {{ generandoPdf ? 'Generando PDF…' : '⬇ Descargar PDF' }}
+    </button>
+  </div>
+</section>
+
+<div class="mensaje-error mensaje-error-seccion" *ngIf="error">{{ error }}</div>
+<div class="mensaje-error mensaje-error-seccion" *ngIf="errorPdf">{{ errorPdf }}</div>
+
+<div class="loading-state" *ngIf="cargando">
+  <div class="spinner"></div>
+  <p>Generando informe...</p>
+</div>
+
+<ng-container *ngIf="!cargando && informe">
+  <p class="etiqueta-periodo-activo">
+    Periodo: <strong>{{ etiquetaPeriodo }}</strong>
+    <span *ngIf="informe.generadoEn"> · generado {{ fechaHora(informe.generadoEn) }}</span>
+  </p>
+
+  <div class="mensaje-error mensaje-error-seccion" *ngIf="!informe.f5Configurado">
+    No hay ningún dispositivo F5 configurado en el backend — este informe no tiene datos que mostrar.
+  </div>
+
+  <div class="mensaje-error mensaje-error-seccion" *ngIf="informe.resumenActual.dispositivosConError.length">
+    No se pudo consultar en vivo:
+    <span *ngFor="let d of informe.resumenActual.dispositivosConError; let last = last; trackBy: trackDispositivoError">{{ d.nombre || d.id }}{{ last ? '' : ', ' }}</span>
+    (no se incluyen en el estado actual).
+  </div>
+
+  <!-- Backend anterior: solo trae el informe básico -->
+  <div class="aviso-info" *ngIf="informe.f5Configurado && !hayInformeAmpliado">
+    El servidor aún no entrega el informe ampliado (tráfico por nodo, transacciones y detalle). Despliega la versión más reciente del backend para verlo; mientras tanto se muestra el resumen de disponibilidad.
+  </div>
+
+  <!-- Notas de cobertura: qué datos hay y qué falta -->
+  <div class="aviso-info" *ngIf="informe.f5Configurado && informe.notas?.length">
+    <strong>Cobertura de los datos</strong>
+    <ul>
+      <li *ngFor="let n of informe.notas">{{ n }}</li>
+    </ul>
+  </div>
+
+  <section class="centro-analitica" *ngIf="informe.f5Configurado">
+
+    <!-- =================== ESTADO ACTUAL =================== -->
+    <h2 class="subtitulo-seccion">Estado actual (en vivo)</h2>
+    <div class="kpis-grid">
+      <div class="kpi-card kpi-sano">
+        <div class="kpi-texto">
+          <span class="kpi-valor">{{ informe.resumenActual.dispositivosTotal }}</span>
+          <span class="kpi-label">Dispositivos F5</span>
+        </div>
+      </div>
+      <div class="kpi-card" [ngClass]="informe.resumenActual.virtualesAbajo ? 'kpi-critico' : 'kpi-sano'">
+        <div class="kpi-texto">
+          <span class="kpi-valor">{{ informe.resumenActual.virtualesArriba }}/{{ informe.resumenActual.virtualesTotal }}</span>
+          <span class="kpi-label">Virtual Servers arriba</span>
+        </div>
+      </div>
+      <ng-container *ngIf="informe.conteos as c; else kpiNodosBasico">
+        <div class="kpi-card" [ngClass]="c.virtualesDeshabilitados ? 'kpi-riesgo' : 'kpi-sano'">
+          <div class="kpi-texto">
+            <span class="kpi-valor">{{ c.virtualesDeshabilitados }}</span>
+            <span class="kpi-label">Virtual Servers deshabilitados</span>
+          </div>
+        </div>
+        <div class="kpi-card kpi-sano">
+          <div class="kpi-texto">
+            <span class="kpi-valor">{{ c.nodosDisponibles }}/{{ nodosTotalDetalle }}</span>
+            <span class="kpi-label">Nodos disponibles</span>
+          </div>
+        </div>
+        <div class="kpi-card" [ngClass]="c.nodosCaidos ? 'kpi-critico' : 'kpi-sano'">
+          <div class="kpi-texto">
+            <span class="kpi-valor">{{ c.nodosCaidos }}</span>
+            <span class="kpi-label">Nodos caídos (monitor)</span>
+          </div>
+        </div>
+        <div class="kpi-card" [ngClass]="c.nodosDeshabilitados ? 'kpi-riesgo' : 'kpi-sano'">
+          <div class="kpi-texto">
+            <span class="kpi-valor">{{ c.nodosDeshabilitados }}</span>
+            <span class="kpi-label">Nodos deshabilitados</span>
+          </div>
+        </div>
+        <div class="kpi-card" [ngClass]="c.nodosSinTrafico ? 'kpi-riesgo' : 'kpi-sano'">
+          <div class="kpi-texto">
+            <span class="kpi-valor">{{ c.nodosSinTrafico }}</span>
+            <span class="kpi-label">Nodos sin tráfico</span>
+          </div>
+        </div>
+      </ng-container>
+      <ng-template #kpiNodosBasico>
+        <div class="kpi-card" [ngClass]="informe.resumenActual.nodosAbajo ? 'kpi-riesgo' : 'kpi-sano'">
+          <div class="kpi-texto">
+            <span class="kpi-valor">{{ informe.resumenActual.nodosArriba }}/{{ informe.resumenActual.nodosTotal }}</span>
+            <span class="kpi-label">Nodos arriba</span>
+          </div>
+        </div>
+      </ng-template>
+    </div>
+
+    <!-- =================== RESUMEN DEL PERIODO =================== -->
+    <ng-container *ngIf="informe.resumenPeriodo as r">
+      <h2 class="subtitulo-seccion">Resumen del periodo</h2>
+      <div class="kpis-grid">
+        <div class="kpi-card" [ngClass]="r.disponibilidadVirtualesPct === null ? '' : r.disponibilidadVirtualesPct >= 99 ? 'kpi-sano' : r.disponibilidadVirtualesPct >= 95 ? 'kpi-riesgo' : 'kpi-critico'">
+          <div class="kpi-texto">
+            <span class="kpi-valor">{{ pct(r.disponibilidadVirtualesPct) }}</span>
+            <span class="kpi-label">Disponibilidad Virtual Servers</span>
+          </div>
+        </div>
+        <div class="kpi-card" [ngClass]="r.disponibilidadNodosPct === null ? '' : r.disponibilidadNodosPct >= 99 ? 'kpi-sano' : r.disponibilidadNodosPct >= 95 ? 'kpi-riesgo' : 'kpi-critico'">
+          <div class="kpi-texto">
+            <span class="kpi-valor">{{ pct(r.disponibilidadNodosPct) }}</span>
+            <span class="kpi-label">Disponibilidad nodos</span>
+          </div>
+        </div>
+        <div class="kpi-card">
+          <div class="kpi-texto">
+            <span class="kpi-valor">{{ bps(r.entradaPromBps) }}</span>
+            <span class="kpi-label">Entrada promedio</span>
+          </div>
+        </div>
+        <div class="kpi-card">
+          <div class="kpi-texto">
+            <span class="kpi-valor">{{ bps(r.salidaPromBps) }}</span>
+            <span class="kpi-label">Salida promedio</span>
+          </div>
+        </div>
+        <div class="kpi-card" [title]="r.entradaPicoEn ? 'Pico: ' + fechaHora(r.entradaPicoEn) : ''">
+          <div class="kpi-texto">
+            <span class="kpi-valor">{{ bps(r.entradaPicoBps) }}</span>
+            <span class="kpi-label">Pico de entrada</span>
+          </div>
+        </div>
+        <div class="kpi-card" [title]="r.salidaPicoEn ? 'Pico: ' + fechaHora(r.salidaPicoEn) : ''">
+          <div class="kpi-texto">
+            <span class="kpi-valor">{{ bps(r.salidaPicoBps) }}</span>
+            <span class="kpi-label">Pico de salida</span>
+          </div>
+        </div>
+        <div class="kpi-card" [title]="r.conexionesPicoEn ? 'Pico: ' + fechaHora(r.conexionesPicoEn) : ''">
+          <div class="kpi-texto">
+            <span class="kpi-valor">{{ nf(r.conexionesPico) }}</span>
+            <span class="kpi-label">Conexiones simultáneas (pico)</span>
+          </div>
+        </div>
+        <div class="kpi-card">
+          <div class="kpi-texto">
+            <span class="kpi-valor">{{ nf(r.conexionesNuevas) }}</span>
+            <span class="kpi-label">Conexiones nuevas</span>
+          </div>
+        </div>
+        <div class="kpi-card">
+          <div class="kpi-texto">
+            <span class="kpi-valor">{{ bytes(r.datosEntradaBytes) }}</span>
+            <span class="kpi-label">Datos recibidos</span>
+          </div>
+        </div>
+        <div class="kpi-card">
+          <div class="kpi-texto">
+            <span class="kpi-valor">{{ bytes(r.datosSalidaBytes) }}</span>
+            <span class="kpi-label">Datos enviados</span>
+          </div>
+        </div>
+        <div class="kpi-card">
+          <div class="kpi-texto">
+            <span class="kpi-valor">{{ nf(r.transaccionesTotal) }}</span>
+            <span class="kpi-label">Transacciones HTTP</span>
+          </div>
+        </div>
+        <div class="kpi-card" [ngClass]="informe.picosPeriodo.virtualesAbajoPico || informe.picosPeriodo.nodosAbajoPico ? 'kpi-critico' : 'kpi-sano'">
+          <div class="kpi-texto">
+            <span class="kpi-valor">{{ informe.picosPeriodo.virtualesAbajoPico ?? '-' }} / {{ informe.picosPeriodo.nodosAbajoPico ?? '-' }}</span>
+            <span class="kpi-label">Máx. caídos a la vez (VS / nodos)</span>
+          </div>
+        </div>
+      </div>
+    </ng-container>
+
+    <ng-container *ngIf="!informe.resumenPeriodo">
+      <h2 class="subtitulo-seccion">Picos del periodo ({{ informe.picosPeriodo.totalCapturas }} capturas registradas)</h2>
+      <div class="kpis-grid">
+        <div class="kpi-card" [ngClass]="informe.picosPeriodo.virtualesAbajoPico ? 'kpi-critico' : 'kpi-sano'">
+          <div class="kpi-texto">
+            <span class="kpi-valor">{{ informe.picosPeriodo.virtualesAbajoPico ?? '-' }}</span>
+            <span class="kpi-label">Máx. Virtual Servers caídos a la vez</span>
+          </div>
+        </div>
+        <div class="kpi-card" [ngClass]="informe.picosPeriodo.nodosAbajoPico ? 'kpi-critico' : 'kpi-sano'">
+          <div class="kpi-texto">
+            <span class="kpi-valor">{{ informe.picosPeriodo.nodosAbajoPico ?? '-' }}</span>
+            <span class="kpi-label">Máx. nodos caídos a la vez</span>
+          </div>
+        </div>
+      </div>
+    </ng-container>
+
+    <!-- =================== EVOLUCIÓN DIARIA =================== -->
+    <h2 class="subtitulo-seccion">Evolución diaria</h2>
+    <div class="analitica-paneles-graficas">
+      <div class="panel-analitica" *ngIf="hayInformeAmpliado">
+        <h3>Tráfico promedio por día</h3>
+        <p class="panel-atencion-subtitulo">Entrada y salida del balanceador ({{ escalaBps.unidad }})</p>
+        <app-line-chart *ngIf="etiquetasTrafico.length; else sinTrafico" [etiquetas]="etiquetasTrafico" [series]="serieTrafico"></app-line-chart>
+        <ng-template #sinTrafico><p class="sin-datos">Sin lecturas de tráfico en el periodo.</p></ng-template>
+      </div>
+
+      <div class="panel-analitica" *ngIf="hayInformeAmpliado">
+        <h3>Conexiones simultáneas — pico diario</h3>
+        <p class="panel-atencion-subtitulo">Suma de las conexiones activas de todos los pools</p>
+        <app-line-chart *ngIf="etiquetasConexiones.length; else sinConex" [etiquetas]="etiquetasConexiones" [series]="serieConexiones"></app-line-chart>
+        <ng-template #sinConex><p class="sin-datos">Sin lecturas de tráfico en el periodo.</p></ng-template>
+      </div>
+
+      <div class="panel-analitica" *ngIf="hayInformeAmpliado">
+        <h3>Transacciones HTTP por día</h3>
+        <p class="panel-atencion-subtitulo">Solo Virtual Servers con perfil de analítica HTTP (AVR){{ unidadTransacciones.texto ? ' · en ' + unidadTransacciones.texto : '' }}</p>
+        <app-line-chart *ngIf="etiquetasTransacciones.length; else sinTrans" [etiquetas]="etiquetasTransacciones" [series]="serieTransacciones"></app-line-chart>
+        <ng-template #sinTrans><p class="sin-datos">AVR no devolvió transacciones en este periodo (revisa las notas de cobertura).</p></ng-template>
+      </div>
+
+      <div class="panel-analitica">
+        <h3>Disponibilidad diaria</h3>
+        <p class="panel-atencion-subtitulo">% de Virtual Servers y nodos habilitados</p>
+        <ng-container *ngIf="etiquetasDisponibilidad.length; else tendenciaBasica">
+          <app-line-chart [etiquetas]="etiquetasDisponibilidad" [series]="serieDisponibilidad"></app-line-chart>
+        </ng-container>
+        <ng-template #tendenciaBasica>
+          <app-line-chart *ngIf="informe.tendenciaDiaria.length; else sinTendenciaGrafica" [etiquetas]="etiquetasTendencia" [series]="serieArriba"></app-line-chart>
+          <ng-template #sinTendenciaGrafica><p class="sin-datos">Aún no hay histórico guardado en este periodo.</p></ng-template>
+        </ng-template>
+      </div>
+    </div>
+
+    <!-- =================== DISTRIBUCIÓN ACTUAL =================== -->
+    <h2 class="subtitulo-seccion">Distribución actual</h2>
+    <div class="analitica-paneles-secundarios">
+      <div class="panel-analitica">
+        <h3>Virtual Servers — arriba vs. abajo</h3>
+        <app-donut-chart [segmentos]="segmentosVirtuales" centroEtiqueta="Virtuales"></app-donut-chart>
+      </div>
+      <div class="panel-analitica" *ngIf="informe.conteos">
+        <h3>Nodos por estado</h3>
+        <app-donut-chart [segmentos]="segmentosNodosEstado" centroEtiqueta="Nodos"></app-donut-chart>
+      </div>
+      <div class="panel-analitica" *ngIf="!informe.conteos">
+        <h3>Nodos — arriba vs. abajo</h3>
+        <app-donut-chart [segmentos]="segmentosNodos" centroEtiqueta="Nodos"></app-donut-chart>
+      </div>
+      <div class="panel-analitica">
+        <h3>Virtual Servers arriba por dispositivo</h3>
+        <p class="panel-atencion-subtitulo">Promedio del periodo</p>
+        <app-bar-list [items]="porDispositivoVirtualesBarList" colorVar="var(--ax-chart-series-1)"></app-bar-list>
+      </div>
+      <div class="panel-analitica">
+        <h3>Nodos arriba por dispositivo</h3>
+        <p class="panel-atencion-subtitulo">Promedio del periodo</p>
+        <app-bar-list [items]="porDispositivoNodosBarList" colorVar="var(--ax-chart-series-2)"></app-bar-list>
+      </div>
+    </div>
+
+    <!-- =================== RANKINGS =================== -->
+    <ng-container *ngIf="hayInformeAmpliado">
+      <h2 class="subtitulo-seccion">Principales Virtual Servers</h2>
+      <div class="analitica-paneles-secundarios">
+        <div class="panel-analitica">
+          <h3>Por datos transferidos</h3>
+          <p class="panel-atencion-subtitulo">Entrada + salida del periodo</p>
+          <app-bar-list *ngIf="rankingDatos.length; else sinRank" [items]="rankingDatos" colorVar="var(--ax-chart-series-1)"></app-bar-list>
+        </div>
+        <div class="panel-analitica">
+          <h3>Por transacciones HTTP</h3>
+          <p class="panel-atencion-subtitulo">Requiere perfil de analítica HTTP</p>
+          <app-bar-list *ngIf="rankingTransacciones.length; else sinRank" [items]="rankingTransacciones" colorVar="var(--ax-chart-series-2)"></app-bar-list>
+        </div>
+        <div class="panel-analitica">
+          <h3>Por conexiones simultáneas</h3>
+          <p class="panel-atencion-subtitulo">Pico del periodo</p>
+          <app-bar-list *ngIf="rankingConexiones.length; else sinRank" [items]="rankingConexiones" colorVar="var(--ax-chart-series-1)"></app-bar-list>
+        </div>
+      </div>
+      <ng-template #sinRank><p class="sin-datos">Sin datos en el periodo.</p></ng-template>
+      <p class="nota-pie">El tráfico se mide por pool: si varios Virtual Servers comparten pool aparecen una sola vez, con "(+N)" indicando cuántos más lo comparten.</p>
+    </ng-container>
+
+    <!-- =================== REQUIERE ATENCIÓN =================== -->
+    <ng-container *ngIf="informe.atencion as a">
+      <h2 class="subtitulo-seccion">Requiere atención</h2>
+      <div class="panel-analitica panel-atencion panel-analitica-ancho" *ngIf="hayAtencion; else todoBien">
+        <div class="grupo-atencion" *ngIf="a.virtualesAbajo.length">
+          <h4><span class="status-pill status-vencido">No disponibles</span> Virtual Servers ({{ a.virtualesAbajo.length }})</h4>
+          <ul class="lista-atencion">
+            <li *ngFor="let v of a.virtualesAbajo; trackBy: trackVirtual">
+              <strong>{{ v.nombreMostrado }}</strong> <span class="tenue">· {{ v.dispositivoNombre }}</span>
+              <span class="tenue" *ngIf="v.motivoEstado"> — {{ v.motivoEstado }}</span>
+            </li>
+          </ul>
+        </div>
+        <div class="grupo-atencion" *ngIf="a.nodosCaidos.length">
+          <h4><span class="status-pill status-vencido">Caídos</span> Nodos con monitor en rojo ({{ a.nodosCaidos.length }})</h4>
+          <ul class="lista-atencion">
+            <li *ngFor="let n of a.nodosCaidos; trackBy: trackNodo">
+              <strong>{{ n.miembro }}</strong> <span class="tenue">· {{ n.virtualNombre }} · {{ n.dispositivoNombre }}</span>
+              <span class="tenue" *ngIf="n.motivoEstado"> — {{ n.motivoEstado }}</span>
+            </li>
+          </ul>
+        </div>
+        <div class="grupo-atencion" *ngIf="a.virtualesDeshabilitados.length">
+          <h4><span class="status-pill status-por-vencer">Deshabilitados</span> Virtual Servers ({{ a.virtualesDeshabilitados.length }})</h4>
+          <ul class="lista-atencion">
+            <li *ngFor="let v of a.virtualesDeshabilitados; trackBy: trackVirtual">
+              <strong>{{ v.nombreMostrado }}</strong> <span class="tenue">· {{ v.dispositivoNombre }}</span>
+            </li>
+          </ul>
+        </div>
+        <div class="grupo-atencion" *ngIf="a.nodosDeshabilitados.length">
+          <h4><span class="status-pill status-por-vencer">Deshabilitados</span> Nodos ({{ a.nodosDeshabilitados.length }})</h4>
+          <ul class="lista-atencion">
+            <li *ngFor="let n of a.nodosDeshabilitados; trackBy: trackNodo">
+              <strong>{{ n.miembro }}</strong> <span class="tenue">· {{ n.virtualNombre }} · {{ n.dispositivoNombre }}</span>
+            </li>
+          </ul>
+        </div>
+        <div class="grupo-atencion" *ngIf="a.nodosSinTrafico.length">
+          <h4><span class="status-pill status-neutro">Sin tráfico</span> Nodos disponibles que no recibieron tráfico en el periodo ({{ a.nodosSinTrafico.length }})</h4>
+          <ul class="lista-atencion">
+            <li *ngFor="let n of a.nodosSinTrafico; trackBy: trackNodo">
+              <strong>{{ n.miembro }}</strong> <span class="tenue">· {{ n.virtualNombre }} · {{ n.dispositivoNombre }}</span>
+              <span class="tenue" *ngIf="n.ultimoTraficoEn"> — último tráfico {{ fechaHora(n.ultimoTraficoEn) }}</span>
+            </li>
+          </ul>
+        </div>
+      </div>
+      <ng-template #todoBien>
+        <div class="panel-analitica panel-analitica-ancho"><p class="sin-datos">Todo en orden: no hay Virtual Servers ni nodos caídos, deshabilitados o sin tráfico.</p></div>
+      </ng-template>
+    </ng-container>
+
+    <!-- =================== DETALLE POR VIRTUAL SERVER =================== -->
+    <ng-container *ngIf="virtuales.length">
+      <div class="encabezado-tabla">
+        <h2 class="subtitulo-seccion">Detalle por Virtual Server ({{ virtualesFiltrados.length }}<span *ngIf="virtualesFiltrados.length !== virtuales.length"> de {{ virtuales.length }}</span>)</h2>
+        <div class="controles-tabla">
+          <input type="search" class="buscador" placeholder="Buscar nombre, alias, pool, destino…" [(ngModel)]="busquedaVirtual" (ngModelChange)="verTodosVirtuales = false">
+          <button type="button" class="btn-sm" (click)="exportarCsvVirtuales()">⬇ CSV</button>
+        </div>
+      </div>
+      <div class="panel-analitica panel-analitica-ancho tabla-scroll">
+        <div class="tabla-atencion tabla-ancha">
+          <div class="tabla-atencion-header cols-vs">
+            <span>Virtual Server</span>
+            <span>Dispositivo</span>
+            <span>Estado</span>
+            <span>Nodos</span>
+            <span>Entrada / salida (prom.)</span>
+            <span>Datos (in / out)</span>
+            <span>Conex. pico</span>
+            <span>Transacciones</span>
+          </div>
+          <div class="tabla-atencion-fila cols-vs" *ngFor="let v of virtualesVisibles; trackBy: trackVirtual">
+            <span [title]="v.fullPath + (v.destino ? ' → ' + v.destino : '')">
+              <strong>{{ v.nombreMostrado }}</strong>
+              <small class="tenue" *ngIf="v.alias"> ({{ v.nombre }})</small>
+              <small class="tenue" *ngIf="v.poolCompartidoCon" [title]="'Comparte el pool ' + v.pool + ' con ' + v.poolCompartidoCon + ' Virtual Server(s) más: el tráfico es el del pool'"> · pool compartido</small>
+            </span>
+            <span>{{ v.dispositivoNombre }}</span>
+            <span><span class="status-pill" [ngClass]="claseEstadoVirtual(v)" [title]="v.motivoEstado || ''">{{ textoEstadoVirtual(v) }}</span></span>
+            <span>
+              {{ v.nodosArriba ?? '—' }}/{{ v.nodosTotal ?? '—' }}
+              <small class="peligro" *ngIf="v.nodosCaidos"> · {{ v.nodosCaidos }} caído(s)</small>
+              <small class="aviso" *ngIf="v.nodosDeshabilitados"> · {{ v.nodosDeshabilitados }} desh.</small>
+            </span>
+            <span>{{ v.trafico ? bps(v.trafico.entradaPromBps) + ' / ' + bps(v.trafico.salidaPromBps) : '—' }}</span>
+            <span>{{ v.trafico ? bytes(v.trafico.datosEntradaBytes) + ' / ' + bytes(v.trafico.datosSalidaBytes) : '—' }}</span>
+            <span>{{ v.trafico ? nf(v.trafico.conexionesPico) : '—' }}</span>
+            <span>{{ nf(v.transacciones) }}</span>
+          </div>
+          <p class="sin-datos" *ngIf="!virtualesFiltrados.length">Ningún Virtual Server coincide con la búsqueda.</p>
+        </div>
+      </div>
+      <button type="button" class="btn-ver-mas" *ngIf="virtualesFiltrados.length > FILAS_INICIALES" (click)="verTodosVirtuales = !verTodosVirtuales">
+        {{ verTodosVirtuales ? 'Ver menos' : 'Ver los ' + virtualesFiltrados.length + ' Virtual Servers' }}
+      </button>
+    </ng-container>
+
+    <!-- =================== DETALLE POR NODO =================== -->
+    <ng-container *ngIf="nodos.length">
+      <div class="encabezado-tabla">
+        <h2 class="subtitulo-seccion">Detalle por nodo ({{ nodosFiltrados.length }}<span *ngIf="nodosFiltrados.length !== nodos.length"> de {{ nodos.length }}</span>)</h2>
+        <div class="controles-tabla">
+          <select class="filtro-estado" [(ngModel)]="filtroEstadoNodo" (ngModelChange)="verTodosNodos = false" aria-label="Filtrar por estado">
+            <option value="todos">Todos los estados</option>
+            <option value="disponible">Disponibles</option>
+            <option value="caido">Caídos</option>
+            <option value="deshabilitado">Deshabilitados</option>
+            <option value="sin-trafico">Sin tráfico</option>
+          </select>
+          <input type="search" class="buscador" placeholder="Buscar nodo, Virtual Server, pool…" [(ngModel)]="busquedaNodo" (ngModelChange)="verTodosNodos = false">
+          <button type="button" class="btn-sm" (click)="exportarCsvNodos()">⬇ CSV</button>
+        </div>
+      </div>
+      <div class="panel-analitica panel-analitica-ancho tabla-scroll">
+        <div class="tabla-atencion tabla-ancha">
+          <div class="tabla-atencion-header cols-nodo">
+            <span>Nodo</span>
+            <span>Virtual Server</span>
+            <span>Estado</span>
+            <span>Último tráfico</span>
+            <span>Entrada / salida (prom.)</span>
+            <span>Datos (in / out)</span>
+            <span>Conex. pico</span>
+            <span>Transacciones</span>
+          </div>
+          <div class="tabla-atencion-fila cols-nodo" *ngFor="let n of nodosVisibles; trackBy: trackNodo">
+            <span [title]="n.direccion + (n.puerto ? ':' + n.puerto : '') + ' · pool ' + (n.pool || '—')">
+              <strong>{{ n.miembro }}</strong>
+            </span>
+            <span [title]="n.virtuales.join(', ')">
+              {{ n.virtualNombre }}<small class="tenue" *ngIf="n.virtuales.length > 1"> (+{{ n.virtuales.length - 1 }})</small>
+              <small class="tenue"> · {{ n.dispositivoNombre }}</small>
+            </span>
+            <span><span class="status-pill" [ngClass]="claseEstadoNodo(n.estado)" [title]="n.motivoEstado || ''">{{ textoEstadoNodo(n.estado) }}</span></span>
+            <span>{{ fechaHora(n.ultimoTraficoEn) }}</span>
+            <span>{{ n.trafico ? bps(n.trafico.entradaPromBps) + ' / ' + bps(n.trafico.salidaPromBps) : '—' }}</span>
+            <span>{{ n.trafico ? bytes(n.trafico.datosEntradaBytes) + ' / ' + bytes(n.trafico.datosSalidaBytes) : '—' }}</span>
+            <span>{{ n.trafico ? nf(n.trafico.conexionesPico) : '—' }}</span>
+            <span>{{ nf(n.transacciones) }}</span>
+          </div>
+          <p class="sin-datos" *ngIf="!nodosFiltrados.length">Ningún nodo coincide con el filtro.</p>
+        </div>
+      </div>
+      <button type="button" class="btn-ver-mas" *ngIf="nodosFiltrados.length > FILAS_INICIALES" (click)="verTodosNodos = !verTodosNodos">
+        {{ verTodosNodos ? 'Ver menos' : 'Ver los ' + nodosFiltrados.length + ' nodos' }}
+      </button>
+      <p class="nota-pie">"Último tráfico" es la última lectura (cada 5 min) con bytes o conexiones en el pool del nodo. El tráfico se mide en el pool: dos nodos del mismo pool comparten esa medición.</p>
+    </ng-container>
+
+    <!-- =================== DETALLE DIARIO =================== -->
+    <div class="encabezado-tabla">
+      <h2 class="subtitulo-seccion">Detalle diario del periodo</h2>
+      <div class="controles-tabla" *ngIf="traficoDiario.length">
+        <button type="button" class="btn-sm" (click)="exportarCsvDiario()">⬇ CSV</button>
+      </div>
+    </div>
+    <div class="panel-analitica panel-atencion panel-analitica-ancho tabla-scroll">
+      <div class="tabla-atencion tabla-ancha" *ngIf="informe.tendenciaDiaria.length; else sinTendencia">
+        <div class="tabla-atencion-header cols-dia">
+          <span>Fecha</span>
+          <span>Virtual Servers (prom.)</span>
+          <span>Nodos (prom.)</span>
+          <span>Disp. VS</span>
+          <span>Disp. nodos</span>
+          <span>Entrada / salida (prom.)</span>
+          <span>Conex. pico</span>
+          <span>Transacciones</span>
+        </div>
+        <div class="tabla-atencion-fila cols-dia" *ngFor="let punto of informe.tendenciaDiaria; trackBy: trackFecha">
+          <span>{{ diaCorto(punto.fecha) }}</span>
+          <span>{{ punto.virtualesArribaProm }} / {{ punto.virtualesTotalProm }}</span>
+          <span>{{ punto.nodosArribaProm }} / {{ punto.nodosTotalProm }}</span>
+          <span>{{ pct(punto.virtualesPct) }}</span>
+          <span>{{ pct(punto.nodosPct) }}</span>
+          <ng-container *ngTemplateOutlet="traficoDelDia; context: { $implicit: punto.fecha }"></ng-container>
+        </div>
+      </div>
+      <ng-template #sinTendencia>
+        <p class="sin-datos">Aún no hay suficiente histórico guardado en este periodo — las muestras se guardan cada 10 minutos.</p>
+      </ng-template>
+    </div>
+
+    <ng-template #traficoDelDia let-fecha>
+      <ng-container *ngIf="traficoDe(fecha) as t; else diaSinTrafico">
+        <span>{{ bps(t.entradaPromBps) }} / {{ bps(t.salidaPromBps) }}</span>
+        <span>{{ nf(t.conexionesPico) }}</span>
+        <span>{{ nf(t.transacciones) }}</span>
+      </ng-container>
+      <ng-template #diaSinTrafico>
+        <span>—</span><span>—</span><span>—</span>
+      </ng-template>
+    </ng-template>
+
+    <!-- =================== PROMEDIO POR DISPOSITIVO =================== -->
+    <ng-container *ngIf="informe.porDispositivo.length">
+      <h2 class="subtitulo-seccion">Promedio por dispositivo</h2>
+      <div class="panel-analitica panel-atencion panel-analitica-ancho tabla-scroll">
+        <div class="tabla-atencion">
+          <div class="tabla-atencion-header cols-disp">
+            <span>Dispositivo</span>
+            <span>Virtual Servers (prom.)</span>
+            <span>Nodos (prom.)</span>
+            <span>Disp. VS</span>
+            <span>Disp. nodos</span>
+          </div>
+          <div class="tabla-atencion-fila cols-disp" *ngFor="let d of informe.porDispositivo; trackBy: trackDispositivo">
+            <span>{{ d.dispositivoNombre }}</span>
+            <span>{{ d.virtualesArribaProm }} / {{ d.virtualesTotalProm }}</span>
+            <span>{{ d.nodosArribaProm }} / {{ d.nodosTotalProm }}</span>
+            <span>{{ pct(d.virtualesPct) }}</span>
+            <span>{{ pct(d.nodosPct) }}</span>
+          </div>
+        </div>
+      </div>
+    </ng-container>
+
+    <!-- =================== FUENTES =================== -->
+    <ng-container *ngIf="informe.fuentes as f">
+      <h2 class="subtitulo-seccion">Fuentes de los datos</h2>
+      <div class="panel-analitica panel-analitica-ancho">
+        <ul class="lista-fuentes">
+          <li>
+            <strong>Disponibilidad:</strong> {{ f.disponibilidad.capturasEnPeriodo }} capturas en el periodo (una cada 10 minutos)<span *ngIf="f.disponibilidad.primeraCaptura">; la primera registrada en el sistema es del {{ fechaHora(f.disponibilidad.primeraCaptura) }}</span>.
+          </li>
+          <li>
+            <strong>Tráfico por nodo:</strong>
+            <ng-container *ngIf="f.trafico.disponible; else sinFuenteTrafico">
+              {{ nf(f.trafico.lecturas) }} lecturas (una cada {{ f.trafico.intervaloSegundos / 60 }} min) desde {{ fechaHora(f.trafico.primeraLectura) }}
+              · origen: {{ f.trafico.fuente === 'bd' ? 'base de datos' : 'memoria del servidor (se pierde al reiniciar)' }}.
+            </ng-container>
+            <ng-template #sinFuenteTrafico>sin lecturas en el periodo.</ng-template>
+          </li>
+          <li>
+            <strong>Transacciones HTTP (AVR):</strong>
+            <ng-container *ngIf="f.avr.disponible; else sinAvr">disponibles solo para Virtual Servers con perfil de analítica HTTP.</ng-container>
+            <ng-template #sinAvr>no disponibles.</ng-template>
+            <span *ngFor="let av of f.avr.avisos"> {{ av }}</span>
+          </li>
+        </ul>
+      </div>
+    </ng-container>
+  </section>
+</ng-container>

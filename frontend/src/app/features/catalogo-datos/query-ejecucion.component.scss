@@ -1,0 +1,16 @@
+@use '../../repositorio/azure/azure-base' as *;
+@include base;
+
+.qe { margin-top: 10px; }
+.qe-barra { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.qe-origen { display: flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 700; color: $brand-gray;
+  select { font-family: inherit; font-size: 12.5px; padding: 6px 8px; border: 1px solid $border-light; border-radius: 8px; background: $surface; color: $brand-dark; max-width: 240px; } }
+.qe-nota { font-size: 11.5px; color: $brand-gray; &.qe-aviso { color: #b45309; font-weight: 600; } }
+.qe-cargando { display: flex; align-items: center; gap: 10px; margin-top: 12px; font-size: 13px; color: $brand-gray; .spinner { width: 18px; height: 18px; border-width: 2px; } }
+.qe-resumen { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin: 12px 0 8px; font-size: 12.5px; .espacio { flex: 1; } }
+.qe-tabla-wrap { border: 1px solid $border-light; border-radius: 10px; overflow: auto; max-height: 360px; }
+.qe-tabla { width: 100%; border-collapse: collapse; font-size: 12px; font-family: 'JetBrains Mono', monospace;
+  th { position: sticky; top: 0; background: $surface-bg; text-align: left; font-size: 11px; color: $brand-gray; padding: 7px 10px; border-bottom: 1px solid $border-light; white-space: nowrap; z-index: 1; }
+  td { padding: 6px 10px; border-bottom: 1px solid $border-light; max-width: 320px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  tbody tr:last-child td { border-bottom: 0; } tbody tr:hover { background: $surface-bg; } }
+.qe-nulo { color: $brand-gray; font-style: italic; opacity: 0.7; }

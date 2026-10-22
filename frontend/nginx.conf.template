@@ -1,0 +1,64 @@
+# ============================================================
+# Plantilla de configuración de Nginx para el contenedor del FRONTEND.
+#
+# Se copia (ver Dockerfile) a /etc/nginx/templates/default.conf.template.
+# La imagen oficial de nginx:alpine corre automáticamente "envsubst" sobre
+# cualquier archivo *.template que encuentre ahí, sustituyendo SOLO las
+# variables ${...} que existan como variables de entorno del contenedor
+# (en este caso ${BACKEND_HOST} y ${BACKEND_PORT}), y deja el resultado en
+# /etc/nginx/conf.d/default.conf antes de arrancar Nginx.
+#
+# Las variables propias de Nginx (Host, remote_addr, etc.) usan sintaxis
+# SIN llaves ($host, $remote_addr...) precisamente para que envsubst no
+# las toque.
+# ============================================================
+
+# ------------------------------------------------------------
+# Puerto 80 (HTTP): lo usa el balanceador F5. El F5 termina el SSL frente al
+# navegador (perfil "client SSL") y reenvía a este contenedor en HTTP plano,
+# por eso el puerto 80 sirve la aplicación directamente en vez de redirigir a
+# HTTPS (una redirección aquí mandaría al navegador a https://<ip>:443 y se
+# rompería). El tráfico en texto plano solo viaja entre el F5 y este servidor.
+# El HTTPS directo (puerto 443) es opcional: se activa solo si se montan los
+# certificados (ver nginx-ssl.conf.template y 25-habilitar-https.sh).
+# ------------------------------------------------------------
+server {
+    listen 80;
+    server_name _;
+
+    root /usr/share/nginx/html;
+    index index.html;
+
+    # SPA de Angular: cualquier ruta que no sea un archivo real (ej.
+    # /usuarios-auditoria al refrescar el navegador) debe caer en
+    # index.html para que el Router de Angular la resuelva del lado
+    # del cliente. Sin esto, refrescar en una ruta interna da 404.
+    location / {
+        try_files $uri $uri/ /index.html;
+    }
+
+    # environment.prod.ts usa apiUrl: '/api' (ruta relativa al MISMO
+    # origen que sirve el frontend) — por eso Nginx debe reenviar /api/
+    # al contenedor del backend en vez de que el navegador le pegue
+    # directo a otro host/puerto.
+    location /api/ {
+        proxy_pass http://${BACKEND_HOST}:${BACKEND_PORT}/api/;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_read_timeout 300s;
+    }
+
+    # Cache agresivo para los archivos con hash en el nombre que genera
+    # el build de Angular (main.[hash].js, styles.[hash].css, etc.).
+    location ~* \.(?:js|css|woff2?|ttf|svg|png|jpg|jpeg|gif|ico)$ {
+        expires 1y;
+        add_header Cache-Control "public, immutable";
+        try_files $uri =404;
+    }
+
+    gzip on;
+    gzip_types text/plain text/css application/json application/javascript text/xml application/xml application/xml+rss text/javascript;
+}

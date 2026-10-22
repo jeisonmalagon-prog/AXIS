@@ -1,0 +1,120 @@
+<div class="filtros-panel">
+  <div class="filtros-grid">
+    <div class="campo campo--documento">
+      <label for="opDocumento">Cliente (CC)</label>
+      <input id="opDocumento" type="text" placeholder="Número de documento completo…" [(ngModel)]="documento" (keyup.enter)="consultar()" autocomplete="off">
+    </div>
+
+    <div class="campo">
+      <span class="campo__etiqueta">Periodo</span>
+      <div class="rango-selector" role="group" aria-label="Periodo">
+        <button *ngFor="let p of periodos" type="button" class="rango-boton" [class.activo]="periodo === p.valor" (click)="elegirPeriodo(p.valor)">{{ p.etiqueta }}</button>
+      </div>
+    </div>
+
+    <ng-container *ngIf="periodo === 'rango'">
+      <div class="campo">
+        <label for="opDesde">Desde</label>
+        <input id="opDesde" type="date" [(ngModel)]="fechaDesde" [max]="fechaMaxima">
+      </div>
+      <div class="campo">
+        <label for="opHasta">Hasta</label>
+        <input id="opHasta" type="date" [(ngModel)]="fechaHasta" [max]="fechaMaxima">
+      </div>
+    </ng-container>
+
+    <div class="campo campo--accion">
+      <button type="button" class="btn-primario" [disabled]="cargando" (click)="consultar()">{{ cargando ? 'Armando…' : 'Ver operaciones' }}</button>
+    </div>
+  </div>
+</div>
+
+<p class="detalle-aviso">
+  Cada fila es <strong>una operación completa</strong> de la app (por ejemplo «consultar cuentas»), armada con las varias filas del log que la componen.
+  La duración va de la fila de inicio a la de resultado y tiene <strong>±1 s</strong> porque el log guarda la hora al segundo.
+  Si el log no trae la fila de inicio o la de resultado, la duración se marca como <strong>sin inicio / no medible</strong> en vez de inventarla.
+</p>
+
+<div class="error-banner" *ngIf="error">{{ error }}</div>
+<div class="carga-inicial" *ngIf="cargando">Agrupando las filas del log en operaciones…</div>
+
+<div class="vacio" *ngIf="!cargando && !buscoAlMenosUnaVez && !error">
+  <p>Escribe el documento de un cliente y presiona <strong>Ver operaciones</strong>.</p>
+</div>
+
+<ng-container *ngIf="!cargando && respuesta as r">
+  <div class="kpis-flujo">
+    <div class="kpi-flujo"><span class="kpi-flujo__etiqueta">Operaciones</span><span class="kpi-flujo__valor">{{ r.resumen.operaciones | number }}</span><span class="kpi-flujo__pie">{{ r.totalFilas | number }} filas de log</span></div>
+    <div class="kpi-flujo kpi-flujo--ok"><span class="kpi-flujo__etiqueta">Correctas</span><span class="kpi-flujo__valor">{{ r.resumen.exito | number }}</span></div>
+    <div class="kpi-flujo" [class.kpi-flujo--error]="r.resumen.error > 0"><span class="kpi-flujo__etiqueta">Con error</span><span class="kpi-flujo__valor">{{ r.resumen.error | number }}</span></div>
+    <div class="kpi-flujo" [class.kpi-flujo--warn]="r.resumen.advertencia > 0"><span class="kpi-flujo__etiqueta">Con aviso</span><span class="kpi-flujo__valor">{{ r.resumen.advertencia | number }}</span></div>
+    <div class="kpi-flujo"><span class="kpi-flujo__etiqueta">Sin respuesta registrada</span><span class="kpi-flujo__valor">{{ r.resumen.sinDetalle | number }}</span><span class="kpi-flujo__pie">el log no guarda su resultado</span></div>
+    <div class="kpi-flujo"><span class="kpi-flujo__etiqueta">Más lenta</span><span class="kpi-flujo__valor">{{ formatearDuracion(r.resumen.maxMs) }}</span><span class="kpi-flujo__pie">entre {{ r.resumen.medibles | number }} medibles</span></div>
+  </div>
+
+  <div class="aviso-linea">
+    <span class="aviso-chip" *ngIf="r.truncado">La consulta se cortó por el tope de filas: puede faltar actividad. Acota el periodo.</span>
+    <span class="aviso-chip" *ngIf="r.tablasFaltantes.length">Tablas de log no encontradas: {{ r.tablasFaltantes.join(', ') }}</span>
+    <span class="aviso-chip aviso-chip--neutro" *ngIf="r.omitidas > 0">Se muestran {{ r.mostradas }} de {{ r.mostradas + r.omitidas }} operaciones: filtra o acota el periodo para ver el resto.</span>
+  </div>
+
+  <div class="barra-filtros">
+    <div class="rango-selector" role="group" aria-label="Estado">
+      <button *ngFor="let e of estados" type="button" class="rango-boton" [class.activo]="filtroEstado === e.valor" (click)="elegirEstado(e.valor)">{{ e.etiqueta }}</button>
+    </div>
+    <div class="campo campo--inline">
+      <label for="opMetodo">Servicio</label>
+      <select id="opMetodo" [(ngModel)]="filtroMetodo" (ngModelChange)="consultar(false)">
+        <option value="">Todos</option>
+        <option *ngFor="let m of metodos" [value]="m">{{ m }}</option>
+      </select>
+    </div>
+    <label class="check-label"><input type="checkbox" [(ngModel)]="soloLentas"> Solo lentas (≥ 5 s)</label>
+  </div>
+
+  <div class="vacio" *ngIf="!operaciones.length"><p>No hay operaciones con esos filtros.</p></div>
+
+  <div class="panel-diagrama" *ngIf="operaciones.length">
+    <div class="tabla-scroll">
+      <table>
+        <thead>
+          <tr><th>Inicio</th><th>Operación</th><th>Resultado</th><th class="num">Duración</th><th>Nodo</th><th>Versión</th><th class="num">Filas</th><th></th></tr>
+        </thead>
+        <tbody>
+          <ng-container *ngFor="let o of operaciones; trackBy: trackN">
+            <tr [class.fila-error]="o.estado === 'error'" class="fila-op" (click)="alternar(o.n)">
+              <td class="mono">{{ o.inicio.replace('T', ' ') }}</td>
+              <td class="celda-op">
+                <strong>{{ o.servicio }}</strong>
+                <small *ngIf="o.mensaje">{{ o.mensaje }}</small>
+                <small *ngIf="o.repeticion && o.repeticion > 1">repetida {{ o.repeticion }} veces seguidas</small>
+                <small *ngIf="o.reintento">reintento tras un error</small>
+              </td>
+              <td><span class="pill" [ngClass]="clasePill(o)">{{ textoEstado(o) }}</span></td>
+              <td class="num">
+                <span [class.dur-lenta]="o.lentitud === 'lenta'" [class.dur-muy-lenta]="o.lentitud === 'muy_lenta'">{{ textoDuracion(o) }}</span>
+                <small *ngIf="o.pasoLento">espera: {{ o.pasoLento }}</small>
+              </td>
+              <td>{{ o.nodo ?? '—' }}</td>
+              <td>{{ o.version ?? '—' }}</td>
+              <td class="num">{{ o.filas }}</td>
+              <td><button type="button" class="btn-link" (click)="alternar(o.n); $event.stopPropagation()">{{ abiertas.has(o.n) ? 'Ocultar' : 'Ver pasos' }}</button></td>
+            </tr>
+            <tr class="fila-detalle" *ngIf="abiertas.has(o.n)">
+              <td colspan="8">
+                <div class="detalle-meta">
+                  <span *ngIf="o.equipo">Equipo: <strong>{{ o.equipo }}</strong></span>
+                  <span *ngIf="o.clase">Clase: <span class="mono">{{ o.clase }}</span></span>
+                  <span>Fin: <span class="mono">{{ o.fin.replace('T', ' ') }}</span></span>
+                </div>
+                <app-pasos-analisis [pasos]="o.pasos"></app-pasos-analisis>
+              </td>
+            </tr>
+          </ng-container>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <p class="detalle-aviso detalle-aviso--precision"><strong>Precisión.</strong> {{ r.precision }}</p>
+</ng-container>

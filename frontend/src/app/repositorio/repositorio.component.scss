@@ -1,0 +1,705 @@
+$brand-dark: var(--ax-text, #1e293b);
+$border-light: var(--ax-border, #e2e8f0);
+
+* { box-sizing: border-box; }
+
+.repo-shell {
+  max-width: 1360px;
+  margin: 0 auto;
+}
+
+.repo-container {
+  max-width: 100%;
+}
+
+// ==========================================
+// BARRA DE PESTAÑAS (Archivos / Pull Requests
+// / Branches / Wiki / Pipelines)
+// ==========================================
+.tabs-repo {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 18px;
+  border-bottom: 1px solid $border-light;
+
+  button {
+    background: none;
+    border: none;
+    color: var(--ax-text-muted, #64748b);
+    font-size: 13.5px;
+    font-weight: 600;
+    padding: 10px 16px;
+    cursor: pointer;
+    border-bottom: 2px solid transparent;
+    transition: color 0.15s, border-color 0.15s;
+    margin-bottom: -1px;
+    display: inline-flex;
+    align-items: center;
+    white-space: nowrap;
+    font-family: inherit;
+
+    &:hover { color: $brand-dark; }
+
+    &.activa {
+      color: var(--ax-brand-primary, #673ab7);
+      border-bottom-color: var(--ax-brand-primary, #673ab7);
+    }
+  }
+}
+
+.header-section {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+  gap: 12px;
+
+  h1 { font-size: 24px; font-weight: 800; color: $brand-dark; margin: 0; }
+  p { font-size: 13px; color: var(--ax-text-muted, #64748b); margin: 4px 0 0 0; }
+}
+
+.badge-rama {
+  display: inline-block;
+  background: var(--ax-brand-soft, #ede9fe);
+  color: var(--ax-brand-ink, #6d28d9);
+  font-size: 11px;
+  font-weight: 700;
+  padding: 2px 9px;
+  border-radius: 999px;
+  margin-left: 6px;
+}
+
+.selector-repositorio {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 6px;
+
+  label {
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--ax-text-muted, #64748b);
+  }
+
+  select {
+    font-size: 13px;
+    font-weight: 600;
+    color: $brand-dark;
+    background: var(--ax-surface-2, #f1f5f9);
+    border: 1px solid var(--ax-border, #e2e8f0);
+    border-radius: 8px;
+    padding: 5px 10px;
+    cursor: pointer;
+
+    &:focus {
+      outline: 2px solid var(--ax-brand-primary, #673ab7);
+      outline-offset: 1px;
+    }
+  }
+}
+
+.btn-secondary {
+  background: var(--ax-surface-2, #f1f5f9);
+  color: $brand-dark;
+  border: none;
+  padding: 10px 20px;
+  border-radius: 8px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+  display: inline-flex;
+  align-items: center;
+  font-family: inherit;
+  &:hover { background: #e2e8f0; }
+  &:disabled { opacity: 0.6; cursor: not-allowed; }
+}
+
+// ==========================================
+// MIGAS DE PAN
+// ==========================================
+.breadcrumbs {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 18px;
+  font-size: 13px;
+
+  a {
+    color: var(--ax-brand-primary, #673ab7);
+    cursor: pointer;
+    font-weight: 600;
+    &:hover { text-decoration: underline; }
+    &.actual { color: $brand-dark; cursor: default; &:hover { text-decoration: none; } }
+  }
+
+  .separador { color: #94a3b8; }
+}
+
+// ==========================================
+// TABLA DE ITEMS
+// ==========================================
+.tabla-items {
+  background: var(--ax-surface, #fff);
+  border: 1px solid $border-light;
+  border-radius: 14px;
+  overflow: hidden;
+}
+
+.fila-encabezado, .fila-item {
+  display: grid;
+  grid-template-columns: minmax(160px, 1.1fr) minmax(140px, 0.8fr) minmax(220px, 1.8fr) minmax(120px, 0.6fr) 40px;
+  gap: 16px;
+  padding: 12px 20px;
+  align-items: center;
+}
+
+.fila-encabezado {
+  background: var(--ax-surface-2, #f8fafc);
+  font-size: 11.5px;
+  font-weight: 700;
+  text-transform: uppercase;
+  color: var(--ax-text-muted, #64748b);
+}
+
+.fila-item {
+  border-top: 1px solid $border-light;
+  cursor: pointer;
+  transition: background 0.15s;
+  font-size: 13.5px;
+  color: $brand-dark;
+
+  &:hover { background: var(--ax-surface-2, #f8fafc); }
+}
+
+.col-nombre {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 600;
+
+  .icono { margin-right: 8px; display: inline-flex; vertical-align: middle; color: #8b95a7; font-size: 15px; app-ico { margin: 0; } &.carpeta { color: var(--ax-brand-primary, #673ab7); } }
+}
+
+.col-cambio {
+  color: var(--ax-text-muted, #64748b);
+  font-size: 12.5px;
+  white-space: nowrap;
+}
+
+.col-autor {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.avatar-autor {
+  flex-shrink: 0;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: var(--ax-brand-primary, #673ab7);
+  color: #fff;
+  font-size: 10.5px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  letter-spacing: 0.2px;
+}
+
+.nombre-autor {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+  font-weight: 600;
+  color: $brand-dark;
+}
+
+.col-commit {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+
+  code {
+    font-family: monospace;
+    font-size: 11.5px;
+    background: var(--ax-surface-2, #f1f5f9);
+    padding: 2px 6px;
+    border-radius: 5px;
+    color: var(--ax-text, #0f172a);
+    flex-shrink: 0;
+  }
+
+  .comentario-commit {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    min-width: 0;
+    color: var(--ax-text-muted, #64748b);
+  }
+}
+
+.col-acciones {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+}
+
+.btn-icono {
+  background: var(--ax-surface-2, #f1f5f9);
+  border: none;
+  width: 30px;
+  height: 30px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 14px;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.15s;
+  color: var(--ax-text-muted, #64748b);
+  text-decoration: none;
+
+  &:hover { background: #e2e8f0; color: var(--ax-brand-primary, #673ab7); }
+}
+
+.vacio-carpeta {
+  padding: 30px 20px;
+  text-align: center;
+  color: #94a3b8;
+  font-style: italic;
+  margin: 0;
+}
+
+.text-gray { color: var(--ax-text-muted, #64748b); }
+.text-center { text-align: center; }
+.py-4 { padding-top: 16px; padding-bottom: 16px; }
+
+.empty-state {
+  color: var(--ax-text-muted, #64748b);
+  padding: 50px 0;
+  text-align: center;
+  font-weight: 500;
+  background: var(--ax-surface, #fff);
+  border: 1px solid $border-light;
+  border-radius: 16px;
+}
+
+.error-state {
+  background: #fef2f2;
+  border: 1px solid #fca5a5;
+  color: #b91c1c;
+  padding: 16px 20px;
+  border-radius: 12px;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.nota-final {
+  font-size: 12.5px;
+  color: var(--ax-text-muted, #64748b);
+  background: var(--ax-surface-2, #f8fafc);
+  border: 1px dashed $border-light;
+  border-radius: 12px;
+  padding: 14px 18px;
+  margin-top: 16px;
+}
+
+// ==========================================
+// PANEL DE HISTORIAL (mismo patrón visual que
+// el modal de detalle de Servidores/Aplicativos)
+// ==========================================
+.modal-overlay {
+  position: fixed;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background: rgba(15, 23, 42, 0.4);
+  backdrop-filter: blur(4px);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 1000;
+}
+
+.modal-content {
+  background: var(--ax-surface, white);
+  padding: 30px;
+  border-radius: 16px;
+  width: 100%;
+  max-width: 900px;
+  max-height: 94vh;
+  overflow-y: auto;
+  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1);
+
+  &::-webkit-scrollbar { width: 8px; }
+  &::-webkit-scrollbar-track { background: transparent; }
+  &::-webkit-scrollbar-thumb { background: var(--ax-border-2, #cbd5e1); border-radius: 8px; }
+}
+
+// Variante más ancha para el visor de contenido -- una tabla de Excel, un
+// bloque de código o un PDF necesitan bastante más espacio que el modal de
+// historial (que solo tiene texto corto). Se usa casi todo el ancho/alto de
+// la pantalla para que las tablas de Excel (que suelen tener muchas columnas)
+// se vean claras sin tener que reducir tanto el zoom del navegador.
+.modal-content-ancho {
+  max-width: min(1600px, 96vw);
+  max-height: 94vh;
+}
+
+.detail-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  border-bottom: 1px solid $border-light;
+  padding-bottom: 16px;
+  margin-bottom: 20px;
+  gap: 16px;
+
+  h2 { margin: 0; font-size: 18px; color: $brand-dark; word-break: break-word; }
+  .ip-subtitle { margin: 4px 0 0 0; font-size: 12.5px; color: var(--ax-text-muted, #64748b); word-break: break-all; }
+  .btn-close { background: none; border: none; font-size: 20px; cursor: pointer; color: var(--ax-text-muted, #64748b); display: inline-flex; align-items: center; border-radius: 8px; padding: 4px; &:hover { background: var(--ax-surface-2, #f1f5f9); color: var(--ax-text, #1e293b); } }
+}
+
+.acciones-visor {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-shrink: 0;
+}
+
+.btn-descargar {
+  padding: 8px 16px;
+  font-size: 13px;
+}
+
+.lista-commits {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.fila-commit {
+  background: var(--ax-surface-2, #f8fafc);
+  border-radius: 10px;
+  padding: 12px 14px;
+
+  code {
+    font-family: monospace;
+    font-size: 11.5px;
+    background: #e2e8f0;
+    padding: 2px 6px;
+    border-radius: 5px;
+    color: var(--ax-text, #0f172a);
+    margin-right: 8px;
+  }
+
+  strong { color: $brand-dark; }
+}
+
+.comentario-commit-full {
+  margin: 6px 0 0 0;
+  font-size: 13px;
+  color: $brand-dark;
+}
+
+.ver-en-azure {
+  display: inline-flex;
+  align-items: center;
+  margin-top: 8px;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--ax-brand-primary, #673ab7);
+  text-decoration: none;
+  &:hover { text-decoration: underline; }
+}
+
+// ==========================================
+// VISOR DE CONTENIDO -- Excel/CSV
+// ==========================================
+.visor-excel {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.tabs-hojas {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  border-bottom: 1px solid $border-light;
+  padding-bottom: 10px;
+}
+
+.tab-hoja {
+  background: var(--ax-surface-2, #f1f5f9);
+  border: 1px solid transparent;
+  color: var(--ax-text-muted, #64748b);
+  padding: 6px 14px;
+  border-radius: 999px;
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+
+  &:hover { background: #e2e8f0; }
+
+  &.activa {
+    background: var(--ax-brand-primary, #673ab7);
+    color: #fff;
+  }
+}
+
+.tabla-excel-scroll {
+  overflow: auto;
+  max-height: 74vh;
+  border: 1px solid $border-light;
+  border-radius: 10px;
+}
+
+.tabla-excel {
+  border-collapse: collapse;
+  width: 100%;
+  font-size: 12.5px;
+  white-space: nowrap;
+
+  th, td {
+    border: 1px solid $border-light;
+    padding: 6px 10px;
+    text-align: left;
+  }
+
+  thead th {
+    position: sticky;
+    top: 0;
+    background: var(--ax-surface-2, #f8fafc);
+    color: $brand-dark;
+    font-weight: 700;
+    z-index: 1;
+  }
+
+  tbody tr:nth-child(even) {
+    background: var(--ax-surface-2, #fafbfc);
+  }
+}
+
+// ==========================================
+// VISOR DE CONTENIDO -- Excel "con estilo"
+// (.xlsx/.xlsm, ver procesarExcelConEstilo)
+// ==========================================
+
+// Aviso cuando la hoja trae dibujos que ExcelJS no puede leer como imagen
+// (formas/flowchart dibujados a mano en Excel, ej. "Diagrama Servicio").
+.aviso-formas {
+  background: #fffbeb;
+  border: 1px solid #fde68a;
+  color: #92400e;
+  font-size: 12.5px;
+  padding: 10px 14px;
+  border-radius: 10px;
+  line-height: 1.5;
+}
+
+.tabla-excel-rica-scroll {
+  overflow: auto;
+  max-height: 78vh;
+  border: 1px solid $border-light;
+  border-radius: 10px;
+  background: #fff; // el propio Excel siempre tiene fondo blanco, independiente del tema de la app
+  padding: 10px;
+}
+
+// Envoltorio con position:relative del tamaño exacto de la tabla -- es el
+// sistema de referencia para posicionar las imágenes incrustadas encima.
+.tabla-excel-rica-lienzo {
+  position: relative;
+  display: inline-block;
+}
+
+.tabla-excel-rica {
+  border-collapse: collapse;
+  table-layout: fixed; // imprescindible: así el ancho de columna que se calculó se respeta de verdad
+  font-family: Calibri, Arial, sans-serif;
+  font-size: 12.3px; // ~11pt, la fuente por defecto de Excel
+  color: #000;
+
+  td {
+    box-sizing: border-box;
+    padding: 1px 4px;
+    overflow: hidden;
+    white-space: normal;
+    word-break: break-word;
+    vertical-align: middle;
+  }
+}
+
+.imagen-hoja-excel {
+  position: absolute;
+  pointer-events: none;
+
+  img {
+    width: 100%;
+    height: 100%;
+    object-fit: fill; // Excel estira la imagen exactamente al tamaño del ancla, sin mantener proporción
+    display: block;
+  }
+}
+
+// Formas (rectángulos/óvalos) de un diagrama dibujado a mano en Excel -- ver
+// extraerFormasHoja() en el componente. Se superponen sobre el mismo lienzo
+// (.tabla-excel-rica-lienzo) que las imágenes incrustadas.
+.forma-hoja-excel {
+  position: absolute;
+  box-sizing: border-box;
+  border-style: solid;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 2px 6px;
+  font-family: Calibri, Arial, sans-serif;
+  font-size: 11.5px;
+  line-height: 1.25;
+  color: #1e293b;
+  white-space: pre-line;
+  overflow: hidden;
+  pointer-events: none;
+
+  &.forma-redondeada {
+    border-radius: 10px;
+  }
+
+  &.forma-ovalo {
+    border-radius: 50%;
+  }
+}
+
+// Conectores/flechas del diagrama -- una línea SVG dentro de su propio
+// recuadro absoluto, igual que las formas e imágenes.
+.conector-hoja-excel {
+  position: absolute;
+  overflow: visible;
+  pointer-events: none;
+}
+
+// ==========================================
+// VISOR DE CONTENIDO -- imagen / PDF
+// ==========================================
+.visor-imagen {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  max-height: 70vh;
+  overflow: auto;
+  background: var(--ax-surface-2, #f8fafc);
+  border: 1px solid $border-light;
+  border-radius: 10px;
+  padding: 12px;
+
+  img {
+    max-width: 100%;
+    max-height: 65vh;
+    object-fit: contain;
+    border-radius: 4px;
+  }
+}
+
+.visor-pdf {
+  height: 75vh;
+  border: 1px solid $border-light;
+  border-radius: 10px;
+  overflow: hidden;
+
+  iframe {
+    width: 100%;
+    height: 100%;
+    border: none;
+  }
+}
+
+// ==========================================
+// VISOR DE CONTENIDO -- texto / código / XML
+// ==========================================
+.visor-codigo {
+  max-height: 70vh;
+  overflow: auto;
+  background: #282c34;
+  border-radius: 10px;
+
+  pre {
+    margin: 0;
+    padding: 16px 18px;
+  }
+
+  code {
+    font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
+    font-size: 12.5px;
+    line-height: 1.6;
+    color: #abb2bf;
+    white-space: pre;
+  }
+
+  // Paleta mínima compatible con las clases que genera highlight.js
+  // (equivalente a un tema oscuro tipo "atom-one-dark").
+  ::ng-deep {
+    .hljs-comment, .hljs-quote { color: #5c6370; font-style: italic; }
+    .hljs-doctag, .hljs-keyword, .hljs-formula { color: #c678dd; }
+    .hljs-section, .hljs-name, .hljs-selector-tag, .hljs-deletion, .hljs-subst { color: #e06c75; }
+    .hljs-literal { color: #56b6c2; }
+    .hljs-string, .hljs-regexp, .hljs-addition, .hljs-attribute, .hljs-meta .hljs-string { color: #98c379; }
+    .hljs-attr, .hljs-variable, .hljs-template-variable, .hljs-type, .hljs-selector-class,
+    .hljs-selector-attr, .hljs-selector-pseudo, .hljs-number { color: #d19a66; }
+    .hljs-symbol, .hljs-bullet, .hljs-link, .hljs-meta, .hljs-selector-id, .hljs-title { color: #61aeee; }
+    .hljs-built_in, .hljs-title.class_, .hljs-class .hljs-title { color: #e6c07b; }
+    .hljs-emphasis { font-style: italic; }
+    .hljs-strong { font-weight: 700; }
+    .hljs-link { text-decoration: underline; }
+    .hljs-tag { color: #e06c75; }
+    .hljs-tag .hljs-attr, .hljs-tag .hljs-name { color: #d19a66; }
+  }
+}
+
+// ==========================================
+// VISOR DE CONTENIDO -- tipos sin preview
+// ==========================================
+.visor-no-soportado {
+  text-align: center;
+  padding: 50px 20px;
+
+  p { margin: 4px 0; font-size: 14px; color: $brand-dark; }
+  p.text-gray { font-size: 12.5px; }
+}
+
+@media (max-width: 700px) {
+  .fila-encabezado { display: none; }
+
+  .fila-item {
+    grid-template-columns: 1fr auto;
+    grid-template-areas:
+      "nombre   acciones"
+      "autor    acciones"
+      "cambio   acciones"
+      "commit   commit";
+    gap: 4px;
+  }
+  .fila-item .col-nombre { grid-area: nombre; }
+  .fila-item .col-autor { grid-area: autor; }
+  .fila-item .col-cambio { grid-area: cambio; }
+  .fila-item .col-commit { grid-area: commit; flex-wrap: wrap; }
+  .fila-item .col-acciones { grid-area: acciones; align-items: flex-start; }
+
+  .modal-content-ancho { max-width: 100%; }
+  .detail-header { flex-wrap: wrap; }
+  .acciones-visor { width: 100%; justify-content: flex-end; }
+}
+
+.header-acciones { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.aviso-acceso {
+  background: rgba(245, 158, 11, 0.1); border: 1px solid rgba(245, 158, 11, 0.4); border-radius: 12px; padding: 12px 16px; margin-bottom: 14px;
+  font-size: 13px; line-height: 1.5; color: var(--ax-text, #1e293b);
+}

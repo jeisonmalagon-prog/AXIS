@@ -1,0 +1,345 @@
+<header class="page-header">
+  <div>
+    <h1>Calendario del Equipo</h1>
+    <p class="subtitle">Sesiones agendadas (RFC, revisiones y pasos a producción) — calendario de Google compartido.</p>
+  </div>
+  <button type="button" class="btn btn-primary" *ngIf="configurado && puedeEditar" (click)="abrirCrear()">+ Agendar Sesión</button>
+</header>
+
+<div class="aviso-no-configurado" *ngIf="configurado === false && !errorEstado">
+  <h3>El calendario todavía no está conectado</h3>
+  <p>
+    Falta configurar la cuenta de servicio de Google compartida por el equipo (variables de entorno
+    <code>GOOGLE_CALENDAR_CLIENT_EMAIL</code>, <code>GOOGLE_CALENDAR_PRIVATE_KEY</code> y <code>GOOGLE_CALENDAR_ID</code>
+    en el backend). Revisa las instrucciones de configuración entregadas aparte.
+  </p>
+</div>
+
+<!-- Distinto del aviso de arriba: esto es cuando /estado sí respondió pero
+     con un error real (módulo no habilitado, 500, etc.) -- antes se
+     confundía con "no configurado" y ocultaba la causa verdadera. -->
+<div class="error-banner" *ngIf="errorEstado">{{ errorEstado }}</div>
+
+<div class="error-banner" *ngIf="error">{{ error }}</div>
+
+<!-- Avisos de correos que no se pudieron leer esta vez (ej. todavía no
+     comparten su calendario con la cuenta de servicio) -- no bloquean el
+     resto de la vista, solo informan cuáles faltan por arreglar. -->
+<div class="aviso-calendarios" *ngIf="erroresCalendarios.length">
+  <p *ngFor="let msg of erroresCalendarios">{{ msg }}</p>
+</div>
+
+<!-- Calendarios que puede ver ESTE usuario: AXIS, los comunes del equipo y los
+     que él mismo agregó (solo los ve él). Cada chip también es un filtro: un
+     clic oculta/muestra ese calendario y la elección se recuerda por usuario. -->
+<div class="leyenda-equipo" *ngIf="configurado">
+  <span class="leyenda-titulo">Calendarios:</span>
+  <button type="button" class="leyenda-item" [class.apagado]="filtroAxisOculto()" (click)="toggleFiltroAxis()" [title]="filtroAxisOculto() ? 'Clic para volver a mostrar' : 'Clic para ocultar'">
+    <span class="leyenda-punto" [style.background]="colorAxis()"></span>
+    AXIS (sesiones agendadas)
+  </button>
+  <button type="button" class="leyenda-item" *ngFor="let c of calendariosEquipo" [class.apagado]="filtroCalendarioOculto(c.Id)" (click)="toggleFiltroCalendario(c.Id)" [title]="filtroCalendarioOculto(c.Id) ? 'Clic para volver a mostrar' : 'Clic para ocultar'">
+    <span class="leyenda-punto" [style.background]="colorParaCalendario(c.Id)"></span>
+    {{ c.Etiqueta }}
+  </button>
+  <button type="button" class="leyenda-item leyenda-item--propio" *ngFor="let p of calendariosPersonales" [class.apagado]="filtroPersonalOculto(p.Id)" (click)="toggleFiltroPersonal(p.Id)" [title]="(filtroPersonalOculto(p.Id) ? 'Clic para volver a mostrar' : 'Clic para ocultar') + ' (solo lo ves tú)'">
+    <span class="leyenda-punto" [style.background]="colorParaPersonal(p.Id)"></span>
+    {{ p.Etiqueta }}
+    <span class="leyenda-privado">solo tú</span>
+  </button>
+  <button type="button" class="btn-agregar-correo" *ngIf="personalizacionDisponible" (click)="abrirMisCalendarios()" title="Agregar un calendario de Google que solo verás tú">+ Mi calendario</button>
+  <button type="button" class="btn-agregar-correo" *ngIf="puedeEditar" (click)="abrirGestionCorreos()" title="Calendarios que ve todo el equipo">+ Correo del equipo</button>
+</div>
+
+<div class="aviso-calendarios" *ngIf="configurado && !personalizacionDisponible && puedeEditar && mensajePersonalizacion">
+  <p>Elegir calendarios por usuario todavía no está disponible: {{ mensajePersonalizacion }}</p>
+</div>
+
+<!-- Leyenda de colores por persona -- para las sesiones internas agendadas
+     desde "+ Agendar Sesión" (calendario "AXIS"), no las de arriba. -->
+<div class="leyenda-equipo" *ngIf="configurado && usuarios.length">
+  <span class="leyenda-titulo">Sesiones agendadas aquí:</span>
+  <button type="button" class="leyenda-item" *ngFor="let u of usuarios" [class.apagado]="filtroPersonaOculto(u.id)" (click)="toggleFiltroPersona(u.id)" [title]="filtroPersonaOculto(u.id) ? 'Clic para volver a mostrar' : 'Clic para ocultar'">
+    <span class="leyenda-punto" [style.background]="colorParaUsuario(u.id)"></span>
+    {{ u.nombre_completo }}
+  </button>
+</div>
+
+<ng-container *ngIf="configurado">
+  <div class="cal-nav">
+    <button type="button" class="btn btn-sm" (click)="anterior()">‹</button>
+    <button type="button" class="btn btn-sm" (click)="irAHoy()">Hoy</button>
+    <button type="button" class="btn btn-sm" (click)="siguiente()">›</button>
+    <span class="cal-rango" *ngIf="vista === 'semana' && dias.length">{{ dias[0] | date:'d MMM' }} – {{ dias[6] | date:'d MMM yyyy' }}</span>
+    <span class="cal-rango" *ngIf="vista === 'mes'">{{ fechaReferencia | date:'MMMM yyyy' }}</span>
+    <span class="cal-cargando" *ngIf="cargando">Cargando…</span>
+
+    <div class="cal-vista-toggle">
+      <button type="button" [class.activo]="vista === 'semana'" (click)="cambiarVista('semana')">Semana</button>
+      <button type="button" [class.activo]="vista === 'mes'" (click)="cambiarVista('mes')">Mes</button>
+    </div>
+  </div>
+
+  <!-- ---------- VISTA SEMANA: grilla por horas ---------- -->
+  <div class="cal-grid" *ngIf="vista === 'semana'">
+    <!-- Cabecera: nombre y número de cada día -->
+    <div class="cal-header-row">
+      <div class="cal-corner"></div>
+      <div class="cal-day-header" *ngFor="let d of dias" [class.hoy]="esHoy(d)">
+        <div class="cal-day-nombre">{{ d | date:'EEE' }}</div>
+        <div class="cal-day-numero">{{ d | date:'d' }}</div>
+      </div>
+    </div>
+
+    <!-- Fila de eventos "todo el día" -->
+    <div class="cal-allday-row" *ngIf="hayEventosTodoElDia()">
+      <div class="cal-corner-label">Todo el día</div>
+      <div class="cal-allday-cell" *ngFor="let d of dias">
+        <div class="cal-chip-miniatura" *ngFor="let e of eventosTodoElDiaDelDia(d)" [style.borderLeftColor]="colorPrimeraPersona(e)" (click)="abrirDetalleEvento(e)">
+          {{ e.titulo }}
+        </div>
+      </div>
+    </div>
+
+    <!-- Cuerpo con horas: una sola fila de grid, scrolleable -->
+    <div class="cal-body" #cuerpoGrid>
+      <div class="cal-horas">
+        <div class="cal-hora" *ngFor="let h of horas">{{ h }}:00</div>
+      </div>
+      <div
+        class="cal-dia-col"
+        *ngFor="let d of dias"
+        [class.hoy]="esHoy(d)"
+        (dragover)="permitirSoltar($event)"
+        (drop)="soltarEnColumnaHora(d, $event)"
+      >
+        <div class="cal-hora-linea" *ngFor="let h of horas"></div>
+        <div class="cal-linea-ahora" *ngIf="esHoy(d)" [style.top.px]="lineaAhora()"></div>
+        <div
+          class="cal-evento"
+          *ngFor="let e of eventosConHoraDelDiaPosicionados(d)"
+          [style.top.px]="posicionTop(e)"
+          [style.height.px]="alturaEvento(e)"
+          [style.left]="posicionLeft(e)"
+          [style.width]="anchoEvento(e)"
+          [style.borderLeftColor]="colorPrimeraPersona(e)"
+          [style.background]="colorPrimeraPersona(e) + '1a'"
+          [class.cal-evento--externo]="e.origen !== 'axis'"
+          [class.cal-evento--angosto]="e.totalCols > 2"
+          [draggable]="puedeEditarEvento(e)"
+          [title]="e.titulo + ' (' + (e.inicio | date:'HH:mm') + ' - ' + (e.fin | date:'HH:mm') + ')'"
+          (dragstart)="iniciarArrastre(e, $event)"
+          (click)="abrirDetalleEvento(e)"
+        >
+          <strong>{{ e.titulo }}</strong>
+          <span *ngIf="alturaEvento(e) > 30">{{ e.inicio | date:'HH:mm' }} - {{ e.fin | date:'HH:mm' }}</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ---------- VISTA MES: grilla de días completa ---------- -->
+  <div class="cal-mes" *ngIf="vista === 'mes'">
+    <div class="cal-mes-header-row">
+      <div class="cal-mes-header-dia" *ngFor="let nombre of ['Dom','Lun','Mar','Mié','Jue','Vie','Sáb']">{{ nombre }}</div>
+    </div>
+    <div class="cal-mes-semana" *ngFor="let semana of semanasMes">
+      <div
+        class="cal-mes-dia"
+        *ngFor="let d of semana"
+        [class.hoy]="esHoy(d)"
+        [class.fuera-de-mes]="esOtroMes(d)"
+        (dragover)="permitirSoltar($event)"
+        (drop)="soltarEnDiaMes(d, $event)"
+      >
+        <div class="cal-mes-dia-numero">{{ d | date:'d' }}</div>
+        <div
+          class="cal-mes-evento"
+          *ngFor="let e of eventosDelDiaMes(d) | slice:0:3"
+          [style.borderLeftColor]="colorPrimeraPersona(e)"
+          [style.background]="colorPrimeraPersona(e) + '1a'"
+          [class.cal-evento--externo]="e.origen !== 'axis'"
+          [draggable]="puedeEditarEvento(e)"
+          [title]="e.titulo"
+          (dragstart)="iniciarArrastre(e, $event)"
+          (click)="abrirDetalleEvento(e)"
+        >
+          {{ e.titulo }}
+        </div>
+        <div class="cal-mes-mas" *ngIf="eventosDelDiaMes(d).length > 3">+{{ eventosDelDiaMes(d).length - 3 }} más</div>
+      </div>
+    </div>
+  </div>
+</ng-container>
+
+<!-- MODAL: DETALLE DEL EVENTO (clic en la grilla) -->
+<div class="overlay" *ngIf="mostrarDetalle" (click)="cerrarDetalle()">
+  <div class="modal" (click)="$event.stopPropagation()">
+    <div class="modal-header"><h2>{{ eventoDetalle?.titulo }}</h2></div>
+    <div class="modal-body" *ngIf="eventoDetalle as ev">
+      <p class="detalle-hora">
+        {{ ev.todoElDia ? 'Todo el día' : (ev.inicio | date:'EEEE d MMMM, HH:mm') + ' - ' + (ev.fin | date:'HH:mm') }}
+      </p>
+      <p class="aviso-evento" *ngIf="ev.origen === 'equipo'">
+        Del calendario real de <strong>{{ ev.etiquetaCalendario }}</strong> -- solo lectura, no se puede editar desde acá.
+      </p>
+      <p class="aviso-evento" *ngIf="ev.origen === 'personal'">
+        De tu calendario <strong>{{ ev.etiquetaCalendario }}</strong> -- solo lo ves tú, y es de solo lectura.
+      </p>
+      <p class="descripcion" *ngIf="ev.descripcion">{{ ev.descripcion }}</p>
+      <div class="evento-asignados" *ngIf="ev.asignados?.length">
+        <span class="chip-usuario" *ngFor="let uid of ev.asignados" [style.color]="colorParaUsuario(uid)" [style.background]="colorParaUsuario(uid) + '1a'">
+          {{ nombreUsuario(uid) }}
+        </span>
+      </div>
+    </div>
+    <div class="modal-footer modal-footer--detalle">
+      <button type="button" class="btn btn-sm" *ngIf="eventoDetalle && puedeEditarEvento(eventoDetalle)" (click)="editarDesdeDetalle()">Editar</button>
+      <button type="button" class="btn btn-sm btn-outline-purple" (click)="vincularDesdeDetalle()">Vincular a bitácora</button>
+      <a class="btn btn-sm" *ngIf="eventoDetalle?.enlaceGoogle" [href]="eventoDetalle?.enlaceGoogle" target="_blank" rel="noopener">Ver en Google</a>
+      <button type="button" class="btn btn-sm btn-danger" *ngIf="eventoDetalle && puedeEditarEvento(eventoDetalle)" (click)="eliminarDesdeDetalle()">Eliminar</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: AGENDAR / EDITAR SESIÓN -->
+<div class="overlay" *ngIf="mostrarForm" (click)="cerrarFormulario()">
+  <div class="modal" (click)="$event.stopPropagation()">
+    <div class="modal-header"><h2>{{ eventoEditando ? 'Editar Sesión' : 'Agendar Sesión' }}</h2></div>
+    <div class="modal-body">
+      <label class="form-label">Título (ej. RFC-1234 — Paso a producción módulo X)</label>
+      <input class="form-input" type="text" [(ngModel)]="form.titulo">
+
+      <label class="form-label">Descripción</label>
+      <textarea class="form-input" rows="3" [(ngModel)]="form.descripcion"></textarea>
+
+      <label class="form-label">Inicio</label>
+      <input class="form-input" type="datetime-local" [(ngModel)]="form.inicio">
+
+      <label class="form-label">Fin</label>
+      <input class="form-input" type="datetime-local" [(ngModel)]="form.fin">
+
+      <label class="form-label">Asignar a (quién participa en esta sesión)</label>
+      <div class="lista-usuarios">
+        <label class="checkbox-row" *ngFor="let u of usuarios">
+          <input type="checkbox" [checked]="form.asignados.includes(u.id)" (change)="toggleAsignado(u.id, $event)">
+          <span class="leyenda-punto" [style.background]="colorParaUsuario(u.id)"></span>
+          {{ u.nombre_completo }}
+        </label>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button type="button" class="btn" (click)="cerrarFormulario()">Cancelar</button>
+      <button type="button" class="btn btn-primary" [disabled]="guardando || !form.titulo.trim()" (click)="guardar()">
+        {{ guardando ? 'Guardando…' : (eventoEditando ? 'Guardar cambios' : 'Agendar') }}
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: VINCULAR A LA BITÁCORA -->
+<div class="overlay" *ngIf="mostrarVincular" (click)="cerrarVincular()">
+  <div class="modal" (click)="$event.stopPropagation()">
+    <div class="modal-header"><h2>Vincular a la Bitácora</h2></div>
+    <div class="modal-body">
+      <p class="aviso-evento">Sesión: <strong>{{ eventoVinculando?.titulo }}</strong></p>
+
+      <label class="form-label">Elegir un registro existente de Pasos a Producción</label>
+      <app-selector-buscable
+        [opciones]="pasosDisponibles"
+        [valor]="pasoElegidoId"
+        (valorChange)="pasoElegidoId = $event"
+        placeholder="Buscar por título o RFC..."
+        [textoVacio]="'No hay registros de la bitácora sin vincular todavía.'"
+      ></app-selector-buscable>
+
+      <p class="separador-o">o</p>
+
+      <button type="button" class="btn btn-outline-purple btn-ancho" (click)="crearNuevoDesdeVincular()">
+        Crear un registro nuevo a partir de esta sesión
+      </button>
+    </div>
+    <div class="modal-footer">
+      <button type="button" class="btn" (click)="cerrarVincular()">Cancelar</button>
+      <button type="button" class="btn btn-primary" [disabled]="!pasoElegidoId || guardandoVinculo" (click)="confirmarVincular()">
+        {{ guardandoVinculo ? 'Vinculando…' : 'Vincular' }}
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: GESTIONAR CORREOS DEL EQUIPO (agregar/quitar calendarios reales) -->
+<div class="overlay" *ngIf="mostrarGestionCorreos" (click)="cerrarGestionCorreos()">
+  <div class="modal" (click)="$event.stopPropagation()">
+    <div class="modal-header"><h2>Calendarios del equipo</h2></div>
+    <div class="modal-body">
+      <p class="aviso-evento">Estos calendarios los ve todo el equipo. Si solo quieres verlo tú, usa <strong>+ Mi calendario</strong>.</p>
+      <p class="aviso-evento">
+        Cada correo que agregues debe compartir su calendario de Google con la cuenta de servicio (permiso de al
+        menos "Ver todos los detalles del evento") antes de agregarlo acá -- ver instrucciones aparte.
+      </p>
+
+      <div class="lista-correos" *ngIf="calendariosEquipo.length; else sinCorreos">
+        <div class="fila-correo" *ngFor="let c of calendariosEquipo">
+          <span class="leyenda-punto" [style.background]="colorParaCalendario(c.Id)"></span>
+          <span class="fila-correo-texto"><strong>{{ c.Etiqueta }}</strong> — {{ c.Correo }}</span>
+          <button type="button" class="btn-quitar-correo" (click)="eliminarCorreo(c)" title="Quitar">✕</button>
+        </div>
+      </div>
+      <ng-template #sinCorreos>
+        <p class="descripcion">Todavía no has agregado ningún correo.</p>
+      </ng-template>
+
+      <label class="form-label" style="margin-top: 16px;">Nombre para mostrar</label>
+      <input class="form-input" type="text" placeholder="Ej. Erick Rodríguez" [(ngModel)]="nuevaEtiqueta">
+
+      <label class="form-label">Correo del calendario de Google</label>
+      <input class="form-input" type="email" placeholder="persona@bancofinandina.com" [(ngModel)]="nuevoCorreo">
+
+      <button type="button" class="btn btn-outline-purple btn-ancho" [disabled]="!nuevoCorreo.trim() || !nuevaEtiqueta.trim() || guardandoCorreo" (click)="agregarCorreo()">
+        {{ guardandoCorreo ? 'Agregando…' : '+ Agregar correo' }}
+      </button>
+    </div>
+    <div class="modal-footer">
+      <button type="button" class="btn" (click)="cerrarGestionCorreos()">Cerrar</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: MIS CALENDARIOS (cada usuario agrega los suyos; solo él los ve) -->
+<div class="overlay" *ngIf="mostrarMisCalendarios" (click)="cerrarMisCalendarios()">
+  <div class="modal" (click)="$event.stopPropagation()">
+    <div class="modal-header"><h2>Mis calendarios</h2></div>
+    <div class="modal-body">
+      <p class="aviso-evento">
+        Agrega calendarios de Google para verlos junto al del equipo. Solo los ves tú y son de solo lectura.
+        Quien sea dueño del calendario debe compartirlo antes con la cuenta de servicio (permiso de al menos
+        "Ver todos los detalles del evento").
+      </p>
+
+      <div class="lista-correos" *ngIf="calendariosPersonales.length; else sinPropios">
+        <div class="fila-correo" *ngFor="let p of calendariosPersonales">
+          <span class="leyenda-punto" [style.background]="colorParaPersonal(p.Id)"></span>
+          <span class="fila-correo-texto"><strong>{{ p.Etiqueta }}</strong> — {{ p.Correo }}</span>
+          <button type="button" class="btn-quitar-correo" (click)="quitarMiCalendario(p)" title="Quitar">✕</button>
+        </div>
+      </div>
+      <ng-template #sinPropios>
+        <p class="descripcion">Todavía no has agregado ningún calendario propio.</p>
+      </ng-template>
+
+      <label class="form-label" style="margin-top: 16px;">Nombre para mostrar</label>
+      <input class="form-input" type="text" placeholder="Ej. Mi calendario personal" [(ngModel)]="miEtiqueta">
+
+      <label class="form-label">Correo del calendario de Google</label>
+      <input class="form-input" type="email" placeholder="persona@bancofinandina.com" [(ngModel)]="miCorreo" (keyup.enter)="agregarMiCalendario()">
+
+      <button type="button" class="btn btn-outline-purple btn-ancho" [disabled]="!miCorreo.trim() || !miEtiqueta.trim() || guardandoMiCalendario" (click)="agregarMiCalendario()">
+        {{ guardandoMiCalendario ? 'Agregando…' : '+ Agregar calendario' }}
+      </button>
+    </div>
+    <div class="modal-footer">
+      <button type="button" class="btn" (click)="cerrarMisCalendarios()">Cerrar</button>
+    </div>
+  </div>
+</div>

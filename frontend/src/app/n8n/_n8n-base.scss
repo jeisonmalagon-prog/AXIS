@@ -1,0 +1,103 @@
+// Estilos comunes de las pantallas del módulo n8n (cada componente tiene sus
+// estilos encapsulados, por eso se incluye este mixin en cada uno).
+$brand-dark:    var(--ax-text, #1e293b);
+$brand-gray:    var(--ax-text-muted, #64748b);
+$surface:       var(--ax-surface, #ffffff);
+$surface-bg:    var(--ax-surface-2, #f8fafc);
+$border-light:  var(--ax-border, #e2e8f0);
+$brand:         var(--ax-brand-primary, #673ab7);
+$brand-rgb:     var(--ax-brand-primary-rgb, 103, 58, 183);
+$ok:            var(--ax-chart-ok, #10b981);
+$warn:          var(--ax-chart-warn, #f59e0b);
+$danger:        var(--ax-chart-danger, #ef4444);
+
+@mixin base {
+  * { box-sizing: border-box; }
+  .mono { font-family: 'JetBrains Mono', monospace; }
+
+  .btn {
+    display: inline-flex; align-items: center; gap: 8px; padding: 8px 14px; border-radius: 8px; font-family: inherit; font-size: 13px; font-weight: 600;
+    cursor: pointer; transition: 0.2s; border: none; text-decoration: none;
+    &.btn-purple { background: $brand; color: white; }
+    &.btn-success { background: $ok; color: white; }
+    &.btn-danger { background: $danger; color: white; }
+    &.btn-sm { padding: 6px 12px; font-size: 12px; }
+    &.btn-ghost { background: transparent; color: $brand; border: 1px solid rgba($brand-rgb, 0.35); &:hover:not(:disabled) { background: rgba($brand-rgb, 0.08); } }
+    &:disabled { opacity: 0.55; cursor: not-allowed; }
+  }
+  .btn-mini {
+    font-family: inherit; font-size: 11px; font-weight: 700; color: $brand; background: transparent;
+    border: 1px solid rgba($brand-rgb, 0.3); border-radius: 7px; padding: 5px 10px; cursor: pointer;
+    &:hover:not(:disabled) { background: rgba($brand-rgb, 0.1); }
+    &:disabled { opacity: 0.5; cursor: not-allowed; }
+    &.btn-mini-peligro { color: $danger; border-color: rgba(239, 68, 68, 0.35); &:hover:not(:disabled) { background: rgba(239, 68, 68, 0.08); } }
+  }
+
+  .status-badge {
+    padding: 3px 10px; border-radius: 999px; font-size: 10.5px; font-weight: 700; text-transform: uppercase; white-space: nowrap; display: inline-block;
+    &.status-active { background: rgba(16, 185, 129, 0.15); color: $ok; }
+    &.status-inactive { background: $surface-bg; color: $brand-gray; border: 1px solid $border-light; }
+  }
+
+  // Estado de una ejecución
+  .est {
+    display: inline-flex; align-items: center; gap: 5px; font-size: 11px; font-weight: 700; padding: 2px 9px; border-radius: 999px; white-space: nowrap;
+    &::before { content: ''; width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+    &.est-ok { background: rgba(16, 185, 129, 0.14); color: $ok; }
+    &.est-mal { background: rgba(239, 68, 68, 0.14); color: $danger; }
+    &.est-aviso { background: rgba(245, 158, 11, 0.16); color: $warn; }
+    &.est-info { background: rgba($brand-rgb, 0.12); color: $brand; }
+    &.est-nulo { background: $surface-bg; color: $brand-gray; border: 1px solid $border-light; }
+  }
+
+  .chip {
+    display: inline-block; font-size: 10.5px; font-weight: 700; padding: 2px 8px; border-radius: 999px; max-width: 100%;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis; vertical-align: middle;
+    background: $surface-bg; color: $brand-gray; border: 1px solid $border-light;
+    &.chip-marca { background: rgba($brand-rgb, 0.1); color: $brand; border-color: transparent; }
+    &.chip-alta { background: rgba(239, 68, 68, 0.14); color: $danger; border-color: transparent; }
+    &.chip-media { background: rgba(245, 158, 11, 0.16); color: $warn; border-color: transparent; }
+    &.chip-baja { background: $surface-bg; color: $brand-gray; }
+    &.chip-ok { background: rgba(16, 185, 129, 0.14); color: $ok; border-color: transparent; }
+  }
+
+  .aviso-cuentas {
+    background: rgba(239, 68, 68, 0.08); border: 1px solid rgba(239, 68, 68, 0.25); color: $danger;
+    border-radius: 10px; padding: 10px 14px; font-size: 13px; font-weight: 600; margin-bottom: 14px;
+    code { font-family: 'JetBrains Mono', monospace; font-size: 12px; }
+  }
+  .aviso-info {
+    background: rgba($brand-rgb, 0.08); border: 1px solid rgba($brand-rgb, 0.25); color: $brand-dark;
+    border-radius: 10px; padding: 10px 14px; font-size: 13px; margin-bottom: 14px; line-height: 1.5;
+    code { font-family: 'JetBrains Mono', monospace; font-size: 12px; }
+  }
+  .aviso-aviso {
+    background: rgba(245, 158, 11, 0.1); border: 1px solid rgba(245, 158, 11, 0.35); color: $brand-dark;
+    border-radius: 10px; padding: 10px 14px; font-size: 13px; margin-bottom: 14px; line-height: 1.5;
+    code { font-family: 'JetBrains Mono', monospace; font-size: 12px; }
+  }
+  .aviso-ok {
+    background: rgba(16, 185, 129, 0.1); border: 1px solid rgba(16, 185, 129, 0.3); color: $ok;
+    border-radius: 10px; padding: 10px 14px; font-size: 13px; font-weight: 600; margin-bottom: 14px;
+  }
+
+  .modal-overlay { position: fixed; inset: 0; background: rgba(15, 23, 42, 0.45); backdrop-filter: blur(4px); display: flex; justify-content: center; align-items: center; z-index: 1000; padding: 16px; }
+  .modal-card {
+    background: $surface; color: $brand-dark; width: 100%; max-width: 700px; max-height: 94vh; overflow-y: auto; border-radius: 16px; padding: 24px; box-shadow: 0 20px 40px rgba(0, 0, 0, 0.25);
+    .modal-header { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; border-bottom: 1px solid $border-light; padding-bottom: 12px; margin-bottom: 16px; h2 { margin: 0; font-size: 18px; } }
+    .close-btn { border: none; background: transparent; font-size: 18px; cursor: pointer; color: $brand-gray; line-height: 1; padding: 4px; }
+  }
+
+  .spinner { width: 32px; height: 32px; border: 3px solid $border-light; border-top-color: $brand; border-radius: 50%; animation: spin 1s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .cargando { text-align: center; padding: 50px 0; color: $brand-gray; display: flex; flex-direction: column; align-items: center; gap: 14px; }
+
+  .tarjeta {
+    background: $surface; border: 1px solid $border-light; border-radius: 16px; padding: 20px; min-width: 0;
+    box-shadow: 0 6px 20px rgba(var(--ax-brand-primary-rgb, 103, 58, 183), 0.03);
+    h2 { font-size: 15px; font-weight: 700; margin: 0; }
+    .tarjeta-cab { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; margin-bottom: 16px; flex-wrap: wrap; }
+    .tarjeta-sub { font-size: 11.5px; color: $brand-gray; font-weight: 500; }
+  }
+  .vacio { text-align: center; color: $brand-gray; font-size: 13px; padding: 28px 12px; }
+}

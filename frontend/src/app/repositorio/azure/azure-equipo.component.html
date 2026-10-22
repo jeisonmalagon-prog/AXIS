@@ -1,0 +1,152 @@
+<div class="pestanas" role="tablist">
+  <button type="button" [class.activa]="vista === 'equipo'" (click)="cambiarVista('equipo')"><app-ico n="equipo"></app-ico>Equipo</button>
+  <button type="button" [class.activa]="vista === 'politicas'" (click)="cambiarVista('politicas')"><app-ico n="escudo"></app-ico>Políticas de ramas</button>
+  <button type="button" [class.activa]="vista === 'agentes'" (click)="cambiarVista('agentes')"><app-ico n="monitor"></app-ico>Agentes</button>
+  <button type="button" [class.activa]="vista === 'ambientes'" (click)="cambiarVista('ambientes')"><app-ico n="globo"></app-ico>Ambientes</button>
+  <button type="button" [class.activa]="vista === 'artefactos'" (click)="cambiarVista('artefactos')"><app-ico n="paquete"></app-ico>Artefactos</button>
+  <button type="button" *ngIf="esAdminPod" [class.activa]="vista === 'conexiones'" (click)="cambiarVista('conexiones')"><app-ico n="enlace"></app-ico>Conexiones</button>
+  <button type="button" *ngIf="esAdminPod" [class.activa]="vista === 'variables'" (click)="cambiarVista('variables')"><app-ico n="llave"></app-ico>Variables</button>
+  <button type="button" [class.activa]="vista === 'permisos'" (click)="cambiarVista('permisos')"><app-ico n="ok"></app-ico>Permisos del token</button>
+</div>
+
+<app-azure-fallo [fallo]="falloVista"></app-azure-fallo>
+<div class="cargando" *ngIf="cargandoVista"><div class="spinner"></div>Cargando…</div>
+
+<!-- EQUIPO -->
+<ng-container *ngIf="vista === 'equipo' && proyecto as p">
+  <div class="grilla g-2-1">
+    <section class="tarjeta">
+      <div class="tarjeta-cab"><h2>{{ p.proyecto.nombre }}</h2><a class="ext" [href]="p.proyecto.url" target="_blank" rel="noopener">Abrir proyecto<app-ico n="externo" class="fin"></app-ico></a></div>
+      <p class="gris" *ngIf="p.proyecto.descripcion">{{ p.proyecto.descripcion }}</p>
+      <dl class="kv">
+        <dt>Estado</dt><dd>{{ p.proyecto.estado }}</dd><dt>Visibilidad</dt><dd>{{ p.proyecto.visibilidad === 'private' ? 'Privado' : p.proyecto.visibilidad }}</dd>
+        <dt>Control de versiones</dt><dd>{{ p.proyecto.control || '—' }}</dd><dt>Proceso</dt><dd>{{ p.proyecto.proceso || '—' }}</dd><dt>Actualizado</dt><dd>{{ fmtFecha(p.proyecto.ultimaActualizacion) }}</dd>
+      </dl>
+    </section>
+    <section class="tarjeta">
+      <div class="tarjeta-cab"><h2>Equipos</h2><span class="tarjeta-sub">{{ p.equipos.length }}</span></div>
+      <ul class="lista"><li class="item-lista" *ngFor="let e of p.equipos"><div class="il-cab"><strong>{{ e.nombre }}</strong><span class="chip">{{ e.miembros.length }} miembros</span></div><div class="il-sub" *ngIf="e.descripcion"><span>{{ e.descripcion }}</span></div><div class="il-sub" *ngIf="e.errorMiembros"><span class="t-aviso">{{ e.errorMiembros }}</span></div></li></ul>
+    </section>
+  </div>
+  <section class="tarjeta" style="margin-top: 16px">
+    <div class="tarjeta-cab"><h2>Personas</h2><span class="tarjeta-sub">{{ personasFiltradas.length }} de {{ p.personas.length }}</span></div>
+    <div class="barra"><label class="buscar"><span aria-hidden="true"><app-ico n="buscar" class="solo"></app-ico></span><input type="text" [(ngModel)]="filtroPersona" placeholder="Buscar persona…" aria-label="Buscar persona" /></label></div>
+    <div class="tabla-wrap tabla-alta"><table class="tabla"><thead><tr><th>Persona</th><th>Usuario</th><th>Equipos</th><th>Rol</th></tr></thead>
+      <tbody><tr *ngFor="let x of personasFiltradas"><td><span class="persona"><span class="avatar">{{ iniciales(x.nombre) }}</span>{{ x.nombre }}</span></td><td class="gris">{{ x.usuario || '—' }}</td><td><span class="chip" *ngFor="let e of x.equipos" style="margin-right: 4px">{{ e }}</span></td><td><span class="chip chip-marca" *ngIf="x.admin">Admin de equipo</span></td></tr></tbody></table></div>
+  </section>
+</ng-container>
+
+<!-- POLÍTICAS -->
+<ng-container *ngIf="vista === 'politicas' && politicas as p">
+  <div class="kpis">
+    <div class="kpi"><span class="kpi-et">Políticas</span><span class="kpi-v">{{ p.resumen.total }}</span><span class="kpi-s">Que aplican a {{ p.repo }}</span></div>
+    <div class="kpi"><span class="kpi-et">Obligatorias</span><span class="kpi-v">{{ p.resumen.requeridas }}</span><span class="kpi-s">Bloquean el merge</span></div>
+  </div>
+  <div class="grilla g-2-1">
+    <section class="tarjeta">
+      <div class="tarjeta-cab"><h2>Reglas configuradas</h2></div>
+      <p class="vacio" *ngIf="!p.politicas.length">No hay políticas de ramas para este repositorio: cualquiera con permiso puede hacer push directo.</p>
+      <ul class="lista">
+        <li class="item-lista" *ngFor="let x of p.politicas">
+          <div class="il-cab"><strong>{{ x.tipo }}</strong><span class="est" [ngClass]="x.habilitada ? 'est-ok' : 'est-nulo'">{{ x.habilitada ? 'Activa' : 'Desactivada' }}</span><span class="chip chip-media" *ngIf="x.requerida">obligatoria</span></div>
+          <div class="il-sub"><span *ngFor="let a of x.ambito">Rama <code class="sha">{{ a.rama }}</code> ({{ a.repositorio }})</span></div>
+          <div class="il-sub" *ngIf="x.ajustes.minimumApproverCount !== undefined"><span>Aprobaciones mínimas: <strong>{{ x.ajustes.minimumApproverCount }}</strong></span><span *ngIf="x.ajustes.creatorVoteCounts === false">El autor no puede aprobar su propio PR</span><span *ngIf="x.ajustes.resetOnSourcePush">Se reinician votos al subir cambios</span></div>
+          <div class="il-sub" *ngIf="x.ajustes.displayName"><span>{{ x.ajustes.displayName }}</span></div>
+          <div class="il-sub"><span>Creada por {{ x.autor || '—' }} · {{ fmtFecha(x.creada) }}</span></div>
+        </li>
+      </ul>
+    </section>
+    <section class="tarjeta"><div class="tarjeta-cab"><h2>Ramas protegidas</h2></div><app-bar-list [items]="ramasProtegidas"></app-bar-list></section>
+  </div>
+</ng-container>
+
+<!-- AGENTES -->
+<ng-container *ngIf="vista === 'agentes' && agentes as a">
+  <div class="kpis">
+    <div class="kpi"><span class="kpi-et">Pools</span><span class="kpi-v">{{ a.resumen.pools }}</span></div>
+    <div class="kpi"><span class="kpi-et">Agentes propios</span><span class="kpi-v">{{ a.resumen.agentes }}</span></div>
+    <div class="kpi"><span class="kpi-et">En línea</span><span class="kpi-v t-ok">{{ a.resumen.enLinea }}</span><span class="kpi-s">{{ a.resumen.ocupados }} ocupados</span></div>
+    <div class="kpi"><span class="kpi-et">Desconectados</span><span class="kpi-v" [class.t-mal]="a.resumen.desconectados > 0">{{ a.resumen.desconectados }}</span></div>
+  </div>
+  <section class="tarjeta" *ngFor="let p of a.pools" style="margin-bottom: 16px">
+    <div class="tarjeta-cab"><h2>{{ p.nombre }}</h2><span class="chip" [class.chip-marca]="p.alojado">{{ p.alojado ? 'Alojado por Microsoft' : 'Propio' }}</span></div>
+    <app-azure-fallo [fallo]="p.errorAgentes ? { error: p.errorAgentes } : null"></app-azure-fallo>
+    <p class="gris" *ngIf="p.alojado">Los agentes alojados los administra Microsoft; no se listan.</p>
+    <div class="tabla-wrap" *ngIf="!p.alojado && p.agentes.length"><table class="tabla"><thead><tr><th>Agente</th><th>Estado</th><th>Habilitado</th><th>Versión</th><th>Sistema</th><th>Trabajo actual</th></tr></thead>
+      <tbody><tr *ngFor="let g of p.agentes"><td><strong>{{ g.nombre }}</strong></td><td><span class="est" [ngClass]="g.estado === 'online' ? 'est-ok' : 'est-mal'">{{ g.estado === 'online' ? 'En línea' : 'Desconectado' }}</span></td><td>{{ g.habilitado ? 'Sí' : 'No' }}</td><td>{{ g.version || '—' }}</td><td>{{ g.so || '—' }}</td><td>{{ g.trabajoActual || 'Libre' }}</td></tr></tbody></table></div>
+    <p class="vacio" *ngIf="!p.alojado && !p.agentes.length && !p.errorAgentes">Este pool no tiene agentes.</p>
+  </section>
+</ng-container>
+
+<!-- AMBIENTES -->
+<section class="tarjeta" *ngIf="vista === 'ambientes' && ambientes as a">
+  <div class="tarjeta-cab"><h2>Ambientes de despliegue</h2><span class="tarjeta-sub">{{ a.ambientes.length }}</span></div>
+  <p class="vacio" *ngIf="!a.ambientes.length">No hay ambientes definidos.</p>
+  <div class="tabla-wrap" *ngIf="a.ambientes.length"><table class="tabla"><thead><tr><th>Ambiente</th><th>Recursos</th><th>Creado</th><th>Modificado</th><th></th></tr></thead>
+    <tbody><tr *ngFor="let e of a.ambientes"><td class="td-nombre"><strong>{{ e.nombre }}</strong><div class="gris peq" *ngIf="e.descripcion">{{ e.descripcion }}</div></td>
+      <td><span class="chip" *ngFor="let r of e.recursos" style="margin-right: 4px">{{ r.tipo }}: {{ r.nombre }}</span><span class="gris" *ngIf="!e.recursos.length">—</span></td>
+      <td>{{ fmtFecha(e.creado) }}</td><td>{{ fmtRelativo(e.modificado) }}</td><td><button type="button" class="btn-mini" (click)="verHistorial(e)">Historial</button></td></tr></tbody></table></div>
+  <ng-container *ngIf="historial">
+    <h3 class="titulo-sec">Despliegues en {{ historial.ambiente.nombre }}</h3>
+    <p class="vacio" *ngIf="!historial.registros.length">Sin registros (o cargando).</p>
+    <div class="tabla-wrap" *ngIf="historial.registros.length"><table class="tabla"><thead><tr><th>Pipeline</th><th>Ejecución</th><th>Etapa</th><th>Resultado</th><th>Inicio</th><th class="num">Duración</th></tr></thead>
+      <tbody><tr *ngFor="let r of historial.registros"><td>{{ r.pipeline }}</td><td>{{ r.ejecucion }}</td><td>{{ r.etapa || '—' }}</td><td><span class="est" [ngClass]="r.resultado === 'succeeded' ? 'est-ok' : r.resultado === 'failed' ? 'est-mal' : 'est-nulo'">{{ r.resultado || '—' }}</span></td><td>{{ fmtRelativo(r.inicio) }}</td><td class="num">{{ fmtDuracion(r.duracionMs) }}</td></tr></tbody></table></div>
+  </ng-container>
+</section>
+
+<!-- ARTEFACTOS -->
+<ng-container *ngIf="vista === 'artefactos' && feeds as f">
+  <div class="grilla g-1-1">
+    <section class="tarjeta">
+      <div class="tarjeta-cab"><h2>Feeds de paquetes</h2><span class="tarjeta-sub">{{ f.feeds.length }}</span></div>
+      <p class="vacio" *ngIf="!f.feeds.length">No hay feeds de artefactos.</p>
+      <ul class="lista"><li class="item-lista click" *ngFor="let x of f.feeds" (click)="abrirFeed(x)" tabindex="0" (keyup.enter)="abrirFeed(x)" [class.sel]="feedAbierto?.id === x.id">
+        <div class="il-cab"><strong>{{ x.nombre }}</strong><span class="chip">{{ x.alcance }}</span><span class="chip chip-marca" *ngIf="x.upstream">upstream</span></div><div class="il-sub" *ngIf="x.descripcion"><span>{{ x.descripcion }}</span></div></li></ul>
+    </section>
+    <section class="tarjeta">
+      <div class="tarjeta-cab"><h2>{{ feedAbierto ? 'Paquetes de ' + feedAbierto.nombre : 'Paquetes' }}</h2></div>
+      <p class="vacio" *ngIf="!feedAbierto">Elige un feed para ver sus paquetes.</p>
+      <ng-container *ngIf="feedAbierto">
+        <div class="barra"><label class="buscar"><input type="text" [(ngModel)]="textoPaquete" (keyup.enter)="buscarPaquetes()" placeholder="Nombre del paquete…" aria-label="Buscar paquete" /></label><button type="button" class="btn btn-purple btn-sm" (click)="buscarPaquetes()">Buscar</button></div>
+        <app-azure-fallo [fallo]="paquetesFallo"></app-azure-fallo>
+        <div class="cargando" *ngIf="paquetesCargando"><div class="spinner chico"></div></div>
+        <div class="tabla-wrap tabla-alta" *ngIf="!paquetesCargando && paquetes.length"><table class="tabla"><thead><tr><th>Paquete</th><th>Tipo</th><th>Última versión</th><th class="num">Versiones</th><th>Publicado</th></tr></thead>
+          <tbody><tr *ngFor="let p of paquetes"><td><strong>{{ p.nombre }}</strong></td><td><span class="chip">{{ p.tipo }}</span></td><td><code class="sha">{{ p.versionReciente || '—' }}</code></td><td class="num">{{ p.versiones }}</td><td>{{ fmtRelativo(p.publicado) }}</td></tr></tbody></table></div>
+        <p class="vacio" *ngIf="!paquetesCargando && !paquetes.length && !paquetesFallo">Sin paquetes.</p>
+      </ng-container>
+    </section>
+  </div>
+</ng-container>
+
+<!-- CONEXIONES (solo administrador) -->
+<ng-container *ngIf="vista === 'conexiones' && conexiones as c">
+  <div class="aviso-info">Solo se muestran nombre, tipo y destino. Las credenciales de las conexiones nunca salen del servidor.</div>
+  <div class="grilla g-2-1">
+    <section class="tarjeta">
+      <div class="tarjeta-cab"><h2>Conexiones de servicio</h2><span class="tarjeta-sub">{{ c.resumen.total }} · {{ c.resumen.conProblema }} con problema</span></div>
+      <div class="tabla-wrap"><table class="tabla"><thead><tr><th>Nombre</th><th>Tipo</th><th>Destino</th><th>Autenticación</th><th>Estado</th></tr></thead>
+        <tbody><tr *ngFor="let x of c.conexiones"><td class="td-nombre"><strong>{{ x.nombre }}</strong><div class="gris peq" *ngIf="x.descripcion">{{ x.descripcion }}</div></td><td><span class="chip">{{ x.tipo }}</span></td><td class="gris">{{ x.destino || '—' }}</td><td>{{ x.esquemaAutenticacion || '—' }}</td><td><span class="est" [ngClass]="claseVoto(x.lista)">{{ x.lista ? 'Lista' : 'Con problema' }}</span> <span class="chip" *ngIf="x.compartida">compartida</span></td></tr></tbody></table></div>
+    </section>
+    <section class="tarjeta"><div class="tarjeta-cab"><h2>Por tipo</h2></div><app-bar-list [items]="tiposConexion"></app-bar-list></section>
+  </div>
+</ng-container>
+
+<!-- VARIABLES (solo administrador) -->
+<ng-container *ngIf="vista === 'variables' && variables as v">
+  <div class="aviso-info">Solo se muestran los nombres de las variables. Los valores nunca salen del servidor.</div>
+  <section class="tarjeta" *ngFor="let g of v.grupos" style="margin-bottom: 14px">
+    <div class="tarjeta-cab"><h2>{{ g.nombre }}</h2><span class="tarjeta-sub">{{ g.variables.length }} variables · modificado {{ fmtRelativo(g.modificado) }} por {{ g.modificadoPor || '—' }}</span></div>
+    <p class="gris" *ngIf="g.descripcion">{{ g.descripcion }}</p>
+    <div class="chips-vars"><span class="chip" *ngFor="let x of g.variables" [class.chip-media]="x.secreta">{{ x.nombre }}<app-ico *ngIf="x.secreta" n="candado" class="fin"></app-ico></span></div>
+  </section>
+  <p class="vacio" *ngIf="!v.grupos.length">No hay grupos de variables.</p>
+</ng-container>
+
+<!-- PERMISOS DEL TOKEN -->
+<ng-container *ngIf="vista === 'permisos' && permisos as p">
+  <div class="aviso-info">Este diagnóstico prueba cada área de Azure DevOps con el token (PAT) configurado en el servidor ({{ p.organizacion }} / {{ p.proyecto }}). Si algo aparece sin permiso, hay que agregar ese alcance al token en Azure DevOps; el módulo sigue funcionando con lo demás.</div>
+  <div class="barra"><button type="button" class="btn btn-ghost btn-sm" (click)="cargarPermisos()"><app-ico n="refrescar"></app-ico>Probar de nuevo</button></div>
+  <section class="tarjeta"><div class="tabla-wrap"><table class="tabla"><thead><tr><th>Área</th><th>Permiso del token</th><th>Resultado</th></tr></thead>
+    <tbody><tr *ngFor="let a of p.areas"><td><strong>{{ a.nombre }}</strong></td><td><code class="sha">{{ a.permiso }}</code></td>
+      <td><span class="est" [ngClass]="a.ok ? 'est-ok' : (a.codigo === 'SIN_PERMISO' ? 'est-aviso' : 'est-mal')">{{ a.ok ? 'Disponible' : (a.codigo === 'SIN_PERMISO' ? 'Sin permiso' : 'No disponible') }}</span><div class="gris peq" *ngIf="!a.ok && a.codigo !== 'SIN_PERMISO'">{{ a.mensaje }}</div></td></tr></tbody></table></div></section>
+</ng-container>

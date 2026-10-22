@@ -1,0 +1,156 @@
+<div class="modal-overlay" (click)="cerrarModal()">
+  <div class="modal-card modal-origenes" (click)="$event.stopPropagation()" role="dialog" aria-modal="true" aria-label="Orígenes del catálogo de datos">
+    <div class="modal-header">
+      <div>
+        <h2>Mis orígenes</h2>
+        <p class="sub">Tus servidores SQL Server y MariaDB: son solo tuyos, nadie más los ve ni los usa, y con ellos se arma tu catálogo. Aquí no se guardan usuarios ni claves: entras con los tuyos («Mis credenciales»). Solo se consultan las vistas del sistema (nombres de tablas, columnas y llaves); nunca los datos de negocio.</p>
+      </div>
+      <button type="button" class="close-btn" (click)="cerrarModal()" aria-label="Cerrar">✕</button>
+    </div>
+
+    <div class="error-state" *ngIf="error">{{ error }}</div>
+    <div class="aviso-info" *ngIf="aviso">{{ aviso }}</div>
+    <div class="aviso-aviso" *ngIf="hayClavesAntiguas && esAdminPod && !cargando">
+      <strong>Hay claves guardadas de la versión anterior.</strong> Ya no se usan para nada, pero siguen cifradas en la base de AXIS.
+      <button type="button" class="btn-mini btn-peligro" (click)="limpiarClaves()" (blur)="confirmandoLimpieza = false">{{ confirmandoLimpieza ? 'Confirmar: borrar claves guardadas' : 'Borrar claves guardadas' }}</button>
+    </div>
+    <div class="aviso-aviso" *ngIf="!tablaLista && !cargando">
+      <strong>Falta crear la tabla de orígenes.</strong> Pídele a quien tenga permisos de DDL en la base de AXIS que ejecute <span class="mono">crear_tabla_catalogo_origenes.sql</span> y vuelve a abrir esta ventana.
+    </div>
+    <div class="cargando" *ngIf="cargando"><div class="spinner"></div><p>Cargando…</p></div>
+
+    <ng-container *ngIf="!cargando && !mostrarForm && !mostrarMasivo">
+      <div class="acciones-top">
+        <button type="button" class="btn btn-ghost btn-sm" [disabled]="!tablaLista" (click)="abrirMasivo()">Agregar varios (lista)</button>
+        <button type="button" class="btn btn-purple btn-sm" [disabled]="!tablaLista" (click)="nuevo()">+ Agregar origen</button>
+      </div>
+      <p class="vacio" *ngIf="!origenes.length">Todavía no tienes orígenes. Agrega el primero para empezar a llenar tu catálogo.</p>
+      <ul class="lista" *ngIf="origenes.length">
+        <li class="item-lista" *ngFor="let o of origenes">
+          <div class="il-cab">
+            <strong>{{ o.nombre }}</strong>
+            <span class="chip chip-marca">{{ etiquetaMotor(o.motor) }}</span>
+            <span class="chip" [ngClass]="o.activo ? 'chip-ok' : 'chip-media'">{{ o.activo ? 'Activo' : 'Pausado' }}</span>
+            <span class="chip chip-media" *ngIf="o.claveAntigua" title="Quedó una clave guardada de la versión anterior; ya no se usa">Clave antigua sin uso</span>
+            <span class="espacio"></span>
+            <button type="button" class="btn-mini" (click)="editar(o)">Editar</button>
+            <button type="button" class="btn-mini btn-peligro" (click)="quitar(o)" (blur)="quitando = null">{{ quitando === o.id ? 'Confirmar: quitar' : 'Quitar' }}</button>
+          </div>
+          <div class="il-sub mono cortar">{{ o.host }}:{{ o.puerto }}</div>
+          <div class="il-sub" *ngIf="o.basesIncluidas.length">Solo estas bases: <span class="mono">{{ o.basesIncluidas.join(', ') }}</span></div>
+          <div class="il-sub gris" *ngIf="o.creadoPor">Creado por {{ o.creadoPor }}</div>
+        </li>
+      </ul>
+    </ng-container>
+
+    <ng-container *ngIf="mostrarMasivo">
+      <h3 class="titulo-form">Agregar varios servidores SQL Server</h3>
+      <p class="ayuda">Pega un servidor por línea. Formatos: <span class="mono">host,puerto</span>, <span class="mono">host:puerto</span>, <span class="mono">host\instancia</span> o solo <span class="mono">host</span> (puerto 1433). Opcional: nombre después de <span class="mono">|</span>. Las líneas que empiezan por <span class="mono">#</span> se ignoran. Al registrar solo se guarda el servidor (host y puerto): <strong>no se guarda ningún usuario ni clave</strong>. El usuario y la clave de abajo son únicamente para probar la conexión ahora mismo y se descartan.</p>
+
+      <label class="etiqueta" for="cm-lista">Servidores * <small class="gris">({{ lineasMasivo.length }} de máximo 300)</small></label>
+      <textarea id="cm-lista" class="entrada mono lista-masiva" rows="7" [(ngModel)]="masivo.lista" [disabled]="masivoTrabajando"
+                placeholder="192.168.118.95,60791 | Producción&#10;192.168.102.26&#10;SRV-QA\INST1,1435"></textarea>
+
+      <div class="fila-2">
+        <div>
+          <label class="etiqueta" for="cm-usuario">Usuario (solo para probar) *</label>
+          <input id="cm-usuario" class="entrada mono" [(ngModel)]="masivo.usuario" maxlength="128" autocomplete="off" [disabled]="masivoTrabajando" placeholder="FINANDINA\jeimal  (dominio)  ó  usuario_sql" />
+        </div>
+        <div>
+          <label class="etiqueta" for="cm-clave">Clave (solo para probar) *</label>
+          <input id="cm-clave" class="entrada mono" type="password" [(ngModel)]="masivo.clave" maxlength="256" autocomplete="new-password" [disabled]="masivoTrabajando" />
+        </div>
+      </div>
+      <p class="ayuda">
+        <ng-container *ngIf="masivoEsDominio; else loginSql"><strong>Autenticación de dominio (Windows)</strong> con tu usuario de red. Si la clave está mal, cada intento cuenta para el bloqueo de la cuenta; por eso la prueba se detiene sola tras dos rechazos seguidos.</ng-container>
+        <ng-template #loginSql>Sin <span class="mono">DOMINIO\</span> se usa <strong>login de SQL Server</strong>. Para tu usuario de red escribe <span class="mono">DOMINIO\usuario</span>.</ng-template>
+        Solo hace falta ver bases y tablas: si la cuenta no ve esquemas o columnas, el catálogo se arma con lo que alcance a leer. Con «Encryption: Mandatory» en SSMS deja marcada la conexión cifrada y confiar en el certificado.
+      </p>
+      <label class="check"><input type="checkbox" [(ngModel)]="masivo.cifrado" [disabled]="masivoTrabajando" /><span>Conexión cifrada (TLS)</span></label>
+      <label class="check" *ngIf="masivo.cifrado"><input type="checkbox" [(ngModel)]="masivo.confiarCertificado" [disabled]="masivoTrabajando" /><span>Confiar en el certificado del servidor</span></label>
+
+      <div class="prueba-bloque">
+        <button type="button" class="btn btn-ghost btn-sm" [disabled]="!masivoPuedeProbar" (click)="probarMasivo()">{{ masivoFase === 'probar' ? 'Probando…' : (filasMasivo.length ? 'Volver a probar todos' : 'Probar todos') }}</button>
+        <span class="pequeno" *ngIf="masivoProgreso">{{ masivoProgreso }}</span>
+      </div>
+
+      <div class="error-state" *ngIf="masivoError">{{ masivoError }}</div>
+      <div class="error-state" *ngIf="masivoDetenido">Se detuvo la prueba tras dos rechazos de usuario/clave seguidos para no bloquear la cuenta. Revisa las credenciales y vuelve a probar.</div>
+
+      <ng-container *ngIf="filasMasivo.length">
+        <div class="resumen-masivo">
+          <span class="chip chip-ok">{{ conteoMasivo('ok') + conteoMasivo('creado') }} conectan</span>
+          <span class="chip chip-alta" *ngIf="conteoMasivo('error') + conteoMasivo('invalida')">{{ conteoMasivo('error') + conteoMasivo('invalida') }} con problema</span>
+          <span class="chip chip-media" *ngIf="conteoMasivo('duplicado')">{{ conteoMasivo('duplicado') }} ya registrados</span>
+          <span class="chip chip-media" *ngIf="conteoMasivo('omitida')">{{ conteoMasivo('omitida') }} omitidos</span>
+        </div>
+        <div class="tabla-masiva">
+          <div class="fila-masiva" *ngFor="let f of filasMasivo">
+            <span class="mono cortar fm-texto" [title]="f.texto">{{ f.texto }}</span>
+            <span class="chip" [ngClass]="claseEstadoMasivo(f.estado)">{{ etiquetaEstadoMasivo(f.estado) }}</span>
+            <span class="fm-detalle" *ngIf="f.estado === 'ok'">{{ f.version }} · {{ f.bases }} base(s)</span>
+            <span class="fm-detalle fm-error" *ngIf="f.mensaje">{{ f.mensaje }}</span>
+          </div>
+        </div>
+      </ng-container>
+
+      <div class="pie-form">
+        <button type="button" class="btn btn-ghost" [disabled]="masivoTrabajando" (click)="cerrarMasivo()">{{ masivoRegistrado ? 'Listo' : 'Cancelar' }}</button>
+        <button type="button" class="btn btn-purple" [disabled]="masivoTrabajando || !masivoConectaron.length" (click)="registrarMasivo()">{{ masivoFase === 'registrar' ? 'Registrando…' : 'Registrar los que conectaron (' + masivoConectaron.length + ')' }}</button>
+      </div>
+    </ng-container>
+
+    <ng-container *ngIf="mostrarForm">
+      <h3 class="titulo-form">{{ editando ? 'Editar origen' : 'Agregar origen' }}</h3>
+
+      <div class="fila-2">
+        <div>
+          <label class="etiqueta" for="co-nombre">Nombre *</label>
+          <input id="co-nombre" class="entrada" [(ngModel)]="form.nombre" maxlength="100" placeholder="Ej. SQL Server QA" />
+        </div>
+        <div>
+          <label class="etiqueta" for="co-motor">Motor *</label>
+          <select id="co-motor" class="entrada" [ngModel]="form.motor" (ngModelChange)="cambiarMotor($event)">
+            <option value="MSSQL">SQL Server</option>
+            <option value="MARIADB">MariaDB / MySQL</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="fila-2 fila-host">
+        <div>
+          <label class="etiqueta" for="co-host">Servidor *</label>
+          <input id="co-host" class="entrada mono" [(ngModel)]="form.host" maxlength="200" placeholder="192.168.102.26" autocomplete="off" />
+        </div>
+        <div>
+          <label class="etiqueta" for="co-puerto">Puerto</label>
+          <input id="co-puerto" class="entrada mono" type="number" [(ngModel)]="form.puerto" min="1" max="65535" />
+        </div>
+      </div>
+
+      <p class="ayuda">El origen solo define <strong>a qué servidor</strong> se conecta el catálogo. El usuario y la clave los pone cada persona en «Mis credenciales» (una cuenta de <strong>solo lectura</strong>: en SQL Server necesita <span class="mono">VIEW ANY DEFINITION</span> o <span class="mono">VIEW DEFINITION</span> en cada base; en MariaDB basta <span class="mono">SELECT</span> sobre las bases). Con un usuario <span class="mono">DOMINIO\usuario</span> se usa autenticación de dominio; si no, login de SQL Server. Lo que cada persona ve en su catálogo depende de lo que su propia cuenta pueda leer.</p>
+
+      <label class="etiqueta" for="co-bases">Limitar a estas bases (opcional)</label>
+      <input id="co-bases" class="entrada mono" [(ngModel)]="form.basesIncluidas" maxlength="1000" placeholder="Vacío = todas las que la cuenta pueda ver" />
+
+      <label class="check"><input type="checkbox" [(ngModel)]="form.cifrado" /><span>Conexión cifrada (TLS) <small>(apágalo si el servidor no la exige)</small></span></label>
+      <label class="check" *ngIf="form.cifrado"><input type="checkbox" [(ngModel)]="form.confiarCertificado" /><span>Confiar en el certificado del servidor <small>(necesario con certificados autofirmados)</small></span></label>
+      <label class="check"><input type="checkbox" [(ngModel)]="form.activo" /><span>Origen activo <small>(si lo pausas, sale del catálogo sin borrar su configuración)</small></span></label>
+
+      <div class="prueba-bloque">
+        <button type="button" class="btn btn-ghost btn-sm" [disabled]="probando || !puedeProbar" (click)="probar()">{{ probando ? 'Probando…' : 'Probar con mis credenciales' }}</button>
+        <div class="aviso-ok" *ngIf="prueba?.ok">
+          Conexión correcta: <strong>{{ prueba?.version }}</strong>
+          <div class="pequeno">{{ prueba?.bases?.length || 0 }} base(s) visibles<span *ngIf="prueba?.bases?.length">: <span class="mono">{{ prueba?.bases?.slice(0, 12)?.join(', ') }}<ng-container *ngIf="(prueba?.bases?.length || 0) > 12"> …</ng-container></span></span></div>
+        </div>
+        <div class="error-state" *ngIf="prueba && !prueba.ok">{{ prueba.error }}</div>
+      </div>
+
+      <div class="error-state" *ngIf="errorForm">{{ errorForm }}</div>
+      <div class="pie-form">
+        <button type="button" class="btn btn-ghost" (click)="cancelarForm()">Cancelar</button>
+        <button type="button" class="btn btn-purple" [disabled]="guardando || !formValido" (click)="guardar()">{{ guardando ? 'Guardando…' : 'Guardar' }}</button>
+      </div>
+    </ng-container>
+  </div>
+</div>

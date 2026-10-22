@@ -1,0 +1,86 @@
+<div class="esquema-layout">
+
+  <!-- BARRA SUPERIOR -->
+  <header class="top-bar">
+    <div class="top-left">
+      <button class="btn-volver" (click)="volver()">
+        <span class="btn-volver__icon">←</span>
+        Volver a Aplicaciones
+      </button>
+      <span class="divider"></span>
+      <h2 class="title">Diseñador de Arquitectura</h2>
+      <span *ngIf="!puedeEditar" class="badge-solo-lectura" style="background:#f1f5f9; color:#64748b; font-size:11px; font-weight:700; text-transform:uppercase; padding:4px 10px; border-radius:999px; margin-left:8px;">
+        👁 Solo lectura
+      </span>
+    </div>
+
+    <div class="top-center">
+      <label for="app-selector">Aplicación</label>
+      <select
+        id="app-selector"
+        class="app-selector"
+        [(ngModel)]="appSeleccionadaId"
+        (ngModelChange)="cambiarAplicacion($event)">
+        <option [ngValue]="null" disabled>Seleccione una aplicación...</option>
+        <option *ngFor="let app of aplicacionesDisponibles" [ngValue]="app.id || app.Id">
+          {{ app.nombre || app.Nombre }}
+        </option>
+      </select>
+    </div>
+
+    <div class="top-right">
+      <div class="estado-guardado" *ngIf="estaGuardando">
+        <span class="spinner spinner--sm"></span>
+        Guardando...
+      </div>
+      <div class="estado-guardado estado-guardado--ok" *ngIf="!estaGuardando && ultimoGuardadoOk === true">
+        ✓ Guardado
+      </div>
+      <div class="estado-guardado estado-guardado--error" *ngIf="!estaGuardando && ultimoGuardadoOk === false">
+        ⚠ Error al guardar
+      </div>
+    </div>
+  </header>
+
+  <!-- CONTENEDOR DEL IFRAME DE DRAW.IO -->
+  <main class="canvas-container" style="position: relative;">
+
+    <!-- Estado vacío: sin aplicación seleccionada -->
+    <div class="overlay-bloqueo" *ngIf="!appSeleccionadaId">
+      <div class="overlay-bloqueo__card">
+        <div class="overlay-bloqueo__icon">🗂️</div>
+        <h3>Selecciona una aplicación</h3>
+        <p>Elige una aplicación en el menú superior para cargar o crear su diagrama de arquitectura.</p>
+      </div>
+    </div>
+
+    <!-- Overlay de carga: editor iniciando o XML cargándose desde BD -->
+    <div class="overlay-carga" *ngIf="appSeleccionadaId && (!iframeListo || estaCargandoDiagrama)">
+      <div class="overlay-carga__card">
+        <span class="spinner"></span>
+        <p>{{ !iframeListo ? 'Cargando editor de diagramas...' : 'Cargando esquema guardado...' }}</p>
+      </div>
+    </div>
+
+    <iframe #drawioIframe
+            [src]="iframeUrl"
+            class="drawio-iframe"
+            sandbox="allow-scripts allow-same-origin allow-popups allow-forms allow-modals allow-popups-to-escape-sandbox"
+            frameborder="0"
+            title="Editor de diagramas de arquitectura">
+    </iframe>
+
+    <!-- CAPA DE SOLO LECTURA (BASIC): intercepta TODO clic/arrastre antes de
+         que llegue al iframe. El diagrama se sigue viendo perfecto debajo,
+         simplemente no se puede tocar. Esto no depende de ningún flag interno
+         de drawio, por lo que es imposible de saltarse desde el propio editor. -->
+    <div
+      *ngIf="!puedeEditar && appSeleccionadaId"
+      class="overlay-solo-lectura"
+      title="Tu rol solo permite ver este diagrama"
+      style="position:absolute; inset:0; z-index:20; cursor:not-allowed; background:transparent;">
+    </div>
+
+  </main>
+
+</div>

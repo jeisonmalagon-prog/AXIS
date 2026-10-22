@@ -1,0 +1,150 @@
+<!-- ============ SERVIDORES DOCKER (estilo consola de Portainer) ============ -->
+<ng-container *ngIf="id === 'portainer_flota' && flota as d">
+  <p class="vacio" *ngIf="!d.configurado">Portainer no está configurado en el servidor.</p>
+  <ng-container *ngIf="d.configurado && d.totales as t">
+    <div class="ctl-fila">
+      <app-inicio-selector etiqueta="Servidores" todosTexto="Todos" [items]="itemsEntornos" [seleccion]="entornosSel" (cambio)="elegirEntornos($event)"></app-inicio-selector>
+      <select class="ctl" [ngModel]="opFlota.orden" (ngModelChange)="cambiarOrden($event)" aria-label="Ordenar servidores" name="flota-orden">
+        <option value="atencion">Ordenar: requieren atención</option>
+        <option value="nombre">Ordenar: nombre</option>
+        <option value="memoria">Ordenar: más memoria</option>
+        <option value="cpu">Ordenar: más CPU</option>
+      </select>
+      <button type="button" class="chip-tog" [class.activo]="opFlota.soloAtencion" (click)="alternarAtencion()">Solo con novedades <b>{{ t.conAtencion }}</b></button>
+      <button type="button" class="ctl-reset" *ngIf="hayFiltro" (click)="limpiar()">Restablecer filtros</button>
+    </div>
+
+    <div class="mini-kpis">
+      <div class="mk" [class.alerta]="t.caidos > 0"><span class="et">Servidores activos</span><span class="v">{{ t.arriba }}<small> / {{ t.entornos }}</small></span><span class="s" *ngIf="t.caidos">{{ t.caidos }} sin conexión</span></div>
+      <div class="mk"><span class="et">Contenedores en ejecución</span><span class="v">{{ n(t.corriendo) }}<small> / {{ n(t.contenedores) }}</small></span></div>
+      <div class="mk" [class.aviso]="t.detenidos > 0"><span class="et">Detenidos</span><span class="v">{{ n(t.detenidos) }}</span></div>
+      <div class="mk" [class.alerta]="t.conProblemas > 0"><span class="et">Reiniciando o sin salud</span><span class="v">{{ n(t.conProblemas) }}</span></div>
+      <div class="mk" *ngIf="t.memTotalGb"><span class="et">Memoria usada</span><span class="v">{{ d1(t.memHostPct) }} %</span><span class="s">{{ d1(t.memUsadaGb) }} de {{ d1(t.memTotalGb) }} GB</span></div>
+    </div>
+
+    <div class="tiles" *ngIf="d.entornos?.length">
+      <article class="tile" *ngFor="let e of servidoresVisibles; trackBy: trackE" [class.grave]="e.grave" [class.atencion]="e.atencion && !e.grave" [class.caido]="e.estado !== 'up'">
+        <div class="t-cab">
+          <span class="punto" [ngClass]="puntoClase(e)" [attr.title]="e.estado === 'up' ? (e.atencion ? 'Con novedades' : 'Sin novedades') : 'Sin conexión'"></span>
+          <span class="nombre" [title]="e.nombre">{{ e.nombre }}</span>
+          <span class="ip" *ngIf="e.ip">{{ e.ip }}</span>
+        </div>
+        <div class="t-sub" *ngIf="e.cores || e.memTotalGb || e.dockerVersion">
+          <ng-container *ngIf="e.cores">{{ e.cores }} núcleos</ng-container><ng-container *ngIf="e.cores && e.memTotalGb"> · </ng-container><ng-container *ngIf="e.memTotalGb">{{ d1(e.memTotalGb) }} GB</ng-container><ng-container *ngIf="e.dockerVersion"> · Docker {{ e.dockerVersion }}</ng-container>
+        </div>
+        <div class="t-err" *ngIf="e.estado !== 'up' || e.error">{{ e.error || 'Sin conexión' }}</div>
+        <ng-container *ngIf="e.estado === 'up'">
+          <div class="conteos">
+            <span class="g-ok"><i>●</i><b>{{ e.corriendo }}</b> en ejecución</span>
+            <span [class.g-aviso]="e.detenidos > 0" [class.g-apag]="e.detenidos === 0"><i>■</i><b>{{ e.detenidos }}</b> detenidos</span>
+            <span class="g-mal" *ngIf="e.reiniciando"><i>↻</i><b>{{ e.reiniciando }}</b> reiniciando</span>
+            <span class="g-mal" *ngIf="e.insanos"><i>⚠</i><b>{{ e.insanos }}</b> sin salud</span>
+          </div>
+          <div class="medidor" [title]="'Uso de CPU de los contenedores respecto a todos los núcleos del servidor (suma de contenedores: ' + d1(e.cpuSumaPct) + ' %)'">
+            <span>CPU</span>
+            <span class="pista"><i class="relleno" [ngClass]="claseMedidor(e.cpuHostPct)" [style.width.%]="e.cpuHostPct ?? 0"></i></span>
+            <span class="val">{{ e.cpuHostPct !== null ? d1(e.cpuHostPct) + ' %' : d1(e.cpuSumaPct) + ' % (suma)' }}</span>
+          </div>
+          <div class="medidor" title="Memoria usada por los contenedores respecto a la memoria total del servidor">
+            <span>Mem.</span>
+            <span class="pista"><i class="relleno" [ngClass]="claseMedidor(e.memHostPct)" [style.width.%]="e.memHostPct ?? 0"></i></span>
+            <span class="val">{{ e.memTotalGb ? d1(e.memUsadaGb) + ' / ' + d1(e.memTotalGb) + ' GB' : d1(e.memUsadaGb) + ' GB' }}</span>
+          </div>
+        </ng-container>
+      </article>
+    </div>
+    <button type="button" class="ver-mas" *ngIf="(d.entornos?.length ?? 0) > visiblesServidores" (click)="alternarServidores()">{{ verTodosServidores ? 'Ver menos' : 'Ver los ' + d.entornos?.length + ' servidores (hay ' + ((d.entornos?.length ?? 0) - visiblesServidores) + ' más)' }}</button>
+    <p class="vacio" *ngIf="!d.entornos?.length">Ningún servidor coincide con los filtros.</p>
+    <p class="nota" *ngIf="d.hayMas">y {{ d.hayMas }} servidores más… afina el filtro para verlos.</p>
+    <p class="nota">CPU y memoria son los que usan los contenedores respecto a la capacidad del servidor (Portainer no informa el uso total del equipo).</p>
+  </ng-container>
+</ng-container>
+
+<!-- ============ CONTENEDORES CON PROBLEMAS ============ -->
+<ng-container *ngIf="id === 'portainer_problemas' && problemas as d">
+  <p class="vacio" *ngIf="!d.configurado">Portainer no está configurado en el servidor.</p>
+  <ng-container *ngIf="d.configurado && d.cuentas as cu">
+    <div class="ctl-fila">
+      <app-inicio-selector etiqueta="Servidores" todosTexto="Todos" [items]="itemsEntornos" [seleccion]="entornosSel" (cambio)="elegirEntornos($event)"></app-inicio-selector>
+      <button type="button" class="chip-tog" [class.activo]="tipoActivo('insano')" (click)="alternarTipo('insano')">⚠ Sin salud <b>{{ cu.insano }}</b></button>
+      <button type="button" class="chip-tog" [class.activo]="tipoActivo('reiniciando')" (click)="alternarTipo('reiniciando')">↻ Reiniciando <b>{{ cu.reiniciando }}</b></button>
+      <button type="button" class="chip-tog" [class.activo]="tipoActivo('detenido')" (click)="alternarTipo('detenido')">■ Detenidos <b>{{ cu.detenido }}</b></button>
+      <button type="button" class="ctl-reset" *ngIf="hayFiltro || busca" (click)="limpiar()">Restablecer</button>
+    </div>
+    <div class="ctl-fila" *ngIf="(d.total ?? 0) > 12 || busca">
+      <input class="ctl" type="search" placeholder="Buscar contenedor, imagen o servidor" [(ngModel)]="busca" name="prob-busca" autocomplete="off" />
+    </div>
+
+    <ul class="lista-compacta" *ngIf="filasVisibles.length">
+      <li *ngFor="let f of filasVisibles">
+        <span class="chip" [ngClass]="claseTipo(f.tipo)">{{ etiquetaTipo(f.tipo) }}</span>
+        <span class="nombre" [title]="f.contenedor + ' · ' + f.imagen">{{ f.contenedor }}<small>{{ f.entorno }} · {{ f.imagen }}</small></span>
+        <span class="val" [title]="f.detalle">{{ f.detalle }}</span>
+      </li>
+    </ul>
+    <button type="button" class="ver-mas" *ngIf="filasProblemas.length > 8" (click)="alternarVerTodos()">{{ verTodos ? 'Ver menos' : 'Ver los ' + filasProblemas.length + ' (hay ' + (filasProblemas.length - visiblesProblemas) + ' más)' }}</button>
+    <p class="ok-linea" *ngIf="!filasProblemas.length && !busca">Ningún contenedor con esos estados en los servidores elegidos.</p>
+    <p class="ok-linea" *ngIf="!filasProblemas.length && busca">Sin coincidencias para «{{ busca }}».</p>
+    <div class="aviso-aviso" *ngIf="d.sinConexion?.length">Sin conexión en Portainer: <b>{{ d.sinConexion?.length }}</b> servidor(es) ({{ sinConexionNombres(d) }}).</div>
+  </ng-container>
+</ng-container>
+
+<!-- ============ MAYORES CONSUMIDORES ============ -->
+<ng-container *ngIf="id === 'portainer_consumo' && consumo as d">
+  <p class="vacio" *ngIf="!d.configurado">Portainer no está configurado en el servidor.</p>
+  <ng-container *ngIf="d.configurado">
+    <div class="ctl-fila">
+      <app-inicio-selector etiqueta="Servidores" todosTexto="Todos" [items]="itemsEntornos" [seleccion]="entornosSel" (cambio)="elegirEntornos($event)"></app-inicio-selector>
+      <select class="ctl" [ngModel]="opCons.cantidad" (ngModelChange)="elegirCantidad($event)" aria-label="Cantidad de contenedores" name="cons-cant">
+        <option [ngValue]="6">Top 6</option><option [ngValue]="10">Top 10</option><option [ngValue]="20">Top 20</option>
+      </select>
+      <div class="selector-dias" role="tablist">
+        <button type="button" [class.activo]="opCons.metrica === 'cpu'" (click)="elegirMetrica('cpu')">CPU</button>
+        <button type="button" [class.activo]="opCons.metrica === 'mem'" (click)="elegirMetrica('mem')">Memoria</button>
+      </div>
+      <button type="button" class="ctl-reset" *ngIf="hayFiltro" (click)="limpiar()">Restablecer</button>
+    </div>
+    <ul class="barras" *ngIf="opCons.metrica === 'cpu'">
+      <li *ngFor="let c of d.porCpu" [title]="c.nombre + ' (' + c.entorno + '): ' + fmtCpu(c.cpu) + ' CPU · ' + mb(c.memMb) + ' · ' + c.imagen">
+        <span class="nombre">{{ c.nombre }}<small>{{ c.entorno }}</small></span>
+        <span class="pista"><i [style.width.%]="pct(c.cpu, maxCpu())"></i></span>
+        <span class="val">{{ fmtCpu(c.cpu) }}</span>
+      </li>
+    </ul>
+    <ul class="barras" *ngIf="opCons.metrica === 'mem'">
+      <li *ngFor="let c of d.porMem" [title]="c.nombre + ' (' + c.entorno + '): ' + mb(c.memMb) + ' · ' + fmtCpu(c.cpu) + ' CPU · ' + c.imagen">
+        <span class="nombre">{{ c.nombre }}<small>{{ c.entorno }}</small></span>
+        <span class="pista"><i [style.width.%]="pct(c.memMb, maxMem())"></i></span>
+        <span class="val">{{ mb(c.memMb) }}</span>
+      </li>
+    </ul>
+    <p class="vacio" *ngIf="!d.porCpu?.length">Sin contenedores con métricas en los servidores elegidos.</p>
+    <p class="nota">Top {{ opCons.cantidad }} de {{ n(d.totalMedidos) }} contenedores en ejecución.</p>
+  </ng-container>
+</ng-container>
+
+<!-- ============ TENDENCIA ============ -->
+<ng-container *ngIf="id === 'portainer_tendencia' && tendencia as d">
+  <p class="vacio" *ngIf="!d.configurado">Portainer no está configurado en el servidor.</p>
+  <ng-container *ngIf="d.configurado">
+    <div class="ctl-fila">
+      <app-inicio-selector etiqueta="Servidores" todosTexto="Todos" [items]="itemsEntornos" [seleccion]="entornosSel" (cambio)="elegirEntornos($event)"></app-inicio-selector>
+      <div class="selector-dias" role="tablist" aria-label="Rango de tiempo">
+        <button type="button" *ngFor="let r of rangos" [class.activo]="opTend.horas === r.v" (click)="cambiar({ horas: r.v })">{{ r.t }}</button>
+      </div>
+      <div class="selector-dias" role="tablist" aria-label="Métrica">
+        <button type="button" [class.activo]="opTend.metrica === 'cpu'" (click)="cambiar({ metrica: 'cpu' })">CPU</button>
+        <button type="button" [class.activo]="opTend.metrica === 'mem'" (click)="cambiar({ metrica: 'mem' })">Memoria</button>
+      </div>
+      <div class="selector-dias" role="tablist" aria-label="Agrupación">
+        <button type="button" [class.activo]="opTend.agrupar === 'total'" (click)="cambiar({ agrupar: 'total' })">Total</button>
+        <button type="button" [class.activo]="opTend.agrupar === 'servidor'" (click)="cambiar({ agrupar: 'servidor' })">Por servidor</button>
+      </div>
+      <button type="button" class="ctl-reset" *ngIf="hayFiltro" (click)="limpiar()">Restablecer</button>
+    </div>
+    <app-inicio-linea [series]="seriesTendencia" [fmt]="fmtTend" [alto]="190" [etiqueta]="'Tendencia de ' + (opTend.metrica === 'cpu' ? 'CPU' : 'memoria') + ' de los contenedores en ' + rangoTexto"></app-inicio-linea>
+    <p class="nota" *ngIf="d.agrupar === 'servidor'">Una línea por servidor (hasta 6<ng-container *ngIf="d.hayMasServidores">; hay {{ d.hayMasServidores }} más: elige cuáles ver en «Servidores»</ng-container>).
+      {{ opTend.metrica === 'cpu' ? 'CPU promedio por contenedor.' : 'Memoria usada por los contenedores del servidor.' }}</p>
+    <p class="nota" *ngIf="d.agrupar !== 'servidor'">{{ opTend.metrica === 'cpu' ? 'CPU promedio por contenedor' : 'Memoria usada por todos los contenedores' }} en {{ rangoTexto }}; una lectura cada 10 minutos.</p>
+  </ng-container>
+</ng-container>

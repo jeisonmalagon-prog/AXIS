@@ -1,0 +1,213 @@
+<header class="cab">
+  <div>
+    <h2 class="titulo">Puertos por servidor</h2>
+    <p class="sub">Según Portainer (solo lectura, sin SSH): qué puertos publican los contenedores de cada servidor Docker, en qué servidor y en qué contenedor, y qué puertos libres conviene usar según el tipo de componente.</p>
+  </div>
+  <div class="cab-acciones">
+    <button type="button" class="btn btn-ghost btn-sm" *ngIf="vista === 'uso' && hayPuertos" (click)="exportarExcel()">Exportar Excel</button>
+    <button type="button" class="btn btn-purple" (click)="cargar(true)" [disabled]="cargando">
+      <span class="spinner chico" *ngIf="cargando"></span>
+      {{ cargando ? 'Consultando Portainer…' : 'Actualizar' }}
+    </button>
+  </div>
+</header>
+
+<div class="segmentos" role="tablist">
+  <button type="button" role="tab" class="segmento" [class.activo]="vista === 'uso'" (click)="cambiarVista('uso')">Puertos en uso</button>
+  <button type="button" role="tab" class="segmento" [class.activo]="vista === 'sugerir'" (click)="cambiarVista('sugerir')">Sugerir puertos libres</button>
+</div>
+
+<div class="error-state" *ngIf="error">{{ error }} <button type="button" class="btn btn-ghost btn-sm" (click)="cargar(true)">Reintentar</button></div>
+<div class="aviso-aviso" *ngIf="sinPortainer">
+  Portainer no está configurado en el backend. Define <span class="mono">PORTAINER_URL</span>, <span class="mono">PORTAINER_USER</span> y <span class="mono">PORTAINER_PASS</span> en el .env (son los mismos que usa Monitoreo).
+</div>
+
+<!-- ============================================================ Puertos en uso -->
+<ng-container *ngIf="vista === 'uso'">
+  <div class="cargando chico-v" *ngIf="cargando && !datos"><div class="spinner"></div><p>Consultando los servidores en Portainer…</p></div>
+
+  <ng-container *ngIf="datos && datos.configurado">
+    <div class="kpis kpis-5">
+      <div class="kpi"><span class="kpi-et">Servidores Docker</span><span class="kpi-v">{{ kpi.servidores }}<small *ngIf="kpi.conError"> / {{ kpi.total }}</small></span><span class="kpi-s">{{ kpi.contenedores }} contenedores</span></div>
+      <div class="kpi"><span class="kpi-et">Puertos en uso</span><span class="kpi-v">{{ kpi.enUso }}</span><span class="kpi-s">publicados por contenedores en ejecución</span></div>
+      <div class="kpi"><span class="kpi-et">Reservados</span><span class="kpi-v">{{ kpi.reservados }}</span><span class="kpi-s">de contenedores detenidos</span></div>
+      <div class="kpi" [class.kpi-alerta]="kpi.sinInventariar"><span class="kpi-et">Sin inventariar</span><span class="kpi-v">{{ kpi.sinInventariar }}</span><span class="kpi-s">en uso y que el inventario no conoce</span></div>
+      <div class="kpi" [class.kpi-alerta]="kpi.conError"><span class="kpi-et">Con error</span><span class="kpi-v">{{ kpi.conError }}</span><span class="kpi-s">servidores que Portainer no pudo leer</span></div>
+    </div>
+
+    <section class="tarjeta filtros-card">
+      <div class="filtros-fila">
+        <label class="etiqueta">Buscar
+          <input class="entrada" type="search" [(ngModel)]="texto" name="p-texto" (ngModelChange)="recalcular()" placeholder="Puerto, contenedor, imagen o servidor" autocomplete="off" />
+        </label>
+      </div>
+      <div class="filtros-bloque">
+        <span class="filtros-et">Estado</span>
+        <button type="button" class="chip-filtro" [class.activo]="estado === 'activo'" (click)="elegirEstado('activo')">En ejecución</button>
+        <button type="button" class="chip-filtro" [class.activo]="estado === 'reservado'" (click)="elegirEstado('reservado')">Reservado (detenido)</button>
+      </div>
+      <div class="filtros-bloque">
+        <span class="filtros-et">Inventario</span>
+        <button type="button" class="chip-filtro" [class.activo]="inventario === 'no_inventariado'" (click)="elegirInventario('no_inventariado')">No inventariado</button>
+        <button type="button" class="chip-filtro" [class.activo]="inventario === 'inventariado'" (click)="elegirInventario('inventariado')">En inventario</button>
+      </div>
+      <div class="filtros-bloque" *ngIf="ambientes.length > 1">
+        <span class="filtros-et">Ambiente</span>
+        <button type="button" class="chip-filtro" *ngFor="let a of ambientes" [class.activo]="ambiente === a.nombre" (click)="elegirAmbiente(a.nombre)">{{ a.nombre }} <span>{{ a.total }}</span></button>
+      </div>
+      <div class="filtros-pie" *ngIf="hayFiltros">
+        <span class="gris">Consultado {{ hora(datos.consultadoEn) }}</span>
+        <button type="button" class="btn btn-ghost btn-sm" (click)="quitarFiltros()">Quitar filtros</button>
+      </div>
+    </section>
+
+    <div class="aviso-info" *ngIf="usoDelPuerto as up">
+      <ng-container *ngIf="up.usos.length; else libre">
+        El puerto <strong>{{ up.puerto }}</strong> aparece en {{ up.usos.length }} servidor(es):
+        <ng-container *ngFor="let u of up.usos; let ultimo = last"><strong>{{ u.servidor }}</strong> (contenedor {{ u.contenedor }}<ng-container *ngIf="u.reservado">, detenido: reservado</ng-container>)<ng-container *ngIf="!ultimo">, </ng-container></ng-container>.
+      </ng-container>
+      <ng-template #libre>El puerto <strong>{{ up.puerto }}</strong> no aparece publicado en ningún contenedor de los servidores consultados.</ng-template>
+    </div>
+
+    <div class="aviso-aviso" *ngIf="conRedHost">
+      {{ conRedHost }} servidor(es) tienen contenedores con red «host»: Docker no informa sus puertos, así que no aparecen en la lista (se indican en cada servidor).
+    </div>
+    <p class="nota" *ngIf="!conRedHost">Portainer solo ve Docker: procesos fuera de contenedores (IIS, servicios del sistema operativo) no aparecen aquí.</p>
+
+    <section class="tarjeta vacio-inicial" *ngIf="!vistas.length && !hayFiltros">
+      <h3>Portainer no devolvió servidores</h3>
+      <p>No hay environments de Docker disponibles en Portainer.</p>
+    </section>
+    <section class="tarjeta vacio-inicial" *ngIf="!vistas.length && hayFiltros">
+      <h3>Sin coincidencias</h3>
+      <p>Ningún servidor tiene puertos con esos filtros.</p>
+    </section>
+
+    <section class="tarjeta srv" *ngFor="let v of vistas; trackBy: trackE">
+      <div class="srv-cab" [class.clic]="v.e.ok" (click)="alternar(v.e)">
+        <div class="srv-id">
+          <span class="srv-flecha" *ngIf="v.e.ok">{{ abierta(v.e) ? '▾' : '▸' }}</span>
+          <strong>{{ v.e.nombre }}</strong>
+          <span class="mono gris" *ngIf="v.e.ip">{{ v.e.ip }}</span>
+          <span class="chip" *ngIf="v.e.ambiente">{{ v.e.ambiente }}</span>
+          <span class="chip chip-media" *ngIf="v.e.ok && !v.e.servidorInventariado" title="El entorno de Portainer no coincide con ningún servidor del inventario por nombre ni por IP">No está en el inventario</span>
+        </div>
+        <div class="srv-estado">
+          <span class="t-mal" *ngIf="!v.e.ok">{{ v.e.error || 'No se pudo leer este servidor' }}</span>
+          <span *ngIf="v.e.ok">
+            <strong>{{ v.e.resumen.enUso }}</strong> en uso
+            <ng-container *ngIf="v.e.resumen.reservados"> · {{ v.e.resumen.reservados }} reservados</ng-container>
+            · {{ v.e.contenedores }} contenedores
+            <span class="chip chip-alta" *ngIf="v.e.resumen.sinInventariar">{{ v.e.resumen.sinInventariar }} sin inventariar</span>
+          </span>
+        </div>
+      </div>
+
+      <div *ngIf="v.e.ok && abierta(v.e)">
+        <div class="vacio" *ngIf="!v.filas.length">{{ hayFiltros ? 'Sin puertos con esos filtros en este servidor.' : 'Ningún contenedor de este servidor publica puertos.' }}</div>
+        <div class="tabla-wrap tabla-alta" *ngIf="v.filas.length">
+          <table class="tabla">
+            <thead><tr><th>Puerto</th><th>Protocolo</th><th>Contenedor</th><th>Imagen / stack</th><th>Publicado</th><th>Estado</th><th>Inventario</th></tr></thead>
+            <tbody>
+              <tr *ngFor="let f of v.filas; trackBy: trackF" [class.fila-reservada]="f.reservado">
+                <td class="mono puerto">{{ f.puerto }}</td>
+                <td>{{ f.protocolo }}</td>
+                <td class="contenedor" [title]="f.contenedor">{{ f.contenedor }}</td>
+                <td class="gris" [title]="f.imagen">{{ f.imagen }}<span class="stack" *ngIf="f.stack">stack: {{ f.stack }}</span></td>
+                <td class="mono gris">{{ publicado(f) }}<span class="alcance" *ngIf="alcanceTexto(f)">{{ alcanceTexto(f) }}</span></td>
+                <td><span class="chip" [ngClass]="f.reservado ? 'chip-media' : 'chip-ok'">{{ f.reservado ? 'Reservado (detenido)' : 'En ejecución' }}</span></td>
+                <td class="celda-inv">
+                  <span class="chip" [ngClass]="claseInventario(f.estadoInventario)">{{ etiquetaInventario(f.estadoInventario) }}</span>
+                  <span class="inv-det" *ngFor="let i of f.inventario">{{ detalleInventario(i) }}<span class="gris" *ngIf="i.aplicaciones.length"> · {{ i.aplicaciones.join(', ') }}</span></span>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="aviso-aviso inv-aviso" *ngIf="v.e.redHost.length">
+          Con red «host» (sus puertos no se pueden ver):
+          <ng-container *ngFor="let h of v.e.redHost; let ultimo = last"><strong>{{ h.contenedor }}</strong> ({{ h.imagen }})<ng-container *ngIf="!ultimo">, </ng-container></ng-container>.
+        </div>
+        <div class="aviso-aviso inv-aviso" *ngIf="v.e.reservasSinLeer">
+          Hay {{ v.e.reservasSinLeer }} contenedor(es) detenido(s) cuyos puertos reservados no se leyeron (límite por servidor); pueden existir más puertos reservados.
+        </div>
+        <div class="inv-ausentes" *ngIf="v.e.inventarioSinEscuchar.length && !inventario">
+          <strong>En el inventario pero no publicado por Docker ({{ v.e.inventarioSinEscuchar.length }}):</strong>
+          <span class="chip chip-media" *ngFor="let i of v.e.inventarioSinEscuchar">{{ i.puerto }} · {{ detalleInventario(i) }}</span>
+        </div>
+      </div>
+    </section>
+  </ng-container>
+</ng-container>
+
+<!-- ============================================================ Sugerir puertos libres -->
+<ng-container *ngIf="vista === 'sugerir'">
+  <div class="error-state" *ngIf="errorNormas">{{ errorNormas }} <button type="button" class="btn btn-ghost btn-sm" (click)="cargarNormas()">Reintentar</button></div>
+
+  <section class="tarjeta sug-form" *ngIf="normas">
+    <div class="sug-campos">
+      <label class="etiqueta">Tipo de componente
+        <select class="entrada" [ngModel]="tipoId" (ngModelChange)="elegirTipo($event)" name="s-tipo">
+          <option *ngFor="let t of normas.tipos" [value]="t.id">{{ t.nombre }} ({{ t.desde }}–{{ t.hasta }})</option>
+        </select>
+      </label>
+      <label class="etiqueta">Servidor
+        <select class="entrada" [(ngModel)]="destino" name="s-destino">
+          <option value="todos">Cualquiera: libre en todos los servidores</option>
+          <option *ngFor="let e of entornosOk" [ngValue]="e.id">{{ e.nombre }}{{ e.ambiente ? ' · ' + e.ambiente : '' }}</option>
+        </select>
+      </label>
+      <label class="etiqueta">Cantidad
+        <input class="entrada corto" type="number" min="1" max="10" [(ngModel)]="cantidad" name="s-cant" />
+      </label>
+      <button type="button" class="btn btn-purple" (click)="sugerir()" [disabled]="sugiriendo || !tipoId">
+        <span class="spinner chico" *ngIf="sugiriendo"></span>{{ sugiriendo ? 'Calculando…' : 'Sugerir puertos' }}
+      </button>
+    </div>
+    <p class="ayuda" *ngIf="tipoActual">{{ tipoActual.descripcion }}. Rango {{ tipoActual.desde }}–{{ tipoActual.hasta }}.</p>
+  </section>
+
+  <div class="error-state" *ngIf="errorSugerencia">{{ errorSugerencia }}</div>
+
+  <section class="tarjeta sug-res" *ngIf="sugerencia as s">
+    <h3 class="sug-tit">{{ s.sugeridos.length ? 'Puertos sugeridos' : 'Sin puertos sugeridos' }} — {{ s.tipo.nombre }}</h3>
+    <p class="gris sug-sub">Para {{ s.destino }} · rango {{ s.tipo.desde }}–{{ s.tipo.hasta }} · {{ s.ocupadosEnRango }} de {{ s.tamanoRango }} ocupados · toca un puerto para copiarlo</p>
+    <div class="sug-chips" *ngIf="s.sugeridos.length">
+      <button type="button" class="sug-puerto" *ngFor="let p of s.sugeridos" (click)="copiar(p)" [class.parcial]="!p.libreEnTodos">
+        <span class="sug-num mono">{{ p.puerto }}</span>
+        <span class="sug-nota" *ngIf="copiado === p.puerto">Copiado</span>
+        <span class="sug-nota" *ngIf="copiado !== p.puerto && p.libreEnTodos">Libre en todos los servidores</span>
+        <span class="sug-nota" *ngIf="copiado !== p.puerto && !p.libreEnTodos">En uso en {{ p.usadoEn.join(', ') }}</span>
+      </button>
+    </div>
+    <div class="aviso-aviso" *ngIf="s.mensaje">{{ s.mensaje }}</div>
+  </section>
+
+  <section class="tarjeta normas" *ngIf="normas">
+    <div class="normas-cab clic" (click)="alternarNormas()">
+      <strong><span class="srv-flecha">{{ verNormas ? '▾' : '▸' }}</span> Rangos por tipo de componente</strong>
+      <span class="gris">{{ normas.origen === 'archivo' ? 'Definidos en puertos-normas.json' : 'Rangos propuestos por defecto' }}</span>
+    </div>
+    <div *ngIf="verNormas">
+      <div class="tabla-wrap">
+        <table class="tabla">
+          <thead><tr><th>Tipo</th><th>Rango</th><th>Para qué</th></tr></thead>
+          <tbody>
+            <tr *ngFor="let t of normas.tipos" [class.fila-sel]="t.id === tipoId">
+              <td>{{ t.nombre }}</td><td class="mono">{{ t.desde }}–{{ t.hasta }}</td><td class="gris">{{ t.descripcion }}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="inv-ausentes">
+        <strong>Nunca se sugieren (puertos por defecto de herramientas conocidas):</strong>
+        <span class="chip" *ngFor="let r of normas.reservados">{{ r }}</span>
+      </div>
+    </div>
+    <p class="nota nota-pie">Los rangos son una propuesta basada en buenas prácticas de arquitectura; ajústalos a la norma de la organización editando <span class="mono">backend/config/puertos-normas.json</span> y reiniciando el backend.</p>
+    <div class="aviso-aviso inv-aviso" *ngIf="normas.aviso">{{ normas.aviso }}</div>
+  </section>
+
+  <p class="nota" *ngIf="datos && datos.configurado">La sugerencia descarta los puertos publicados (o reservados por contenedores detenidos) en los servidores consultados y los registrados en el inventario. Procesos fuera de Docker no son visibles para Portainer: valida el puerto antes de desplegar.</p>
+</ng-container>

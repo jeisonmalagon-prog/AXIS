@@ -1,0 +1,331 @@
+<header class="page-header">
+  <div>
+    <h1>Gestor de Tareas</h1>
+    <p class="subtitle">Pendientes propios y de equipo — asigna a uno o varios compañeros y sigue el avance.</p>
+  </div>
+  <button type="button" class="btn btn-primary" *ngIf="!esConsulta" (click)="abrirCrear()">+ Nueva Tarea</button>
+  <span class="aviso-consulta" *ngIf="esConsulta" title="El administrador te asignó el rol de Consulta en Tareas">Rol de consulta: puedes ver tus tareas y cambiar su estado</span>
+</header>
+
+<div class="indicadores">
+  <div class="indicador">
+    <span class="indicador__numero">{{ contarPorEstado('PENDIENTE') }}</span>
+    <span class="indicador__etiqueta">Pendientes</span>
+  </div>
+  <div class="indicador">
+    <span class="indicador__numero">{{ contarPorEstado('EN_PROGRESO') }}</span>
+    <span class="indicador__etiqueta">En progreso</span>
+  </div>
+  <div class="indicador">
+    <span class="indicador__numero">{{ contarPorEstado('COMPLETADA') }}</span>
+    <span class="indicador__etiqueta">Completadas</span>
+  </div>
+  <div class="indicador" [class.indicador--alerta]="contarVencidas() > 0">
+    <span class="indicador__numero">{{ contarVencidas() }}</span>
+    <span class="indicador__etiqueta">Vencidas</span>
+  </div>
+</div>
+
+<div class="filtros-fila">
+  <div class="tabs">
+    <button type="button" class="tab" [class.activo]="filtroVista === 'todas'" (click)="filtroVista = 'todas'; cargar()">Todas</button>
+    <button type="button" class="tab" [class.activo]="filtroVista === 'asignadas'" (click)="filtroVista = 'asignadas'; cargar()">Asignadas a mí</button>
+    <button type="button" class="tab" [class.activo]="filtroVista === 'creadas'" (click)="filtroVista = 'creadas'; cargar()">Que yo creé</button>
+  </div>
+  <div class="filtros-fila__derecha">
+    <div class="buscador">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+      <input type="text" [(ngModel)]="terminoBusqueda" placeholder="Buscar por título o descripción…">
+      <button type="button" class="buscador__limpiar" *ngIf="terminoBusqueda" (click)="terminoBusqueda = ''" title="Limpiar búsqueda">×</button>
+    </div>
+    <select [(ngModel)]="filtroEstado" (change)="cargar()">
+      <option value="">Todos los estados</option>
+      <option value="PENDIENTE">Pendiente</option>
+      <option value="EN_PROGRESO">En progreso</option>
+      <option value="COMPLETADA">Completada</option>
+      <option value="CANCELADA">Cancelada</option>
+    </select>
+    <div class="selector-vista-modo">
+      <button type="button" class="btn-vista-modo" [class.activo]="vistaModo === 'tarjetas'" (click)="cambiarVista('tarjetas')" title="Vista de tarjetas">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
+      </button>
+      <button type="button" class="btn-vista-modo" [class.activo]="vistaModo === 'tablero'" (click)="cambiarVista('tablero')" title="Vista de tablero (Kanban)">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="4" height="18"/><rect x="10" y="3" width="4" height="12"/><rect x="17" y="3" width="4" height="8"/></svg>
+      </button>
+    </div>
+  </div>
+</div>
+
+<div class="error-banner" *ngIf="error">{{ error }}</div>
+<div class="aviso-calendario" *ngIf="avisoCalendario">{{ avisoCalendario }} <button type="button" class="aviso-calendario__cerrar" (click)="avisoCalendario = null" aria-label="Cerrar aviso">✕</button></div>
+
+<div class="carga-inicial" *ngIf="cargando">Cargando tareas…</div>
+<div class="empty" *ngIf="!cargando && !tareas.length">No hay tareas con esos filtros.</div>
+<div class="empty" *ngIf="!cargando && tareas.length && !tareasFiltradas().length">Ninguna tarea coincide con "{{ terminoBusqueda }}".</div>
+
+<!-- ---------- VISTA: TARJETAS ---------- -->
+<div class="tareas-grid" *ngIf="!cargando && tareasFiltradas().length && vistaModo === 'tarjetas'">
+  <div class="tarea-card" [class.tarea-card--vencida]="estaVencida(t)" *ngFor="let t of tareasFiltradas()" (click)="abrirDetalle(t)" [ngClass]="'borde-' + t.Prioridad.toLowerCase()">
+    <div class="tarea-card__top">
+      <span class="status-pill" [ngClass]="'estado-' + t.Estado.toLowerCase()">{{ etiquetaEstado(t.Estado) }}</span>
+      <div class="tarea-card__top-derecha">
+        <span class="prioridad" [ngClass]="'prioridad-' + t.Prioridad.toLowerCase()">{{ t.Prioridad }}</span>
+        <button type="button" class="btn-eliminar btn-eliminar--tarjeta" *ngIf="puedeEliminar(t)" (click)="$event.stopPropagation(); eliminar(t)" title="Eliminar">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+        </button>
+      </div>
+    </div>
+    <h3>{{ t.Titulo }}</h3>
+    <p class="descripcion" *ngIf="t.Descripcion">{{ t.Descripcion }}</p>
+    <div class="avatares">
+      <span class="avatar" *ngFor="let a of t.asignados" [title]="a.nombreCompleto">
+        <img *ngIf="fotoDe(a.id) as foto; else sinFoto" [src]="foto" [alt]="a.nombreCompleto" loading="lazy">
+        <ng-template #sinFoto>{{ iniciales(a.nombreCompleto) }}</ng-template>
+      </span>
+    </div>
+    <div class="tarea-card__meta">
+      <span>Creada por {{ t.CreadoPorNombre }}</span>
+      <span *ngIf="t.FechaLimite" [class.vencida-texto]="estaVencida(t)">
+        {{ estaVencida(t) ? 'Venció' : 'Límite' }}: {{ t.FechaLimite | date:'d MMM yyyy' }}<ng-container *ngIf="t.HoraFin"> · {{ t.HoraInicio }} - {{ t.HoraFin }}</ng-container>
+      </span>
+      <span>Tiempo: {{ tiempoTranscurrido(t) }}</span>
+    </div>
+  </div>
+</div>
+
+<!-- ---------- VISTA: TABLERO (KANBAN) ---------- -->
+<div class="tablero" *ngIf="!cargando && vistaModo === 'tablero'">
+  <div class="tablero-columna" *ngFor="let col of columnasTablero" [class.tablero-columna--resaltada]="columnaResaltada === col.estado"
+       (dragover)="permitirSoltar($event, col.estado)" (dragleave)="columnaResaltada = null" (drop)="soltarEnColumna($event, col.estado)">
+    <div class="tablero-columna__cabecera">
+      <span [ngClass]="'punto-' + col.estado.toLowerCase()"></span>
+      <span>{{ col.etiqueta }}</span>
+      <span class="tablero-columna__contador">{{ tareasPorEstado(col.estado).length }}</span>
+    </div>
+    <div class="tablero-columna__cuerpo">
+      <div class="tablero-card" [ngClass]="'borde-' + t.Prioridad.toLowerCase()" *ngFor="let t of tareasPorEstado(col.estado)"
+           draggable="true" (dragstart)="iniciarArrastre(t)" (dragend)="terminarArrastre()" (click)="abrirDetalle(t)">
+        <div class="tablero-card__top">
+          <span class="prioridad" [ngClass]="'prioridad-' + t.Prioridad.toLowerCase()">{{ t.Prioridad }}</span>
+          <span class="vencida-chip" *ngIf="estaVencida(t)">Vencida</span>
+        </div>
+        <h4>{{ t.Titulo }}</h4>
+        <div class="tablero-card__pie">
+          <div class="avatares">
+            <span class="avatar avatar--sm" *ngFor="let a of t.asignados" [title]="a.nombreCompleto">
+              <img *ngIf="fotoDe(a.id) as foto; else sinFotoTablero" [src]="foto" [alt]="a.nombreCompleto" loading="lazy">
+              <ng-template #sinFotoTablero>{{ iniciales(a.nombreCompleto) }}</ng-template>
+            </span>
+          </div>
+          <span class="tablero-card__fecha" *ngIf="t.FechaLimite">{{ t.FechaLimite | date:'d MMM' }}</span>
+        </div>
+      </div>
+      <p class="tablero-columna__vacio" *ngIf="!tareasPorEstado(col.estado).length">Sin tareas</p>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: NUEVA TAREA -->
+<div class="overlay" *ngIf="mostrarForm" (click)="cerrarFormulario()">
+  <div class="modal" (click)="$event.stopPropagation()">
+    <div class="modal-header"><h2>Nueva Tarea</h2></div>
+    <div class="modal-body">
+      <label class="form-label">Título</label>
+      <input class="form-input" type="text" [(ngModel)]="form.titulo" placeholder="Ej. Cambio de certificados servidor X">
+
+      <label class="form-label">Descripción</label>
+      <textarea class="form-input" rows="3" [(ngModel)]="form.descripcion" placeholder="Detalle opcional…"></textarea>
+
+      <label class="form-label">Prioridad</label>
+      <select class="form-input" [(ngModel)]="form.prioridad">
+        <option value="BAJA">Baja</option>
+        <option value="MEDIA">Media</option>
+        <option value="ALTA">Alta</option>
+      </select>
+
+      <label class="form-label">Fecha límite (opcional)</label>
+      <input class="form-input" type="date" [(ngModel)]="form.fechaLimite" [min]="hoy">
+      <p class="ayuda-horario ayuda-horario--error" *ngIf="fechaLimitePasadaCrear()">La fecha límite no puede ser anterior a la fecha actual.</p>
+      <div class="fila-horas" *ngIf="form.fechaLimite">
+        <div>
+          <label class="form-label">Hora de inicio</label>
+          <input class="form-input" type="time" [(ngModel)]="form.horaInicio">
+        </div>
+        <div>
+          <label class="form-label">Hora de entrega</label>
+          <input class="form-input" type="time" [(ngModel)]="form.horaFin">
+        </div>
+      </div>
+      <p class="ayuda-horario ayuda-horario--error" *ngIf="horarioInvalido(form)">La hora de entrega debe ser posterior a la hora de inicio.</p>
+      <p class="ayuda-horario" *ngIf="form.fechaLimite && !horarioInvalido(form)">Se agenda en el calendario de Google de ese día, de {{ form.horaInicio }} a {{ form.horaFin }}, y aparece en el calendario de cada asignado.</p>
+      <p class="ayuda-horario" *ngIf="!form.fechaLimite">Sin fecha límite la tarea no se agenda en el calendario.</p>
+
+
+      <label class="form-label">Asignar a (si no eliges a nadie, quedará asignada a ti)</label>
+      <div class="lista-usuarios">
+        <label class="checkbox-row" *ngFor="let u of usuarios">
+          <input type="checkbox" [checked]="form.asignados.includes(u.id)" (change)="toggleAsignado(u.id, $event)">
+          {{ u.nombre_completo }}
+        </label>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button type="button" class="btn" (click)="cerrarFormulario()">Cancelar</button>
+      <button type="button" class="btn btn-primary" [disabled]="guardando || !form.titulo.trim() || horarioInvalido(form) || fechaLimitePasadaCrear()" (click)="guardar()">
+        {{ guardando ? 'Guardando…' : 'Crear Tarea' }}
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: DETALLE + AVANCES -->
+<div class="overlay" *ngIf="tareaSeleccionada" (click)="cerrarDetalle()">
+  <div class="modal modal-detalle" (click)="$event.stopPropagation()">
+    <div class="modal-header modal-header--detalle">
+      <h2>{{ tareaSeleccionada.Titulo }}</h2>
+      <button type="button" class="btn btn-sm btn-outline-purple" *ngIf="!editando && puedeEditar(tareaSeleccionada)" (click)="abrirEdicion()">Editar</button>
+    </div>
+
+    <div class="tabs-detalle" *ngIf="!cargandoDetalle">
+      <button type="button" class="tab-detalle" [class.activo]="pestanaDetalle === 'detalle'" (click)="seleccionarPestana('detalle')">Detalle</button>
+      <button type="button" class="tab-detalle" [class.activo]="pestanaDetalle === 'checklist'" (click)="seleccionarPestana('checklist')">
+        Checklist <span class="tab-contador" *ngIf="checklistCargado">{{ progresoChecklist().completados }}/{{ progresoChecklist().total }}</span>
+      </button>
+    </div>
+
+    <div class="modal-body" *ngIf="!cargandoDetalle">
+      <ng-container *ngIf="pestanaDetalle === 'detalle' && !editando">
+        <p class="descripcion" *ngIf="tareaSeleccionada.Descripcion">{{ tareaSeleccionada.Descripcion }}</p>
+
+        <div class="detalle-meta">
+          <span>Creada por <strong>{{ tareaSeleccionada.CreadoPorNombre }}</strong></span>
+          <span>Prioridad: <strong>{{ tareaSeleccionada.Prioridad }}</strong></span>
+          <span>Tiempo transcurrido: <strong>{{ tiempoTranscurrido(tareaSeleccionada) }}</strong></span>
+          <span *ngIf="tareaSeleccionada.FechaLimite">Límite: <strong>{{ tareaSeleccionada.FechaLimite | date:'d MMM yyyy' }}<ng-container *ngIf="tareaSeleccionada.HoraFin"> · {{ tareaSeleccionada.HoraInicio }} - {{ tareaSeleccionada.HoraFin }}</ng-container></strong></span>
+        </div>
+
+        <div class="asignados">
+          <span class="chip chip--persona" *ngFor="let a of tareaSeleccionada.asignados">
+            <span class="avatar avatar--sm">
+              <img *ngIf="fotoDe(a.id) as foto; else sinFotoChip" [src]="foto" [alt]="a.nombreCompleto" loading="lazy">
+              <ng-template #sinFotoChip>{{ iniciales(a.nombreCompleto) }}</ng-template>
+            </span>
+            {{ a.nombreCompleto }}
+          </span>
+        </div>
+      </ng-container>
+
+      <!-- Edición: título/descripción/prioridad/fecha límite/asignados -->
+      <div class="form-edicion" *ngIf="pestanaDetalle === 'detalle' && editando && formEdicion">
+        <label class="form-label">Título</label>
+        <input class="form-input" type="text" [(ngModel)]="formEdicion.titulo">
+
+        <label class="form-label">Descripción</label>
+        <textarea class="form-input" rows="3" [(ngModel)]="formEdicion.descripcion" placeholder="Detalle opcional…"></textarea>
+
+        <label class="form-label">Prioridad</label>
+        <select class="form-input" [(ngModel)]="formEdicion.prioridad">
+          <option value="BAJA">Baja</option>
+          <option value="MEDIA">Media</option>
+          <option value="ALTA">Alta</option>
+        </select>
+
+        <label class="form-label">Fecha límite (opcional)</label>
+        <input class="form-input" type="date" [(ngModel)]="formEdicion.fechaLimite" [min]="hoy">
+        <p class="ayuda-horario ayuda-horario--error" *ngIf="fechaLimitePasadaEdicion()">La fecha límite no puede ser anterior a la fecha actual.</p>
+      <div class="fila-horas" *ngIf="formEdicion.fechaLimite">
+        <div>
+          <label class="form-label">Hora de inicio</label>
+          <input class="form-input" type="time" [(ngModel)]="formEdicion.horaInicio">
+        </div>
+        <div>
+          <label class="form-label">Hora de entrega</label>
+          <input class="form-input" type="time" [(ngModel)]="formEdicion.horaFin">
+        </div>
+      </div>
+      <p class="ayuda-horario ayuda-horario--error" *ngIf="horarioInvalido(formEdicion)">La hora de entrega debe ser posterior a la hora de inicio.</p>
+      <p class="ayuda-horario" *ngIf="formEdicion.fechaLimite && !horarioInvalido(formEdicion)">Se agenda en el calendario de Google de ese día, de {{ formEdicion.horaInicio }} a {{ formEdicion.horaFin }}, y aparece en el calendario de cada asignado.</p>
+      <p class="ayuda-horario" *ngIf="!formEdicion.fechaLimite">Sin fecha límite la tarea no se agenda en el calendario.</p>
+
+
+        <label class="form-label">Asignar a</label>
+        <div class="lista-usuarios">
+          <label class="checkbox-row" *ngFor="let u of usuarios">
+            <input type="checkbox" [checked]="formEdicion.asignados.includes(u.id)" (change)="toggleAsignadoEdicion(u.id, $event)">
+            {{ u.nombre_completo }}
+          </label>
+        </div>
+
+        <div class="form-edicion__acciones">
+          <button type="button" class="btn" [disabled]="guardandoEdicion" (click)="cancelarEdicion()">Cancelar</button>
+          <button type="button" class="btn btn-primary" [disabled]="guardandoEdicion || !formEdicion.titulo.trim() || horarioInvalido(formEdicion) || fechaLimitePasadaEdicion()" (click)="guardarEdicion()">
+            {{ guardandoEdicion ? 'Guardando…' : 'Guardar cambios' }}
+          </button>
+        </div>
+      </div>
+
+      <div class="cambiar-estado" *ngIf="pestanaDetalle === 'detalle' && !editando">
+        <span class="form-label">Estado</span>
+        <div class="estado-botones">
+          <button type="button" class="btn btn-sm" [class.activo]="tareaSeleccionada.Estado === 'PENDIENTE'" (click)="cambiarEstado('PENDIENTE')">Pendiente</button>
+          <button type="button" class="btn btn-sm" [class.activo]="tareaSeleccionada.Estado === 'EN_PROGRESO'" (click)="cambiarEstado('EN_PROGRESO')">En progreso</button>
+          <button type="button" class="btn btn-sm" [class.activo]="tareaSeleccionada.Estado === 'COMPLETADA'" (click)="cambiarEstado('COMPLETADA')">Completada</button>
+          <button type="button" class="btn btn-sm" [class.activo]="tareaSeleccionada.Estado === 'CANCELADA'" (click)="cambiarEstado('CANCELADA')">Cancelada</button>
+        </div>
+      </div>
+
+      <div class="avances" *ngIf="pestanaDetalle === 'detalle' && !editando">
+        <span class="form-label">Avances</span>
+        <div class="avance-form">
+          <textarea class="form-input" rows="2" [(ngModel)]="nuevoAvance" placeholder="Escribe una actualización de avance…"></textarea>
+          <button type="button" class="btn btn-outline-purple" [disabled]="guardandoAvance || !nuevoAvance.trim()" (click)="agregarAvance()">
+            {{ guardandoAvance ? 'Enviando…' : 'Agregar' }}
+          </button>
+        </div>
+        <div class="avance-item" *ngFor="let a of tareaSeleccionada.avances">
+          <div class="avance-item__cabecera">
+            <strong>{{ a.UsuarioNombre }}</strong>
+            <span>{{ a.FechaRegistro | date:'d MMM, HH:mm' }}</span>
+          </div>
+          <p>{{ a.Comentario }}</p>
+        </div>
+        <p class="text-gray" *ngIf="!tareaSeleccionada.avances.length">Todavía no hay avances registrados.</p>
+      </div>
+
+      <!-- ---------- PESTAÑA: CHECKLIST ---------- -->
+      <ng-container *ngIf="pestanaDetalle === 'checklist'">
+        <div class="carga-inicial" *ngIf="cargandoChecklist">Cargando checklist…</div>
+        <ng-container *ngIf="!cargandoChecklist">
+          <div class="checklist-progreso" *ngIf="checklist.length">
+            <div class="checklist-progreso__barra">
+              <div class="checklist-progreso__relleno" [style.width.%]="(progresoChecklist().completados / progresoChecklist().total) * 100"></div>
+            </div>
+            <span>{{ progresoChecklist().completados }} de {{ progresoChecklist().total }} completados</span>
+          </div>
+
+          <div class="checklist-item" *ngFor="let item of checklist">
+            <label class="checklist-item__check">
+              <input type="checkbox" [checked]="item.Completado" [disabled]="!puedeEditarChecklist(tareaSeleccionada)" (change)="toggleItemChecklist(item)">
+              <span [class.tachado]="item.Completado">{{ item.Descripcion }}</span>
+            </label>
+            <span class="checklist-item__meta" *ngIf="item.Completado">{{ item.CompletadoPorNombre }} · {{ item.FechaCompletado | date:'d MMM, HH:mm' }}</span>
+            <button type="button" class="btn-eliminar" *ngIf="puedeGestionarItemsChecklist(tareaSeleccionada)" (click)="eliminarItemChecklist(item)" title="Eliminar ítem">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+            </button>
+          </div>
+          <p class="text-gray" *ngIf="!checklist.length">Todavía no hay ítems en el checklist.</p>
+
+          <div class="checklist-nuevo" *ngIf="puedeGestionarItemsChecklist(tareaSeleccionada)">
+            <input class="form-input" type="text" [(ngModel)]="nuevoItemChecklist" placeholder="Nuevo ítem… ej. Validar con el cliente" (keyup.enter)="agregarItemChecklist()">
+            <button type="button" class="btn btn-outline-purple" [disabled]="guardandoItemChecklist || !nuevoItemChecklist.trim()" (click)="agregarItemChecklist()">
+              {{ guardandoItemChecklist ? 'Agregando…' : 'Agregar' }}
+            </button>
+          </div>
+        </ng-container>
+      </ng-container>
+    </div>
+    <div class="modal-footer">
+      <button type="button" class="btn" (click)="cerrarDetalle()">Cerrar</button>
+    </div>
+  </div>
+</div>

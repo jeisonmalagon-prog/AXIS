@@ -1,0 +1,316 @@
+$brand-dark:    var(--ax-text, #1e293b);
+$brand-gray:    var(--ax-text-muted, #64748b);
+$surface-bg:    var(--ax-surface-2, #f8fafc);
+$border-light:  var(--ax-border, #e2e8f0);
+
+$state-ok:      #10b981;
+$state-warn:    #f59e0b;
+$state-danger:  #ef4444;
+$state-muted:   #94a3b8;
+$state-info:    #2563eb;
+
+* { box-sizing: border-box; }
+:host { display: block; font-family: 'Inter', sans-serif; color: $brand-dark; }
+
+.page-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 22px; gap: 12px; flex-wrap: wrap; }
+.page-header h1 { font-size: 28px; font-weight: 800; margin: 0; letter-spacing: -0.5px; }
+.page-header .subtitle { color: $brand-gray; margin-top: 6px; font-size: 14px; }
+
+.btn {
+  font-family: inherit; display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+  padding: 9px 16px; border-radius: 9px; font-size: 13px; font-weight: 600;
+  border: 1px solid $border-light; background: var(--ax-surface, white); color: $brand-gray; cursor: pointer; transition: all 0.15s ease;
+  &:hover { background: $surface-bg; color: $brand-dark; }
+  &:disabled { opacity: 0.55; cursor: default; }
+  &.btn-sm { padding: 6px 12px; font-size: 12px; }
+  &.activo { background: var(--ax-brand-primary, #673ab7); border-color: var(--ax-brand-primary, #673ab7); color: white; }
+}
+.btn-primary {
+  background: var(--ax-brand-primary, #673ab7); border-color: var(--ax-brand-primary, #673ab7); color: white;
+  box-shadow: 0 4px 12px rgba(var(--ax-brand-primary-rgb, 103, 58, 183), 0.28);
+  &:hover { opacity: 0.92; color: white; }
+}
+.btn-outline-purple { color: var(--ax-brand-primary, #673ab7); background: rgba(var(--ax-brand-primary-rgb, 103, 58, 183), 0.08); border-color: transparent; &:hover { background: rgba(var(--ax-brand-primary-rgb, 103, 58, 183), 0.15); } }
+
+// ---------- Barra de indicadores: 4 números clave de un vistazo, antes de
+// cualquier filtro -- se calculan de lo ya cargado, sin llamada aparte. ----------
+.indicadores { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 12px; margin-bottom: 18px; }
+.indicador {
+  background: var(--ax-surface, white); border: 1px solid $border-light; border-radius: 14px; padding: 14px 16px;
+  display: flex; flex-direction: column; gap: 2px; box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+}
+.indicador__numero { font-size: 24px; font-weight: 800; letter-spacing: -0.5px; }
+.indicador__etiqueta { font-size: 12px; color: $brand-gray; font-weight: 600; }
+.indicador--alerta { border-color: #fecaca; .indicador__numero { color: $state-danger; } }
+
+// ---------- Barra de filtros: misma tarjeta que usa Pasos a Producción, para
+// que ambas pantallas del módulo se sientan consistentes. ----------
+.filtros-fila {
+  display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 18px;
+  background: var(--ax-surface, white); border: 1px solid $border-light; border-radius: 14px; padding: 10px 14px;
+}
+.filtros-fila__derecha { display: flex; align-items: center; gap: 10px; }
+
+.selector-vista-modo { display: inline-flex; gap: 2px; background: $surface-bg; border: 1px solid $border-light; border-radius: 10px; padding: 3px; }
+.btn-vista-modo {
+  border: none; background: transparent; border-radius: 7px; padding: 6px 9px; cursor: pointer; color: $brand-gray; transition: all 0.15s ease;
+  display: flex; align-items: center; svg { width: 15px; height: 15px; }
+  &:hover { color: $brand-dark; }
+  &.activo { background: var(--ax-brand-primary, #673ab7); color: white; }
+}
+.tabs { display: inline-flex; gap: 2px; background: $surface-bg; border: 1px solid $border-light; border-radius: 12px; padding: 4px; }
+.tab {
+  border: none; background: transparent; border-radius: 9px; padding: 7px 14px; font-size: 13px; font-weight: 700;
+  font-family: inherit; color: $brand-gray; cursor: pointer; transition: all 0.15s ease;
+  &.activo { background: var(--ax-brand-primary, #673ab7); color: white; box-shadow: 0 2px 8px rgba(var(--ax-brand-primary-rgb, 103, 58, 183), 0.28); }
+}
+select {
+  padding: 8px 30px 8px 12px; border-radius: 9px; border: 1px solid $border-light; font-size: 13px;
+  background: $surface-bg; color: $brand-dark; font-weight: 600; cursor: pointer;
+  &:focus { outline: none; border-color: var(--ax-brand-primary, #673ab7); }
+}
+
+.error-banner { background: #fef2f2; color: $state-danger; border: 1px solid #fecaca; border-radius: 12px; padding: 12px 16px; font-size: 13px; font-weight: 600; margin-bottom: 16px; }
+.carga-inicial, .empty { text-align: center; color: $brand-gray; padding: 48px 0; font-weight: 600; font-size: 13.5px; }
+.empty { border: 1px dashed $border-light; border-radius: 16px; background: var(--ax-surface, white); }
+
+.tareas-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 16px; }
+.tarea-card {
+  position: relative; background: var(--ax-surface, white); border: 1px solid $border-light; border-left: 3px solid transparent; border-radius: 16px; padding: 18px 20px;
+  cursor: pointer; transition: box-shadow 0.15s, border-color 0.15s, transform 0.15s;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+  &:hover { box-shadow: 0 10px 24px rgba(15, 23, 42, 0.1); border-color: var(--ax-border-2, #d9d2ee); transform: translateY(-1px); }
+  &.tarea-card--vencida { background: linear-gradient(0deg, rgba(254, 242, 242, 0.5), rgba(254, 242, 242, 0.5)), var(--ax-surface, white); }
+  h3 { margin: 10px 0 6px; font-size: 15.5px; font-weight: 700; padding-right: 24px; }
+  // Franja de color a la izquierda según la prioridad -- se repite el mismo
+  // criterio en las tarjetas del tablero Kanban (ver .tablero-card).
+  &.borde-alta { border-left-color: $state-danger; }
+  &.borde-media { border-left-color: $state-warn; }
+  &.borde-baja { border-left-color: $state-muted; }
+}
+.tarea-card__top { display: flex; justify-content: space-between; align-items: center; gap: 10px; }
+// Prioridad + botón de eliminar agrupados en el mismo extremo derecho de la
+// fila -- antes el botón vivía fuera de este flex (position:absolute, pegado
+// a la esquina superior derecha de la tarjeta) y caía exactamente encima del
+// texto de prioridad (BAJA/MEDIA/ALTA), cortándolo o tapándolo. Al meterlo
+// aquí como un elemento más del flex, ambos se acomodan uno al lado del otro
+// sin pisarse.
+.tarea-card__top-derecha { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
+.descripcion { color: $brand-gray; font-size: 13px; margin: 0 0 10px; }
+.asignados { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 10px; }
+.chip { background: var(--ax-brand-soft, #f3ebf8); color: var(--ax-brand-primary, #673ab7); border-radius: 999px; padding: 4px 10px; font-size: 11.5px; font-weight: 600; }
+.tarea-card__meta { display: flex; flex-direction: column; gap: 3px; font-size: 11.5px; color: $brand-gray; border-top: 1px solid $border-light; padding-top: 10px; margin-top: 6px; }
+.vencida-texto { color: $state-danger; font-weight: 700; }
+
+// ---------- Avatares (iniciales) de los asignados -- más compacto que los
+// chips con el nombre completo, usado en las tarjetas de ambas vistas. ----------
+.avatares { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 10px; }
+.avatar {
+  width: 26px; height: 26px; border-radius: 50%; background: var(--ax-brand-primary, #673ab7); color: white;
+  display: inline-flex; align-items: center; justify-content: center; font-size: 10.5px; font-weight: 700; flex-shrink: 0;
+  &.avatar--sm { width: 22px; height: 22px; font-size: 9.5px; }
+  overflow: hidden;
+  img { width: 100%; height: 100%; object-fit: cover; display: block; }
+}
+
+// ---------- Vista de tablero (Kanban) ----------
+.tablero { display: grid; grid-template-columns: repeat(4, minmax(240px, 1fr)); gap: 14px; overflow-x: auto; padding-bottom: 4px; }
+.tablero-columna {
+  background: $surface-bg; border: 1px solid $border-light; border-radius: 14px; padding: 12px; min-width: 240px;
+  display: flex; flex-direction: column; transition: background 0.15s, border-color 0.15s;
+  &.tablero-columna--resaltada { background: var(--ax-brand-soft, #f3ebf8); border-color: var(--ax-brand-primary, #673ab7); }
+}
+.tablero-columna__cabecera {
+  display: flex; align-items: center; gap: 8px; font-size: 12.5px; font-weight: 700; color: $brand-dark; padding: 4px 4px 12px;
+  span[class^="punto-"] { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+  .punto-pendiente { background: $state-warn; }
+  .punto-en_progreso { background: $state-info; }
+  .punto-completada { background: $state-ok; }
+  .punto-cancelada { background: $state-muted; }
+}
+.tablero-columna__contador { margin-left: auto; background: var(--ax-surface, white); border-radius: 999px; padding: 1px 8px; font-size: 11px; color: $brand-gray; }
+.tablero-columna__cuerpo { display: flex; flex-direction: column; gap: 10px; min-height: 60px; }
+.tablero-columna__vacio { text-align: center; color: $state-muted; font-size: 12px; padding: 18px 0; margin: 0; }
+
+.tablero-card {
+  background: var(--ax-surface, white); border: 1px solid $border-light; border-left: 3px solid transparent; border-radius: 12px;
+  padding: 12px 14px; cursor: grab; box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04); transition: box-shadow 0.15s, transform 0.15s;
+  &:hover { box-shadow: 0 6px 16px rgba(15, 23, 42, 0.1); }
+  &:active { cursor: grabbing; }
+  h4 { margin: 6px 0 10px; font-size: 13px; font-weight: 700; line-height: 1.35; }
+  &.borde-alta { border-left-color: $state-danger; }
+  &.borde-media { border-left-color: $state-warn; }
+  &.borde-baja { border-left-color: $state-muted; }
+}
+.tablero-card__top { display: flex; justify-content: space-between; align-items: center; }
+.vencida-chip { font-size: 10px; font-weight: 700; color: $state-danger; background: #fee2e2; border-radius: 999px; padding: 2px 8px; text-transform: uppercase; letter-spacing: 0.3px; }
+.tablero-card__pie { display: flex; justify-content: space-between; align-items: center; .avatares { margin-bottom: 0; } }
+.tablero-card__fecha { font-size: 11px; color: $brand-gray; font-weight: 600; }
+
+.btn-eliminar {
+  position: absolute; top: 16px; right: 14px; background: transparent; border: none; color: $state-muted; cursor: pointer; padding: 4px; border-radius: 6px; transition: all 0.15s;
+  svg { width: 15px; height: 15px; display: block; }
+  &:hover { color: $state-danger; background: #fee2e2; }
+}
+// En la tarjeta de la vista "Tarjetas" el botón ya no flota libre sobre la
+// esquina (ver .tarea-card__top-derecha) -- aquí solo se anula el
+// position:absolute de la regla base para que fluya como un elemento más del
+// flex, junto a la etiqueta de prioridad.
+.btn-eliminar--tarjeta { position: static; top: auto; right: auto; }
+
+.status-pill {
+  display: inline-flex; align-items: center; gap: 6px; padding: 4px 12px; border-radius: 999px; font-size: 11px; font-weight: 700; white-space: nowrap;
+  &::before { content: ''; width: 6px; height: 6px; border-radius: 50%; background: currentColor; flex-shrink: 0; }
+}
+.estado-pendiente { color: $state-warn; background: #fef3c7; }
+.estado-en_progreso { color: $state-info; background: #dbeafe; }
+.estado-completada { color: $state-ok; background: #d1fae5; }
+.estado-cancelada { color: $state-muted; background: #e2e8f0; }
+
+.prioridad { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.4px; }
+.prioridad-baja { color: $state-muted; }
+.prioridad-media { color: $state-warn; }
+.prioridad-alta { color: $state-danger; }
+
+// ---------- Modal (mismo patrón que el resto de la app) ----------
+.overlay { position: fixed; inset: 0; background: rgba(15, 23, 42, 0.55); backdrop-filter: blur(4px); display: flex; align-items: center; justify-content: center; z-index: 9999; padding: 20px; }
+.modal {
+  background: var(--ax-surface, white); border-radius: 18px; width: 100%; max-width: 780px; max-height: 94vh;
+  display: flex; flex-direction: column; box-shadow: 0 25px 50px rgba(0, 0, 0, 0.25); overflow: hidden;
+}
+.modal-detalle { max-width: 860px; }
+.modal-header { padding: 22px 28px 14px; border-bottom: 1px solid $border-light; h2 { margin: 0; font-size: 19px; font-weight: 800; } }
+// Cabecera del modal de detalle: título + botón "Editar" en la misma fila.
+.modal-header--detalle {
+  display: flex; align-items: flex-start; justify-content: space-between; gap: 14px;
+  h2 { flex: 1; min-width: 0; }
+  .btn { flex-shrink: 0; }
+}
+.modal-body { padding: 18px 28px; overflow-y: auto; flex: 1; }
+.modal-footer { padding: 14px 28px 22px; border-top: 1px solid $border-light; background: $surface-bg; display: flex; justify-content: flex-end; gap: 10px; }
+
+.form-label { display: block; margin-bottom: 6px; margin-top: 4px; font-size: 12.5px; color: $brand-gray; font-weight: 600; }
+.form-input {
+  width: 100%; padding: 10px 14px; margin-bottom: 16px; border: 1px solid var(--ax-border-2, #cbd5e1); border-radius: 8px;
+  font-size: 13.5px; color: $brand-dark; font-family: inherit; background: var(--ax-surface, white);
+  &:focus { outline: none; border-color: var(--ax-brand-primary, #673ab7); }
+}
+textarea.form-input { resize: vertical; }
+
+.lista-usuarios { max-height: 180px; overflow-y: auto; border: 1px solid $border-light; border-radius: 10px; padding: 8px 12px; margin-bottom: 8px; }
+.checkbox-row { display: flex; align-items: center; gap: 8px; padding: 5px 0; font-size: 13px; cursor: pointer; }
+
+.detalle-meta { display: flex; flex-wrap: wrap; gap: 14px; font-size: 12.5px; color: $brand-gray; margin-bottom: 12px; }
+.cambiar-estado { margin: 14px 0; }
+.estado-botones { display: flex; flex-wrap: wrap; gap: 8px; }
+
+// ---------- Edición de la tarea: misma "tarjeta suave" que usa Pasos a
+// Producción para su hora estimada, para que el modo edición se distinga
+// visualmente del resto del modal sin ser un modal aparte. ----------
+.form-edicion {
+  background: $surface-bg; border-radius: 12px; padding: 14px 16px 2px; margin-bottom: 14px;
+}
+.form-edicion__acciones { display: flex; justify-content: flex-end; gap: 10px; padding-bottom: 14px; }
+
+.avances { margin-top: 16px; border-top: 1px solid $border-light; padding-top: 14px; }
+.avance-form { display: flex; gap: 10px; align-items: flex-start; margin-bottom: 12px; textarea { margin-bottom: 0; } }
+.avance-item { background: $surface-bg; border-radius: 10px; padding: 10px 14px; margin-bottom: 8px; }
+.avance-item__cabecera { display: flex; justify-content: space-between; font-size: 12px; color: $brand-gray; margin-bottom: 4px; strong { color: $brand-dark; } }
+.avance-item p { margin: 0; font-size: 13px; }
+.text-gray { color: $brand-gray; font-size: 12.5px; }
+
+// ---------- Buscador de texto libre, en la misma barra de filtros ----------
+.buscador {
+  display: flex; align-items: center; gap: 7px; background: $surface-bg; border: 1px solid $border-light; border-radius: 9px;
+  padding: 0 10px; min-width: 210px;
+  svg { width: 14px; height: 14px; color: $state-muted; flex-shrink: 0; }
+  input {
+    border: none; background: transparent; padding: 8px 0; font-size: 13px; color: $brand-dark; font-family: inherit; width: 100%;
+    &:focus { outline: none; }
+    &::placeholder { color: $state-muted; }
+  }
+}
+.buscador__limpiar {
+  border: none; background: transparent; color: $state-muted; font-size: 17px; line-height: 1; cursor: pointer; padding: 0 2px; flex-shrink: 0;
+  &:hover { color: $brand-dark; }
+}
+
+// ---------- Pestañas del modal de detalle (Detalle / Checklist) -- mismo
+// patrón visual que Pasos a Producción, para que ambos módulos se sientan
+// parte de la misma aplicación. ----------
+.tabs-detalle {
+  display: flex; gap: 2px; padding: 0 28px; border-bottom: 1px solid $border-light; background: $surface-bg;
+}
+.tab-detalle {
+  border: none; background: transparent; padding: 12px 14px; font-size: 12.5px; font-weight: 700; font-family: inherit;
+  color: $brand-gray; cursor: pointer; border-bottom: 2px solid transparent; margin-bottom: -1px; transition: all 0.15s ease;
+  display: inline-flex; align-items: center; gap: 6px;
+  &:hover { color: $brand-dark; }
+  &.activo { color: var(--ax-brand-primary, #673ab7); border-bottom-color: var(--ax-brand-primary, #673ab7); }
+}
+.tab-contador {
+  background: var(--ax-border-2, #d9d2ee); color: $brand-dark; border-radius: 999px; padding: 1px 7px; font-size: 10.5px; font-weight: 700;
+  .tab-detalle.activo & { background: var(--ax-brand-primary, #673ab7); color: white; }
+}
+
+// ---------- Checklist de subtareas ----------
+.checklist-progreso { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; font-size: 12px; color: $brand-gray; font-weight: 600; }
+.checklist-progreso__barra { flex: 1; height: 6px; border-radius: 999px; background: $surface-bg; overflow: hidden; }
+.checklist-progreso__relleno { height: 100%; background: $state-ok; border-radius: 999px; transition: width 0.2s ease; }
+
+.checklist-item {
+  display: flex; align-items: center; gap: 10px; padding: 9px 2px; border-bottom: 1px solid $border-light;
+  &:last-of-type { border-bottom: none; }
+}
+.checklist-item__check {
+  display: flex; align-items: center; gap: 10px; font-size: 13.5px; cursor: pointer; flex: 1; min-width: 0;
+  input[type="checkbox"] { width: 16px; height: 16px; flex-shrink: 0; accent-color: var(--ax-brand-primary, #673ab7); cursor: pointer; }
+  span { overflow-wrap: anywhere; }
+  .tachado { text-decoration: line-through; color: $state-muted; }
+}
+.checklist-item__meta { font-size: 11px; color: $brand-gray; white-space: nowrap; }
+
+.checklist-nuevo { display: flex; gap: 10px; margin-top: 12px; input.form-input { margin-bottom: 0; flex: 1; } }
+
+/* =========================================
+   RESPONSIVE
+   ========================================= */
+@media (max-width: 768px) {
+  .overlay { padding: 0; align-items: flex-end; }
+  .modal { max-width: 100%; border-radius: 18px 18px 0 0; max-height: 94vh; }
+  .modal-header, .modal-body { padding-left: 18px; padding-right: 18px; }
+  .modal-footer { padding-left: 18px; padding-right: 18px; }
+
+  // Las columnas del tablero Kanban se angostan un poco antes de recurrir al
+  // scroll horizontal, para que al menos 1 y media quepan de entrada en un
+  // teléfono (240px fijo dejaba ver menos de una columna completa).
+  .tablero { grid-template-columns: repeat(4, minmax(200px, 1fr)); }
+
+  .tabs-detalle { padding: 0 14px; overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  .tab-detalle { padding: 12px 10px; white-space: nowrap; flex-shrink: 0; }
+
+  .avance-form { flex-direction: column; align-items: stretch; }
+  .form-edicion__acciones { flex-direction: column-reverse; .btn { width: 100%; } }
+}
+
+@media (max-width: 480px) {
+  .filtros-fila__derecha { width: 100%; flex-wrap: wrap; }
+  .buscador { max-width: none; flex: 1 1 100%; }
+  .indicadores { grid-template-columns: repeat(2, 1fr); }
+}
+
+// ---------- Horario de la tarea (se agenda en el calendario) ----------
+.fila-horas { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.ayuda-horario { font-size: 12px; color: $brand-gray; margin: 6px 0 0; &--error { color: #b91c1c; font-weight: 600; } }
+.chip--persona { display: inline-flex; align-items: center; gap: 6px; padding-left: 4px; }
+.aviso-calendario {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 14px; padding: 10px 14px;
+  background: #fffbeb; border: 1px solid #fde68a; color: #92400e; border-radius: 10px; font-size: 13px;
+}
+.aviso-calendario__cerrar { background: transparent; border: none; color: inherit; cursor: pointer; font-size: 14px; padding: 2px 6px; }
+
+// ---------- Rol de Consulta en Tareas ----------
+.aviso-consulta {
+  align-self: center; padding: 8px 14px; border-radius: 999px; font-size: 12px; font-weight: 600;
+  background: #f1f5f9; color: #475569; border: 1px solid #e2e8f0;
+}

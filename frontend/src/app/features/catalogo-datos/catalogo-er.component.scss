@@ -1,0 +1,50 @@
+@use '../../repositorio/azure/azure-base' as *;
+@include base;
+
+:host { display: block; min-width: 0; }
+.mono { font-family: 'JetBrains Mono', monospace; }
+
+.er-barra { display: flex; align-items: center; gap: 10px 18px; flex-wrap: wrap; margin-bottom: 10px; font-size: 12px; color: $brand-gray; }
+.er-espacio { flex: 1; }
+.er-niveles { display: inline-flex; align-items: center; gap: 4px; background: $surface-bg; padding: 4px; border-radius: 8px; border: 1px solid $border-light;
+  span { padding: 0 8px; font-weight: 700; }
+  button { border: none; background: transparent; padding: 5px 11px; border-radius: 6px; font-family: inherit; font-size: 12px; font-weight: 600; color: $brand-gray; cursor: pointer;
+    &.on { background: $surface; color: $brand; box-shadow: 0 2px 5px rgba(0, 0, 0, 0.08); } } }
+.er-leyenda { display: inline-flex; gap: 14px; align-items: center; flex-wrap: wrap; span { display: inline-flex; align-items: center; gap: 6px; } }
+.lg { font-style: normal; font-size: 9.5px; font-weight: 800; padding: 1px 5px; border-radius: 4px; font-family: 'JetBrains Mono', monospace; }
+.lg-pk { background: rgba(245, 158, 11, 0.18); color: #b45309; }
+.lg-fk { background: rgba($brand-rgb, 0.14); color: $brand; }
+.lg-linea { stroke: $brand-gray; stroke-width: 1.5; fill: none; }
+.er-zoom { display: inline-flex; gap: 6px; button { min-width: 34px; border: 1px solid rgba($brand-rgb, 0.35); background: $surface; color: $brand; border-radius: 8px; padding: 6px 10px; font-family: inherit; font-size: 13px; font-weight: 700; cursor: pointer; &:hover { background: rgba($brand-rgb, 0.08); } } }
+
+.er-lienzo { position: relative; height: min(68vh, 640px); min-height: 360px; border: 1px solid $border-light; border-radius: 14px; overflow: hidden; background:
+  radial-gradient(circle, rgba(100, 116, 139, 0.22) 1px, transparent 1px) 0 0 / 22px 22px, $surface-bg; }
+.er-svg { width: 100%; height: 100%; display: block; cursor: grab; touch-action: none; user-select: none; &:active { cursor: grabbing; } }
+.er-info { position: absolute; left: 12px; bottom: 34px; max-width: calc(100% - 24px); background: $surface; border: 1px solid $border-light; border-radius: 8px; padding: 6px 10px; font-size: 12px; color: $brand-dark; box-shadow: 0 6px 20px rgba(15, 23, 42, 0.12); pointer-events: none; font-family: 'JetBrains Mono', monospace; overflow-wrap: anywhere; }
+.er-ayuda { position: absolute; left: 12px; bottom: 8px; margin: 0; font-size: 11px; color: $brand-gray; pointer-events: none; }
+
+// --- SVG ---
+.arista { cursor: default;
+  .arista-hit { fill: none; stroke: transparent; stroke-width: 14; }
+  .arista-linea { fill: none; stroke: $brand-gray; stroke-width: 1.5; opacity: 0.7; transition: opacity 0.15s; }
+  .arista-marca { fill: none; stroke: $brand-gray; stroke-width: 1.5; opacity: 0.85; }
+  &.viva .arista-linea, &.hover .arista-linea { stroke: $brand; stroke-width: 2.4; opacity: 1; }
+  &.viva .arista-marca, &.hover .arista-marca { stroke: $brand; stroke-width: 2; opacity: 1; }
+  &.apagada { opacity: 0.18; } }
+
+.nodo { cursor: pointer; outline: none;
+  .nodo-caja { fill: $surface; stroke: $border-light; stroke-width: 1.2; filter: drop-shadow(0 4px 10px rgba(15, 23, 42, 0.10)); }
+  .nodo-cab { fill: rgba($brand-rgb, 0.10); }
+  .nodo-titulo { font-size: 13px; font-weight: 800; fill: $brand-dark; font-family: 'JetBrains Mono', monospace; }
+  .nodo-bd { font-size: 10px; fill: $brand-gray; font-family: inherit; }
+  .fila-fondo { fill: rgba(100, 116, 139, 0.06); }
+  .marca { font-size: 9px; font-weight: 800; font-family: 'JetBrains Mono', monospace; }
+  .marca-pk { fill: #b45309; }
+  .marca-fk { fill: $brand; }
+  .col-nombre { font-size: 12px; fill: $brand-dark; font-family: 'JetBrains Mono', monospace; &.es-pk { font-weight: 800; } }
+  .col-tipo { font-size: 10.5px; fill: $brand-gray; font-family: 'JetBrains Mono', monospace; }
+  .mas { font-size: 11px; fill: $brand-gray; font-style: italic; }
+  &.vista .nodo-caja { stroke-dasharray: 5 4; }
+  &.centro { cursor: default; .nodo-caja { stroke: $brand; stroke-width: 2.4; } .nodo-cab { fill: $brand; } .nodo-titulo { fill: #fff; } .nodo-bd-c { fill: rgba(255, 255, 255, 0.82); } }
+  &:not(.centro):hover .nodo-caja, &.activo:not(.centro) .nodo-caja, &:not(.centro):focus-visible .nodo-caja { stroke: $brand; stroke-width: 2; }
+}

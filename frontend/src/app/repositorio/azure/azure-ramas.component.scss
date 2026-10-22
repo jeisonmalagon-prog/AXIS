@@ -1,0 +1,5 @@
+@use './azure-base' as *;
+@include base;
+.peq { font-size: 11.5px; }
+.acciones { white-space: nowrap; display: flex; gap: 6px; align-items: center; }
+.archivo { cursor: pointer; .ruta { font-family: 'JetBrains Mono', monospace; font-size: 12px; overflow-wrap: anywhere; } .espacio { flex: 1; } }

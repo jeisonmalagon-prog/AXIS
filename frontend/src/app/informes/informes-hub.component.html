@@ -1,0 +1,100 @@
+<div class="hub">
+  <header class="cabecera">
+    <div>
+      <h1>Informes</h1>
+      <p class="subtitulo">Documentos en PDF y Excel (con gráficos) de cada módulo, con hallazgos calculados solos. Descárgalos o prográmalos para que lleguen al correo.</p>
+    </div>
+    <div class="acciones">
+      @if (cat) { <button type="button" class="btn-primario" (click)="abrir('programar')">Programar un envío</button> }
+    </div>
+  </header>
+
+  @if (aviso) { <div class="toast" [class.toast--error]="aviso.tipo === 'error'" role="status">{{ aviso.texto }}</div> }
+
+  <div class="tabs" role="tablist">
+    <button type="button" role="tab" [class.activa]="tab === 'informes'" [attr.aria-selected]="tab === 'informes'" (click)="irATab('informes')">Informes</button>
+    <button type="button" role="tab" [class.activa]="tab === 'programados'" [attr.aria-selected]="tab === 'programados'" (click)="irATab('programados')">Envíos programados @if (programados.length) { <span class="cuenta">{{ programados.length }}</span> }</button>
+  </div>
+
+  @if (error) { <div class="error-banner">{{ error }}</div> }
+  @if (cargando) { <p class="carga-inicial">Cargando…</p> }
+
+  @if (tab === 'informes' && cat) {
+    @for (c of categorias; track c.nombre) {
+      <section class="grupo">
+        <h2>{{ c.nombre }}</h2>
+        <div class="tarjetas">
+          @for (i of c.items; track i.clave) {
+            <a class="tarjeta" [routerLink]="['/informes', i.clave]">
+              <span class="tarjeta__icono"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path [attr.d]="icono(i.icono)" /></svg></span>
+              <span class="tarjeta__cuerpo">
+                <strong>{{ i.titulo }}</strong>
+                <span>{{ i.descripcion }}</span>
+              </span>
+              <span class="tarjeta__pie">
+                <span class="abrir">Abrir informe →</span>
+                <span class="rapidas">
+                  <button type="button" (click)="descargar(i, 'xlsx', $event)" [disabled]="descargando !== null" title="Descargar Excel de los últimos 30 días">{{ descargando === i.clave + '-xlsx' ? '…' : 'Excel' }}</button>
+                  <button type="button" (click)="descargar(i, 'pdf', $event)" [disabled]="descargando !== null" title="Descargar PDF de los últimos 30 días">{{ descargando === i.clave + '-pdf' ? '…' : 'PDF' }}</button>
+                </span>
+              </span>
+            </a>
+          }
+        </div>
+      </section>
+    }
+  }
+
+  @if (tab === 'programados') {
+    @if (progCargando && !programados.length) { <p class="carga-inicial">Cargando envíos…</p> }
+    @if (!progDisponible) {
+      <div class="vacio-grande">
+        <h2>Falta crear la tabla de envíos programados</h2>
+        <p>{{ progError || 'Ejecuta el script crear_reportes_programados.sql en la base de datos para activar esta función.' }}</p>
+      </div>
+    } @else {
+      @if (progError) { <div class="error-banner">{{ progError }}</div> }
+      @if (cat && !cat.correo.configurado) { <div class="aviso-correo">El correo (SMTP) aún no está configurado en el servidor: los envíos se registrarán con error hasta que se defina.</div> }
+      @if (!progCargando && !programados.length && !progError) {
+        <div class="vacio-grande">
+          <h2>Aún no hay envíos programados</h2>
+          <p>Programa un informe para que llegue solo al correo cada día, semana o mes, con PDF y Excel adjuntos.</p>
+          <button type="button" class="btn-primario" (click)="abrir('programar')">Programar el primero</button>
+        </div>
+      }
+      @if (programados.length) {
+        <div class="lista">
+          @for (p of programados; track p.id) {
+            <article class="prog" [class.prog--off]="!p.activo">
+              <div class="prog__info">
+                <div class="prog__titulo">
+                  <strong>{{ p.nombre }}</strong>
+                  <span class="pill" [class.pill--ok]="p.activo">{{ p.activo ? 'Activo' : 'Pausado' }}</span>
+                </div>
+                <p class="prog__detalle">{{ tituloDe(p.informe) }} · {{ periodoTexto(p.periodo) }} · {{ frecuenciaTexto(p) }}</p>
+                <p class="prog__dest" [title]="p.destinatarios.join(', ')">Para: {{ p.destinatarios.join(', ') }} · {{ p.formatos.join(' + ').toUpperCase() }}</p>
+                <p class="prog__ultimo">
+                  @if (p.ultimoEnvio) {
+                    <span class="pill" [class.pill--ok]="p.ultimoEstado === 'ok'" [class.pill--error]="p.ultimoEstado === 'error'">{{ p.ultimoEstado === 'ok' ? 'Enviado' : 'Con error' }}</span>
+                    {{ fechaHora(p.ultimoEnvio) }}@if (p.ultimoMensaje) { — {{ p.ultimoMensaje }} }
+                  } @else { Todavía no se ha enviado. }
+                  @if (p.creadoPor) { <span class="autor"> · creado por {{ p.creadoPor }}</span> }
+                </p>
+              </div>
+              <div class="prog__acciones">
+                <button type="button" class="btn-secundario btn-mini" (click)="enviarAhora(p)" [disabled]="enviandoId !== null">{{ enviandoId === p.id ? 'Enviando…' : 'Enviar ahora' }}</button>
+                <button type="button" class="btn-secundario btn-mini" (click)="alternarActivo(p)">{{ p.activo ? 'Pausar' : 'Activar' }}</button>
+                <button type="button" class="btn-secundario btn-mini" (click)="abrir('editar', p)">Editar</button>
+                <button type="button" class="btn-secundario btn-mini btn-peligro" [class.confirmar]="confirmarBorrar === p.id" (click)="borrar(p)">{{ confirmarBorrar === p.id ? '¿Seguro?' : 'Eliminar' }}</button>
+              </div>
+            </article>
+          }
+        </div>
+      }
+    }
+  }
+</div>
+
+@if (dialogo && cat) {
+  <app-informe-dialogo [modo]="dialogo" [cat]="cat" [programado]="editando" (cerrar)="dialogo = null; editando = null" (hecho)="alHecho($event)" />
+}

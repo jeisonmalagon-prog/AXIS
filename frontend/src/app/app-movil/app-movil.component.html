@@ -1,0 +1,105 @@
+<header class="cabecera">
+  <div class="cabecera__titulo">
+    <h1>Monitoreo de la app móvil</h1>
+    <p class="subtitulo">Salud del servicio, tráfico, tiempos de respuesta y clientes, calculados con el ETL de logs de la app.</p>
+  </div>
+
+  <div class="cabecera__controles">
+    <div class="rango-selector" [class.rango-selector--inactivo]="!usaRango" role="group" aria-label="Rango de días" [title]="usaRango ? '' : 'Esta pestaña tiene sus propios controles de tiempo.'">
+      <button *ngFor="let d of rangosDisponibles" type="button" class="rango-boton" [class.activo]="modoRango === 'preset' && diasSeleccionados === d" [disabled]="!usaRango" (click)="cambiarRango(d)">{{ d === 1 ? 'Hoy' : d + 'd' }}</button>
+      <button type="button" class="rango-boton rango-boton--personalizado" [class.activo]="modoRango === 'personalizado'" [disabled]="!usaRango" (click)="abrirSelectorFechas()">Personalizado</button>
+    </div>
+    <button type="button" class="btn-actualizar" (click)="actualizarAhora()" [disabled]="estadoCargando" title="Actualizar ahora">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" [class.girando]="estadoCargando"><path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
+      <span>Actualizar</span>
+    </button>
+    <span class="actualizado" *ngIf="actualizado">Actualizado {{ actualizado | date:'HH:mm:ss' }}</span>
+  </div>
+</header>
+
+<div class="fechas-panel" *ngIf="mostrandoSelectorFechas">
+  <div class="campo"><label for="fechaInicio">Desde</label><input id="fechaInicio" type="date" [(ngModel)]="fechaInicioInput" [max]="fechaFinInput"></div>
+  <div class="campo"><label for="fechaFin">Hasta</label><input id="fechaFin" type="date" [(ngModel)]="fechaFinInput" [min]="fechaInicioInput"></div>
+  <div class="fechas-panel__acciones">
+    <button type="button" class="btn-secundario" (click)="cancelarSelectorFechas()">Cancelar</button>
+    <button type="button" class="btn-primario" (click)="aplicarRangoPersonalizado()">Aplicar</button>
+  </div>
+  <p class="fechas-panel__error" *ngIf="errorRangoPersonalizado">{{ errorRangoPersonalizado }}</p>
+  <p class="fechas-panel__ayuda">Máximo {{ rangoDiasMaximo }} días por consulta. El ranking de clientes cubre como máximo 31.</p>
+</div>
+
+<!-- AHORA -->
+<section class="ahora" aria-label="Estado actual">
+  <ng-container *ngIf="estado; else sinEstado">
+    <button type="button" class="ahora__semaforo ahora__semaforo--{{ estado.semaforo }}" (click)="irA('datos')" title="Ver el estado de los datos">
+      <span class="luz" aria-hidden="true"></span>
+      <span class="ahora__semaforo-texto"><small>Estado del ETL</small><strong>{{ etiquetaSemaforo }}</strong></span>
+    </button>
+
+    <div class="ahora__dato" *ngIf="estado.hoy as h; else sinHoy">
+      <small>Hoy, hasta ahora</small>
+      <strong>{{ h.total | numEs }} <span>transacciones</span></strong>
+      <span class="ahora__pie">
+        {{ h.tasaExito }}% de éxito
+        <em *ngIf="tendenciaHoy as t" class="tend tend--{{ t.clase }}">{{ t.texto }}</em>
+      </span>
+    </div>
+    <ng-template #sinHoy><div class="ahora__dato"><small>Hoy, hasta ahora</small><strong>—</strong><span class="ahora__pie">Sin datos de hoy todavía</span></div></ng-template>
+
+    <div class="ahora__dato">
+      <small>Usuarios hoy</small>
+      <strong>{{ estado.hoy ? (estado.hoy.usuarios | numEs) : '—' }}</strong>
+      <span class="ahora__pie">{{ minutosDatosHoy === null ? 'Sin dato' : 'Datos de hace ' + minutosDatosHoy + ' min' }}</span>
+    </div>
+
+    <div class="ahora__dato">
+      <small>ETL</small>
+      <strong>{{ estado.etl.enCurso ? 'Calculando…' : hace(estado.etl.ultimoOk) }}</strong>
+      <span class="ahora__pie">Corre cada {{ estado.etl.intervaloMin }} min</span>
+    </div>
+
+    <button type="button" class="ahora__alertas" [class.ahora__alertas--hay]="estado.alertas.ultimas24h > 0" (click)="verAlertas()" [disabled]="!estado.alertas.disponible && !estado.alertas.recientes.length">
+      <small>Alertas masivas (24 h)</small>
+      <strong>{{ estado.alertas.ultimas24h }}</strong>
+      <span class="ahora__pie" *ngIf="estado.alertas.recientes[0] as a; else sinAlerta">{{ a.titulo }}</span>
+      <ng-template #sinAlerta><span class="ahora__pie">{{ estado.alertas.disponible ? 'Sin alertas recientes' : 'Historial no disponible' }}</span></ng-template>
+    </button>
+  </ng-container>
+  <ng-template #sinEstado>
+    <div class="ahora__vacio">
+      <span *ngIf="estadoCargando">Leyendo el estado del ETL…</span>
+      <span *ngIf="!estadoCargando && estadoNoDisponible">{{ estadoNoDisponible }}</span>
+      <span *ngIf="!estadoCargando && estadoError">{{ estadoError }}</span>
+    </div>
+  </ng-template>
+</section>
+
+<!-- PESTAÑAS -->
+<nav class="pestanas" role="tablist" aria-label="Secciones del monitoreo" (keydown)="teclas($event)">
+  <button *ngFor="let p of pestanas" type="button" role="tab" class="pestana" [class.pestana--activa]="actual === p.valor" [attr.aria-selected]="actual === p.valor" [attr.tabindex]="actual === p.valor ? 0 : -1" [title]="p.ayuda" (click)="irA(p.valor)">
+    {{ p.etiqueta }}
+    <span class="insignia insignia--alerta" *ngIf="p.valor === 'errores' && estado && estado.alertas.ultimas24h > 0">{{ estado.alertas.ultimas24h }}</span>
+    <span class="insignia-luz insignia-luz--{{ estado.semaforo }}" *ngIf="p.valor === 'datos' && estado && estado.semaforo !== 'ok'" aria-hidden="true"></span>
+  </button>
+</nav>
+
+<div class="contenido">
+  <div [hidden]="actual !== 'resumen'" role="tabpanel">
+    <app-movil-resumen [rango]="rango" [refresco]="refresco" [estado]="estado" (irA)="irA($event)" (cargado)="alCargarResumen($event)"></app-movil-resumen>
+  </div>
+  <div *ngIf="visitadas.has('servicios')" [hidden]="actual !== 'servicios'" role="tabpanel">
+    <app-movil-tab-servicios [rango]="rango" [refresco]="refresco"></app-movil-tab-servicios>
+  </div>
+  <div *ngIf="visitadas.has('errores')" [hidden]="actual !== 'errores'" role="tabpanel">
+    <app-salud-global subInicial="errores" [alertaInicial]="alertaId"></app-salud-global>
+  </div>
+  <div *ngIf="visitadas.has('versiones')" [hidden]="actual !== 'versiones'" role="tabpanel">
+    <app-versiones-adopcion></app-versiones-adopcion>
+  </div>
+  <div *ngIf="visitadas.has('clientes')" [hidden]="actual !== 'clientes'" role="tabpanel">
+    <app-movil-tab-clientes [rango]="rango" [refresco]="refresco"></app-movil-tab-clientes>
+  </div>
+  <div *ngIf="visitadas.has('datos')" [hidden]="actual !== 'datos'" role="tabpanel">
+    <app-movil-tab-estado [estado]="estado" [cargando]="estadoCargando" [error]="estadoError" [noDisponible]="estadoNoDisponible" (refrescar)="cargarEstado()"></app-movil-tab-estado>
+  </div>
+</div>

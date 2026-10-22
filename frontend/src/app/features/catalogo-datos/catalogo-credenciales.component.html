@@ -1,0 +1,46 @@
+<div class="modal-overlay" (click)="cerrarModal()">
+  <div class="modal-card modal-cred" (click)="$event.stopPropagation()" role="dialog" aria-modal="true" aria-label="Mis credenciales del catálogo de datos">
+    <div class="modal-header">
+      <div>
+        <h2>Mis credenciales</h2>
+        <p class="sub">Tu catálogo y tu mapa estelar se arman con <strong>tu</strong> usuario y <strong>tu</strong> clave, no con los de otra persona. Se guardan solo en la memoria del servidor mientras dure tu sesión (hasta {{ horas }} h), no van a ninguna base de datos, no se muestran después de escribirlas y nadie más las usa. Lo que ves depende de lo que tu cuenta pueda leer en cada servidor.</p>
+      </div>
+      <button type="button" class="close-btn" (click)="cerrarModal()" aria-label="Cerrar">✕</button>
+    </div>
+
+    <div class="cargando" *ngIf="cargando"><div class="spinner"></div><p>Cargando…</p></div>
+
+    <section class="tarjeta-cred" *ngFor="let m of motores">
+      <div class="cred-cab">
+        <h3>{{ etiqueta(m) }}</h3>
+        <span class="chip" [ngClass]="actuales[m].configurada ? 'chip-ok' : 'chip-media'">{{ actuales[m].configurada ? 'Configuradas' : 'Sin configurar' }}</span>
+        <span class="pequeno" *ngIf="actuales[m].configurada">usuario <span class="mono">{{ actuales[m].usuario }}</span> · clave <span class="mono">••••{{ actuales[m].claveFin }}</span> · vence {{ expiraTxt(m) }}</span>
+      </div>
+      <p class="ayuda">Sirven para todos los servidores {{ etiqueta(m) }} de la lista.<ng-container *ngIf="m === 'MSSQL'"> Con <span class="mono">DOMINIO\usuario</span> se usa autenticación de dominio (si la clave está mal, cada intento cuenta para el bloqueo de tu cuenta de red; por eso la lectura se detiene sola tras unos rechazos seguidos). Sin dominio se usa login de SQL Server.</ng-container></p>
+
+      <div class="fila-2">
+        <div>
+          <label class="etiqueta" [for]="'cc-u-' + m">Usuario *</label>
+          <input [id]="'cc-u-' + m" class="entrada mono" [(ngModel)]="form[m].usuario" maxlength="128" autocomplete="off" [disabled]="trabajando[m]" [placeholder]="ejemploUsuario(m)" />
+        </div>
+        <div>
+          <label class="etiqueta" [for]="'cc-c-' + m">Clave {{ actuales[m].configurada ? '' : '*' }}</label>
+          <input [id]="'cc-c-' + m" class="entrada mono" type="password" [(ngModel)]="form[m].clave" maxlength="256" autocomplete="new-password" [disabled]="trabajando[m]"
+                 [placeholder]="actuales[m].configurada ? 'Vacía = conservar la actual' : ''" (keydown.enter)="guardar(m)" />
+        </div>
+      </div>
+
+      <div class="error-state" *ngIf="errores[m]">{{ errores[m] }}</div>
+      <div class="aviso-ok" *ngIf="avisos[m] && !errores[m]">{{ avisos[m] }}</div>
+
+      <div class="pie-cred">
+        <button type="button" class="btn btn-ghost btn-sm btn-peligro" *ngIf="actuales[m].configurada" [disabled]="trabajando[m]" (click)="quitar(m)" (blur)="confirmaQuitar = null">{{ confirmaQuitar === m ? 'Confirmar: quitar' : 'Quitar' }}</button>
+        <button type="button" class="btn btn-purple btn-sm" [disabled]="!puedeGuardar(m)" (click)="guardar(m)">{{ trabajando[m] ? 'Guardando…' : (actuales[m].configurada ? 'Actualizar y leer' : 'Guardar y leer') }}</button>
+      </div>
+    </section>
+
+    <div class="pie-form">
+      <button type="button" class="btn btn-ghost" (click)="cerrarModal()">Cerrar</button>
+    </div>
+  </div>
+</div>

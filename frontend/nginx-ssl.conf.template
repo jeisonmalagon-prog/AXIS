@@ -1,0 +1,54 @@
+# ============================================================
+# Servidor HTTPS (puerto 443) -- OPCIONAL.
+# No se usa directamente: el script 25-habilitar-https.sh lo convierte en
+# /etc/nginx/conf.d/https.conf SOLO si encuentra los certificados montados en
+# /etc/nginx/certs (fullchain.pem y privkey.pem). Así el contenedor nunca
+# queda en bucle de reinicios por falta de certificados (p. ej. cuando el F5
+# ya termina el SSL y reenvía en HTTP al puerto 80).
+# ============================================================
+server {
+    listen 443 ssl;
+    server_name _;
+
+    # Archivos convertidos del .pfx -- se montan como volumen en el
+    # "docker run" (-v /opt/certificados/nginx:/etc/nginx/certs:ro), NUNCA se
+    # copian dentro de la imagen (igual que los demas secretos del proyecto).
+    ssl_certificate     /etc/nginx/certs/fullchain.pem;
+    ssl_certificate_key /etc/nginx/certs/privkey.pem;
+
+    root /usr/share/nginx/html;
+    index index.html;
+
+    # SPA de Angular: cualquier ruta que no sea un archivo real (ej.
+    # /usuarios-auditoria al refrescar el navegador) debe caer en
+    # index.html para que el Router de Angular la resuelva del lado
+    # del cliente. Sin esto, refrescar en una ruta interna da 404.
+    location / {
+        try_files $uri $uri/ /index.html;
+    }
+
+    # environment.prod.ts usa apiUrl: '/api' (ruta relativa al MISMO
+    # origen que sirve el frontend) — por eso Nginx debe reenviar /api/
+    # al contenedor del backend en vez de que el navegador le pegue
+    # directo a otro host/puerto.
+    location /api/ {
+        proxy_pass http://${BACKEND_HOST}:${BACKEND_PORT}/api/;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_read_timeout 300s;
+    }
+
+    # Cache agresivo para los archivos con hash en el nombre que genera
+    # el build de Angular (main.[hash].js, styles.[hash].css, etc.).
+    location ~* \.(?:js|css|woff2?|ttf|svg|png|jpg|jpeg|gif|ico)$ {
+        expires 1y;
+        add_header Cache-Control "public, immutable";
+        try_files $uri =404;
+    }
+
+    gzip on;
+    gzip_types text/plain text/css application/json application/javascript text/xml application/xml application/xml+rss text/javascript;
+}

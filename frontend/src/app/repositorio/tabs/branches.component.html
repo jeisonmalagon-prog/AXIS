@@ -1,0 +1,34 @@
+<div class="ramas-container">
+  <div class="empty-state text-center py-4" *ngIf="cargando">Cargando ramas…</div>
+  <div class="error-state" *ngIf="!cargando && error"><app-ico n="alerta"></app-ico>{{ error }}</div>
+
+  <div class="tabla-ramas" *ngIf="!cargando && !error">
+    <div class="fila-encabezado">
+      <span class="col-nombre">Rama</span>
+      <span class="col-commit">Último commit</span>
+      <span class="col-acciones"></span>
+    </div>
+
+    <p class="vacio-carpeta" *ngIf="!ramas.length">No se encontraron ramas en el repositorio.</p>
+
+    <div class="fila-rama" *ngFor="let rama of ramas">
+      <span class="col-nombre">
+       <app-ico n="rama"></app-ico>{{ rama.nombre }}
+        <span class="badge-default" *ngIf="rama.esRamaPorDefecto">por defecto</span>
+      </span>
+      <span class="col-commit">
+        <ng-container *ngIf="rama.commit; else sinCommit">
+          <code>{{ rama.commit.idCorto }}</code>
+          <span class="comentario-commit" [title]="rama.commit.comentario">{{ rama.commit.comentario || '(sin mensaje)' }}</span>
+          <span class="autor-commit">{{ rama.commit.autor }}</span>
+          <span class="fecha-commit" *ngIf="rama.commit.fecha">{{ rama.commit.fecha | date:'dd/MM/yyyy HH:mm' }}</span>
+        </ng-container>
+        <ng-template #sinCommit><span class="text-gray">Sin información de commit</span></ng-template>
+      </span>
+      <span class="col-acciones">
+        <button type="button" class="btn-explorar" (click)="explorar(rama.nombre)" title="Explorar archivos de esta rama"><app-ico n="carpeta"></app-ico>Explorar</button>
+        <a [href]="rama.url" target="_blank" rel="noopener" class="btn-icono" title="Ver en Azure DevOps"><app-ico n="externo" class="solo"></app-ico></a>
+      </span>
+    </div>
+  </div>
+</div>

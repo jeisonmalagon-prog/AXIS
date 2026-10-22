@@ -1,0 +1,180 @@
+<div class="tb-cab">
+  <button type="button" class="btn btn-ghost btn-sm" (click)="cerrar.emit()">← Volver</button>
+  <div class="tb-titulo" *ngIf="detalle as d">
+    <p class="tb-ruta">{{ d.origen.nombre }} <span aria-hidden="true">›</span> {{ d.bd }}<ng-container *ngIf="d.esquema"> <span aria-hidden="true">›</span> {{ d.esquema }}</ng-container></p>
+    <h2 class="mono">{{ d.nombre }}</h2>
+    <div class="tb-chips">
+      <span class="chip chip-marca">{{ d.tipo === 'VISTA' ? 'Vista' : 'Tabla' }}</span>
+      <span class="chip">{{ d.origen.motor === 'MSSQL' ? 'SQL Server' : 'MariaDB' }}</span>
+      <span class="chip">{{ d.columnas.length }} columna(s)</span>
+      <span class="chip" *ngIf="d.filas !== null" title="Estimación del catálogo del servidor, no un conteo exacto">~{{ formatoFilas(d.filas) }} fila(s)</span>
+      <span class="chip">{{ d.padres.length }} padre(s)</span>
+      <span class="chip">{{ d.hijas.length }} hija(s)</span>
+    </div>
+    <p class="tb-desc" *ngIf="d.descripcion">{{ d.descripcion }}</p>
+    <p class="tb-desc tb-sin-desc" *ngIf="!d.descripcion">Sin descripción registrada en el servidor.</p>
+  </div>
+  <div class="tb-acciones" *ngIf="detalle">
+    <button type="button" class="btn-mini" (click)="copiar(nombreSql, 'nombre')" title="Copia el nombre listo para una consulta">{{ copiado === 'nombre' ? '¡Copiado!' : 'Copiar nombre' }}</button>
+    <button type="button" class="btn-mini" (click)="verQueries.emit(tablaRef)" title="Queries guardadas del equipo que usan esta tabla">Queries que la usan</button>
+    <button type="button" class="btn-mini" (click)="armarQuery.emit(tablaRef)" title="Abre el constructor guiado con esta tabla">Armar query</button>
+    <button type="button" class="btn-mini" (click)="copiarColumnas()" title="Copia la lista de columnas">{{ copiado === 'columnas' ? '¡Copiado!' : 'Copiar columnas' }}</button>
+  </div>
+</div>
+
+<div class="cargando" *ngIf="cargando"><div class="spinner"></div><p>Cargando…</p></div>
+<div class="error-state" *ngIf="error">{{ error }}</div>
+
+<ng-container *ngIf="detalle as d">
+  <div class="pestanas" role="tablist">
+    <button type="button" role="tab" [class.activa]="pestana === 'diccionario'" [attr.aria-selected]="pestana === 'diccionario'" (click)="irA('diccionario')">Diccionario de datos</button>
+    <button type="button" role="tab" [class.activa]="pestana === 'diagrama'" [attr.aria-selected]="pestana === 'diagrama'" (click)="irA('diagrama')">Diagrama ER</button>
+    <button type="button" role="tab" [class.activa]="pestana === 'queries'" [attr.aria-selected]="pestana === 'queries'" (click)="irA('queries')">Queries del equipo<span class="cnt" *ngIf="totalQueriesTabla">{{ totalQueriesTabla }}</span></button>
+  </div>
+
+  <!-- ===== Diccionario ===== -->
+  <section *ngIf="pestana === 'diccionario'">
+    <div class="barra">
+      <label class="buscar"><span aria-hidden="true">⌕</span><input type="search" [(ngModel)]="filtro" placeholder="Filtrar columnas por nombre, tipo o descripción…" aria-label="Filtrar columnas" /></label>
+      <label class="check-chico"><input type="checkbox" [(ngModel)]="soloLlaves" /> Solo llaves y relaciones</label>
+      <span class="gris">{{ columnasFiltradas.length }} de {{ d.columnas.length }}</span>
+    </div>
+
+    <div class="tarjeta tabla-tarjeta">
+      <div class="tabla-wrap">
+        <table class="tabla dic">
+          <thead><tr><th class="num">#</th><th>Columna</th><th>Tipo</th><th>Nulo</th><th>Llaves</th><th>Por defecto</th><th>Relaciones</th><th>Descripción</th></tr></thead>
+          <tbody>
+            <ng-container *ngFor="let c of columnasFiltradas; trackBy: trackColumna">
+              <tr>
+                <td class="num gris">{{ c.orden }}</td>
+                <td class="mono col-nom" [class.es-pk]="c.pk">{{ c.nombre }}</td>
+                <td class="mono">{{ c.tipo }}</td>
+                <td>{{ c.nulo ? 'Sí' : 'No' }}</td>
+                <td>
+                  <span class="marca marca-pk" *ngIf="c.pk" title="Llave primaria">PK</span>
+                  <span class="marca marca-fk" *ngIf="c.fk.length" title="Llave foránea">FK</span>
+                  <span class="marca marca-id" *ngIf="c.identity" title="Se genera sola (identity / auto_increment)">AUTO</span>
+                  <span class="marca marca-id" *ngIf="c.calculada" title="Columna calculada">CALC</span>
+                  <span class="marca marca-q" *ngIf="usoColumna(c.nombre)" [title]="textoUsoColumna(c.nombre)">Q</span>
+                </td>
+                <td class="mono gris td-defecto">{{ c.defecto || '' }}</td>
+                <td class="td-rel">
+                  <div *ngFor="let f of c.fk" class="rel">
+                    <span class="gris">→</span>
+                    <button type="button" class="enlace mono" (click)="abrir.emit(f.tabla.ref)" [title]="'Abrir ' + etiquetaTabla(f.tabla)">{{ f.tabla.nombre }}.{{ f.columna }}</button>
+                  </div>
+                  <div *ngFor="let r of c.referenciadaPor" class="rel">
+                    <span class="gris">←</span>
+                    <button type="button" class="enlace mono" (click)="abrir.emit(r.tabla.ref)" [title]="'Abrir ' + etiquetaTabla(r.tabla)">{{ r.tabla.nombre }}.{{ r.columna }}</button>
+                  </div>
+                  <button type="button" class="enlace-chico" *ngIf="c.otrasTablas > 0" (click)="verLugares(c)" [attr.aria-expanded]="columnaAbierta === c.nombre">
+                    {{ columnaAbierta === c.nombre ? 'Ocultar' : 'También en ' + c.otrasTablas + ' tabla(s)' }}
+                  </button>
+                </td>
+                <td class="td-desc">{{ c.descripcion || '' }}</td>
+              </tr>
+              <tr class="fila-lugares" *ngIf="columnaAbierta === c.nombre">
+                <td colspan="8">
+                  <div class="cargando chico-v" *ngIf="cargandoLugares"><div class="spinner"></div></div>
+                  <div *ngIf="lugares as l">
+                    <p class="lugares-tit">La columna <span class="mono">{{ l.nombre }}</span> aparece en {{ l.total }} tabla(s)<span *ngIf="l.total > l.lugares.length"> (se muestran {{ l.lugares.length }})</span>. Mismo nombre no implica misma relación: confírmalo con el equipo dueño del dato.</p>
+                    <ul class="lugares">
+                      <li *ngFor="let x of l.lugares">
+                        <span *ngIf="esEsta(x)" class="chip chip-marca">esta tabla</span>
+                        <button type="button" class="enlace mono" *ngIf="!esEsta(x)" (click)="abrir.emit(x.ref)">{{ etiquetaTabla(x) }}</button>
+                        <span class="gris mono">{{ x.tipoDato }}</span>
+                        <span class="marca marca-pk" *ngIf="x.pk">PK</span>
+                        <span class="gris">· {{ x.origen }}</span>
+                      </li>
+                    </ul>
+                  </div>
+                </td>
+              </tr>
+            </ng-container>
+            <tr *ngIf="!columnasFiltradas.length"><td colspan="8" class="vacio">Ninguna columna coincide con el filtro.</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="grilla-rel" *ngIf="d.padres.length || d.hijas.length">
+      <div class="tarjeta" *ngIf="d.padres.length">
+        <div class="tarjeta-cab"><h3>Depende de (padres)</h3><span class="tarjeta-sub">esta tabla tiene la llave foránea</span></div>
+        <ul class="lista-rel">
+          <li *ngFor="let p of d.padres">
+            <button type="button" class="enlace mono" (click)="abrir.emit(p.tabla.ref)">{{ etiquetaTabla(p.tabla) }}</button>
+            <span class="gris mono cols">{{ p.columnas.length ? (p.columnas[0].col + ' → ' + p.columnas[0].refCol) : '' }}<ng-container *ngIf="p.columnas.length > 1"> +{{ p.columnas.length - 1 }}</ng-container></span>
+          </li>
+        </ul>
+      </div>
+      <div class="tarjeta" *ngIf="d.hijas.length">
+        <div class="tarjeta-cab"><h3>La usan (hijas)</h3><span class="tarjeta-sub">tablas que la referencian</span></div>
+        <ul class="lista-rel">
+          <li *ngFor="let h of d.hijas">
+            <button type="button" class="enlace mono" (click)="abrir.emit(h.tabla.ref)">{{ etiquetaTabla(h.tabla) }}</button>
+            <span class="gris mono cols">{{ h.columnas.length ? (h.columnas[0].col + ' → ' + h.columnas[0].refCol) : '' }}<ng-container *ngIf="h.columnas.length > 1"> +{{ h.columnas.length - 1 }}</ng-container></span>
+          </li>
+        </ul>
+      </div>
+    </div>
+    <p class="gris pie-nota" *ngIf="!d.padres.length && !d.hijas.length">Esta {{ d.tipo === 'VISTA' ? 'vista' : 'tabla' }} no tiene llaves foráneas declaradas. Las relaciones que solo existen en la aplicación no se pueden detectar; revisa «También en N tabla(s)» para ver columnas con el mismo nombre.</p>
+  </section>
+
+  <!-- ===== Queries del equipo ===== -->
+  <section *ngIf="pestana === 'queries'">
+    <div class="cargando chico-v" *ngIf="cargandoQ"><div class="spinner"></div><p>Buscando queries…</p></div>
+    <p class="gris pie-nota" *ngIf="!cargandoQ && !qDet?.total">Ningún query guardado usa esta {{ d.tipo === 'VISTA' ? 'vista' : 'tabla' }} todavía. Cuando importes o guardes queries, aquí verás con qué otras tablas la une el equipo y qué filtros usa.</p>
+
+    <ng-container *ngIf="qDet as q">
+      <div class="q-grilla" *ngIf="q.total">
+        <div class="tarjeta">
+          <div class="tarjeta-cab"><h3>Queries que la usan</h3><span class="tarjeta-sub">{{ q.total }} guardado(s)</span></div>
+          <ul class="lista-q">
+            <li *ngFor="let x of q.queries">
+              <button type="button" class="enlace q-tit" (click)="abrirQuery.emit(x.id)" [title]="x.titulo">{{ x.titulo }}</button>
+              <span class="chip chip-mini chip-alta" *ngIf="x.modifica">Modifica</span>
+              <span class="gris mono peq" *ngIf="x.baseDatos">{{ x.baseDatos }}</span>
+            </li>
+          </ul>
+          <button type="button" class="enlace peq" (click)="verQueries.emit(tablaRef)">Ver todos en el repositorio</button>
+        </div>
+
+        <div class="tarjeta" *ngIf="q.relacionadas.length">
+          <div class="tarjeta-cab"><h3>Se une en queries con</h3><span class="tarjeta-sub">relaciones reales del equipo</span></div>
+          <ul class="lista-rel">
+            <li *ngFor="let r of q.relacionadas" class="rel-q">
+              <div class="rel-q-cab">
+                <button type="button" class="enlace mono" (click)="abrir.emit(r.tabla.ref)" [title]="'Abrir ' + etiquetaTabla(r.tabla)">{{ r.tabla.nombre }}</button>
+                <span class="chip chip-mini chip-ok" *ngIf="r.fk" title="La base define una llave foránea entre las dos">FK</span>
+                <span class="chip chip-mini" *ngIf="!r.fk" title="La base no define esta relación: solo la conoce el equipo">sin FK</span>
+                <small class="gris">{{ r.queries }} query(s)</small>
+              </div>
+              <div class="gris mono peq" *ngFor="let c of r.condiciones.slice(0, 3)">{{ c.ca }} = {{ c.cb }} <span *ngIf="c.usos > 1">· {{ c.usos }}×</span></div>
+            </li>
+          </ul>
+        </div>
+
+        <div class="tarjeta" *ngIf="q.filtros.length">
+          <div class="tarjeta-cab"><h3>Filtros habituales</h3><span class="tarjeta-sub">columnas por las que se filtra</span></div>
+          <ul class="lista-rel">
+            <li *ngFor="let f of q.filtros">
+              <span class="mono">{{ f.c }}</span>
+              <span class="gris peq">{{ etiquetaOps(f.ops) }} · {{ f.queries }} query(s)</span>
+            </li>
+          </ul>
+        </div>
+      </div>
+    </ng-container>
+  </section>
+
+  <!-- ===== Diagrama ===== -->
+  <section *ngIf="pestana === 'diagrama'">
+    <div class="cargando chico-v" *ngIf="cargandoGrafo && !grafo"><div class="spinner"></div><p>Armando el diagrama…</p></div>
+    <div class="error-state" *ngIf="errorGrafo">{{ errorGrafo }}</div>
+    <ng-container *ngIf="grafo">
+      <app-catalogo-er [grafo]="grafo" [profundidad]="profundidad" (cambiarProfundidad)="cambiarProfundidad($event)" (abrir)="abrir.emit($event)"></app-catalogo-er>
+      <p class="gris pie-nota" *ngIf="grafo.nodos.length === 1">No hay llaves foráneas declaradas hacia o desde esta tabla, por eso el diagrama solo la muestra a ella.</p>
+    </ng-container>
+  </section>
+</ng-container>

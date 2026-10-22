@@ -1,0 +1,409 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap');
+
+$brand-dark: var(--ax-text, #1e293b);
+$brand-gray: var(--ax-text-muted, #64748b);
+$border-light: var(--ax-border, #e2e8f0);
+$state-ok: #10b981;
+$state-warn: #f59e0b;
+$state-danger: #ef4444;
+$font-ui: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+$font-mono: 'JetBrains Mono', 'Courier New', monospace;
+
+:host {
+  display: block;
+  font-family: $font-ui;
+}
+
+.icono-svg {
+  display: block;
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+}
+
+.page-header {
+  margin-bottom: 20px;
+  h1 { font-size: 24px; font-weight: 800; color: $brand-dark; margin: 0; }
+  .subtitle { color: $brand-gray; margin-top: 4px; font-size: 14px; }
+}
+
+// ==========================================
+// SELECTOR DE PERIODO
+// ==========================================
+.seccion-selector {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 18px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid $border-light;
+}
+
+.selector-periodo {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.btn-periodo {
+  font-family: $font-ui;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: $brand-gray;
+  background: var(--ax-surface, white);
+  border: 1px solid $border-light;
+  border-radius: 8px;
+  padding: 7px 14px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+
+  &:hover { border-color: var(--ax-brand-primary, #673ab7); color: var(--ax-brand-primary, #673ab7); }
+
+  &.activo {
+    background: var(--ax-brand-primary, #673ab7);
+    border-color: var(--ax-brand-primary, #673ab7);
+    color: white;
+  }
+}
+
+.rango-fechas {
+  display: flex;
+  align-items: flex-end;
+  gap: 10px;
+  flex-wrap: wrap;
+
+  label {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    font-size: 11px;
+    font-weight: 600;
+    color: $brand-gray;
+
+    input[type="date"] {
+      font-family: $font-ui;
+      font-size: 12.5px;
+      padding: 6px 8px;
+      border: 1px solid $border-light;
+      border-radius: 6px;
+      color: $brand-dark;
+    }
+  }
+}
+
+.acciones-informe {
+  display: flex;
+  gap: 8px;
+}
+
+.btn-sm {
+  font-family: $font-ui;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--ax-brand-primary, #673ab7);
+  background: rgba(var(--ax-brand-primary-rgb, 103, 58, 183), 0.08);
+  border: 1px solid rgba(var(--ax-brand-primary-rgb, 103, 58, 183), 0.25);
+  border-radius: 7px;
+  padding: 7px 12px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+
+  &:hover:not(:disabled) { background: rgba(var(--ax-brand-primary-rgb, 103, 58, 183), 0.15); }
+  &:disabled { opacity: 0.6; cursor: not-allowed; }
+
+  &.btn-pdf {
+    color: $state-ok;
+    background: rgba($state-ok, 0.08);
+    border-color: rgba($state-ok, 0.25);
+    &:hover:not(:disabled) { background: rgba($state-ok, 0.15); }
+  }
+}
+
+.etiqueta-periodo-activo {
+  font-size: 13px;
+  color: $brand-gray;
+  margin: 0 0 16px;
+  strong { color: $brand-dark; }
+
+  .etiqueta-comparacion-vs {
+    font-size: 11.5px;
+    margin-left: 4px;
+  }
+}
+
+// ==========================================
+// ESTADOS: carga / error
+// ==========================================
+.loading-state, .empty {
+  text-align: center;
+  padding: 40px 0;
+  color: $brand-gray;
+}
+
+.spinner {
+  width: 28px; height: 28px; margin: 0 auto 12px;
+  border: 3px solid $border-light; border-top-color: var(--ax-brand-primary, #673ab7);
+  border-radius: 50%; animation: spin 1s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+.mensaje-error {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: $state-danger;
+  font-size: 13px;
+  font-weight: 600;
+  margin-bottom: 16px;
+
+  &.mensaje-error-seccion {
+    background: rgba($state-danger, 0.08);
+    border: 1px solid rgba($state-danger, 0.25);
+    border-radius: 10px;
+    padding: 14px 16px;
+  }
+}
+
+// ==========================================
+// KPIs
+// ==========================================
+.centro-analitica {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.kpis-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 12px;
+}
+
+.kpi-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 6px 12px;
+  background: var(--ax-surface, white);
+  border: 1px solid $border-light;
+  border-radius: 12px;
+  padding: 14px 16px;
+
+  .kpi-texto {
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+  }
+
+  .kpi-valor {
+    font-size: 20px;
+    font-weight: 800;
+    font-family: $font-mono;
+    color: $brand-dark;
+  }
+
+  .kpi-label {
+    font-size: 11px;
+    font-weight: 600;
+    color: $brand-gray;
+  }
+
+  &.kpi-sano .kpi-valor { color: $state-ok; }
+  &.kpi-riesgo .kpi-valor { color: $state-warn; }
+  &.kpi-critico .kpi-valor { color: $state-danger; }
+}
+
+// Píldora de comparación vs. periodo anterior ("+15%", "-8%", "—"). El
+// verde/rojo depende de si la subida es buena o mala para esa métrica en
+// particular (ver claseComparacion() en el .ts) -- nunca de si el número es
+// positivo o negativo en sí mismo.
+.pill-comparacion {
+  font-family: $font-mono;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 3px 8px;
+  border-radius: 20px;
+  white-space: nowrap;
+
+  &.pill-positiva { background: rgba($state-ok, 0.12); color: $state-ok; }
+  &.pill-negativa { background: rgba($state-danger, 0.12); color: $state-danger; }
+  &.pill-neutral { background: rgba(148, 163, 184, 0.15); color: $brand-gray; }
+}
+
+// ==========================================
+// PANELES
+// ==========================================
+.panel-analitica {
+  background: var(--ax-surface-2, #f8fafc);
+  border: 1px solid $border-light;
+  border-radius: 12px;
+  padding: 16px 18px;
+
+  h3 {
+    font-size: 14px;
+    font-weight: 800;
+    color: $brand-dark;
+    margin: 0 0 4px;
+  }
+}
+
+.panel-atencion-subtitulo {
+  color: $brand-gray;
+  font-size: 11.5px;
+  margin: 0 0 12px;
+}
+
+.panel-analitica-ancho {
+  width: 100%;
+}
+
+.sin-datos {
+  color: $brand-gray;
+  font-size: 12px;
+  font-style: italic;
+  margin: 4px 0;
+}
+
+.analitica-paneles-secundarios {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 14px;
+}
+
+// ==========================================
+// TABLAS (mismo vocabulario que "tabla-atencion" de Monitoreo)
+// ==========================================
+.tabla-atencion {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.tabla-atencion-header, .tabla-atencion-fila {
+  display: grid;
+  gap: 10px;
+  align-items: center;
+  padding: 8px 10px;
+  font-size: 12px;
+}
+
+.tabla-atencion-header {
+  font-size: 9.5px;
+  font-weight: 700;
+  text-transform: uppercase;
+  color: $brand-gray;
+  letter-spacing: 0.03em;
+}
+
+.tabla-atencion-fila {
+  background: var(--ax-surface, white);
+  border: 1px solid $border-light;
+  border-radius: 8px;
+  color: $brand-dark;
+
+  span {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+}
+
+.tabla-atencion-header.cols-5, .tabla-atencion-fila.cols-5 {
+  grid-template-columns: minmax(0, 0.8fr) minmax(0, 0.8fr) minmax(0, 1.6fr) minmax(0, 0.9fr) minmax(0, 1fr);
+}
+
+.tabla-atencion-header.cols-6, .tabla-atencion-fila.cols-6 {
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1.4fr) minmax(0, 0.8fr) minmax(0, 1fr) minmax(0, 0.9fr);
+}
+
+.chip-accion {
+  display: inline-block;
+  width: fit-content;
+  font-size: 10px;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: 20px;
+  text-transform: uppercase;
+
+  &.accion-alta { background: rgba($state-ok, 0.12); color: $state-ok; }
+  &.accion-renovacion { background: rgba(var(--ax-brand-primary-rgb, 103, 58, 183), 0.12); color: var(--ax-brand-primary, #673ab7); }
+}
+
+.status-pill {
+  display: inline-block;
+  width: fit-content;
+  font-size: 10.5px;
+  font-weight: 700;
+  padding: 3px 9px;
+  border-radius: 20px;
+
+  &.status-vigente { background: rgba($state-ok, 0.12); color: $state-ok; }
+  &.status-por-vencer { background: rgba($state-warn, 0.14); color: $state-warn; }
+  &.status-vencido { background: rgba($state-danger, 0.12); color: $state-danger; }
+}
+
+// ==========================================
+// RANKINGS
+// ==========================================
+.lista-ranking {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.ranking-fila {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.ranking-etiqueta {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 12px;
+  color: $brand-dark;
+
+  span:first-child {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    max-width: 80%;
+  }
+}
+
+.ranking-total {
+  font-family: $font-mono;
+  font-weight: 700;
+  color: $brand-gray;
+}
+
+.ranking-barra-fondo {
+  height: 6px;
+  background: $border-light;
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.ranking-barra {
+  height: 100%;
+  background: var(--ax-brand-primary, #673ab7);
+  border-radius: 4px;
+}
+
+@media (max-width: 720px) {
+  .tabla-atencion-header, .tabla-atencion-fila {
+    grid-template-columns: 1fr !important;
+
+    span {
+      white-space: normal;
+    }
+  }
+
+  .tabla-atencion-header {
+    display: none;
+  }
+}

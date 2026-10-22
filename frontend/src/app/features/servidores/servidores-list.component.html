@@ -1,0 +1,138 @@
+<header class="page-header">
+  <div class="header-titles">
+    <h1>Servidores</h1>
+    <p class="subtitle">Inventario de servidores Linux y Windows</p>
+  </div>
+  
+  <!-- Contenedor con el buscador y el botón -->
+  <div class="header-actions">
+    <div class="search-box">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <circle cx="11" cy="11" r="8"></circle>
+        <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+      </svg>
+      <input 
+        type="text" 
+        [(ngModel)]="terminoBusqueda" 
+        placeholder="Buscar (ID, Hostname, IP, S.O)..." 
+      />
+    </div>
+
+    <button *ngIf="puedeEditar" class="btn btn-primary" (click)="abrirFormulario()">
+      <span>+ Nuevo servidor</span>
+    </button>
+  </div>
+</header>
+
+<!-- Resumen rápido: da una foto del inventario de un vistazo, antes de
+     entrar a buscar un servidor puntual. -->
+<div class="resumen-strip" *ngIf="servidores.length">
+  <div class="resumen-chip">
+    <span class="resumen-num">{{ servidores.length }}</span>
+    <span class="resumen-label">Servidores</span>
+  </div>
+  <div class="resumen-chip resumen-chip--linux" *ngIf="contarPorSO('linux') as totalLinux">
+    <span class="resumen-num">{{ totalLinux }}</span>
+    <span class="resumen-label">Linux</span>
+  </div>
+  <div class="resumen-chip resumen-chip--windows" *ngIf="contarPorSO('windows') as totalWindows">
+    <span class="resumen-num">{{ totalWindows }}</span>
+    <span class="resumen-label">Windows</span>
+  </div>
+</div>
+
+<!-- Chips de ambiente: filtro rápido de un clic, además del buscador de
+     arriba (que sigue buscando por cualquier campo). -->
+<div class="chips-ambiente" *ngIf="chipsAmbiente.length > 1">
+  <button
+    type="button"
+    class="chip-filtro"
+    [class.chip-filtro--activo]="filtroAmbiente === null"
+    (click)="filtroAmbiente = null"
+  >Todos ({{ servidores.length }})</button>
+  <button
+    type="button"
+    class="chip-filtro"
+    [ngClass]="claseAmbiente(c.valor)"
+    [class.chip-filtro--activo]="filtroAmbiente === c.valor"
+    *ngFor="let c of chipsAmbiente"
+    (click)="seleccionarAmbiente(c.valor)"
+  >{{ c.valor }} ({{ c.total }})</button>
+</div>
+
+<section class="panel">
+  <ng-container *ngIf="servidoresFiltrados.length; else vacio">
+    <div class="cards-grid">
+      <div class="server-card" *ngFor="let s of servidoresFiltrados">
+        <div class="card-header">
+          <span class="os-dot" [ngClass]="claseSO(s.SistemaOperativo)"></span>
+          <div class="card-titles">
+            <span class="hostname" [title]="s.Hostname">{{ s.Hostname }}</span>
+            <span class="ip mono">{{ s.IP }}</span>
+          </div>
+          <span class="badge-ambiente" [ngClass]="claseAmbiente(normalizarAmbiente(s.Ambiente))">
+            {{ normalizarAmbiente(s.Ambiente) }}
+          </span>
+        </div>
+
+        <div class="card-footer">
+          <span class="os-badge" [ngClass]="claseSO(s.SistemaOperativo)">{{ s.SistemaOperativo }}</span>
+          <div class="card-actions" *ngIf="puedeEditar">
+            <button class="btn btn-sm" (click)="editar(s)">Editar</button>
+            <button class="btn btn-sm btn-danger" (click)="eliminar(s)">Eliminar</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </ng-container>
+
+  <ng-template #vacio>
+    <div class="empty">
+      <p *ngIf="servidores.length === 0; else noResultados">No hay servidores registrados todavía.</p>
+      <ng-template #noResultados>
+        <p *ngIf="terminoBusqueda">No se encontraron servidores para "<strong>{{ terminoBusqueda }}</strong>".</p>
+        <p *ngIf="!terminoBusqueda">No hay servidores en "<strong>{{ filtroAmbiente }}</strong>".</p>
+      </ng-template>
+    </div>
+  </ng-template>
+</section>
+
+<!-- Formulario alta/edición -->
+<div class="overlay" *ngIf="mostrarForm" (click)="cerrarFormulario()">
+  <div class="modal" (click)="$event.stopPropagation()">
+    <h2>{{ editando ? 'Editar servidor' : 'Nuevo servidor' }}</h2>
+
+    <div class="form-group">
+      <label>Hostname</label>
+      <input [(ngModel)]="form.Hostname" placeholder="srv-web01" />
+    </div>
+
+    <div class="form-group">
+      <label>IP</label>
+      <input [(ngModel)]="form.IP" placeholder="10.0.0.10" class="mono" />
+    </div>
+
+    <div class="form-group">
+      <label>Sistema operativo</label>
+      <select [(ngModel)]="form.SistemaOperativoId">
+        <option [ngValue]="undefined" disabled>Selecciona uno</option>
+        <option *ngFor="let so of sistemasOperativos" [ngValue]="so.Id">{{ so.Nombre }}</option>
+      </select>
+    </div>
+
+    <div class="form-group">
+      <label>Ambiente</label>
+      <select [(ngModel)]="form.Ambiente">
+        <option [ngValue]="null">Sin especificar</option>
+        <option value="Produccion">Producción</option>
+        <option value="QA">QA</option>
+        <option value="Desarrollo">Desarrollo</option>
+      </select>
+    </div>
+
+    <div class="modal-actions">
+      <button class="btn" (click)="cerrarFormulario()">Cancelar</button>
+      <button class="btn btn-primary" (click)="guardar()">Guardar servidor</button>
+    </div>
+  </div>
+</div>

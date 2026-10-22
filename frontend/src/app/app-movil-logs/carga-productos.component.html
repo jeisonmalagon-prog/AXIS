@@ -1,0 +1,225 @@
+<!-- FORMULARIO -->
+<div class="filtros-panel">
+  <div class="filtros-grid">
+    <div class="campo campo--documento">
+      <label for="cpDocumento">Cliente (CC)</label>
+      <input id="cpDocumento" type="text" placeholder="Número de documento completo…" [(ngModel)]="documento" (keyup.enter)="consultar()" autocomplete="off">
+    </div>
+
+    <div class="campo">
+      <span class="campo__etiqueta">Periodo</span>
+      <div class="rango-selector" role="group" aria-label="Periodo">
+        <button *ngFor="let p of periodos" type="button" class="rango-boton" [class.activo]="periodo === p.valor" (click)="elegirPeriodo(p.valor)">{{ p.etiqueta }}</button>
+      </div>
+    </div>
+
+    <ng-container *ngIf="periodo === 'rango'">
+      <div class="campo">
+        <label for="cpDesde">Desde</label>
+        <input id="cpDesde" type="date" [(ngModel)]="fechaDesde" [max]="fechaMaxima">
+      </div>
+      <div class="campo">
+        <label for="cpHasta">Hasta</label>
+        <input id="cpHasta" type="date" [(ngModel)]="fechaHasta" [max]="fechaMaxima">
+      </div>
+    </ng-container>
+
+    <div class="campo campo--accion">
+      <button type="button" class="btn-primario" [disabled]="cargando" (click)="consultar()">{{ cargando ? 'Validando…' : 'Validar carga' }}</button>
+    </div>
+  </div>
+</div>
+
+<p class="detalle-aviso">
+  Una <strong>carga de productos</strong> es cada vez que la app pidió los productos del cliente: cuentas y tarjetas débito (lista rápida), tarjetas de crédito, estado de los plásticos, fidelización y mora.
+  La pantalla dice si cada parte respondió, cuánto tardó y, cuando falló o fue lenta, qué muestra el log (<strong>evidencia</strong>) y qué se supone a partir de ella (<strong>hipótesis</strong>, con su nivel de confianza).
+  Lo que el log no guarda se marca como <strong>sin confirmar</strong>. Cada consulta queda auditada. Máximo 7 días por consulta.
+</p>
+
+<div class="error-banner" *ngIf="error">{{ error }}</div>
+<div class="carga-inicial" *ngIf="cargando">Analizando las llamadas de productos del cliente…</div>
+
+<div class="vacio" *ngIf="!cargando && !buscoAlMenosUnaVez && !error">
+  <p>Escribe el documento de un cliente y presiona <strong>Validar carga</strong> para confirmar si sus productos se cargaron bien y en cuánto tiempo.</p>
+</div>
+
+<ng-container *ngIf="!cargando && respuesta as r">
+  <!-- RESULTADO GENERAL -->
+  <div class="banner" *ngIf="banner as b" [ngClass]="b.clase">
+    <strong>{{ b.titulo }}</strong>
+    <span>{{ b.detalle }}</span>
+  </div>
+
+  <div class="kpis-flujo">
+    <div class="kpi-flujo"><span class="kpi-flujo__etiqueta">Cargas detectadas</span><span class="kpi-flujo__valor">{{ r.resumen.cargas }}</span><span class="kpi-flujo__pie">{{ r.fechaInicio }} a {{ r.fechaFin }}</span></div>
+    <div class="kpi-flujo kpi-flujo--ok"><span class="kpi-flujo__etiqueta">Completas</span><span class="kpi-flujo__valor">{{ r.resumen.completas + r.resumen.completasLentas }}</span><span class="kpi-flujo__pie">{{ r.resumen.completasLentas }} con lentitud</span></div>
+    <div class="kpi-flujo" [class.kpi-flujo--warn]="r.resumen.parciales > 0"><span class="kpi-flujo__etiqueta">Parciales</span><span class="kpi-flujo__valor">{{ r.resumen.parciales }}</span><span class="kpi-flujo__pie">falló algo complementario</span></div>
+    <div class="kpi-flujo" [class.kpi-flujo--error]="r.resumen.conFallas > 0"><span class="kpi-flujo__etiqueta">Con fallas</span><span class="kpi-flujo__valor">{{ r.resumen.conFallas }}</span><span class="kpi-flujo__pie">productos no cargados</span></div>
+    <div class="kpi-flujo" [class.kpi-flujo--warn]="r.resumen.sinConfirmar > 0"><span class="kpi-flujo__etiqueta">Sin confirmar</span><span class="kpi-flujo__valor">{{ r.resumen.sinConfirmar }}</span><span class="kpi-flujo__pie">log sin respuesta</span></div>
+    <div class="kpi-flujo" *ngIf="r.resumen.tiempoProductos.n > 0"><span class="kpi-flujo__etiqueta">Tiempo hasta ver productos</span><span class="kpi-flujo__valor">{{ formatearDuracion(r.resumen.tiempoProductos.medianaMs) }}</span><span class="kpi-flujo__pie">mediana de {{ r.resumen.tiempoProductos.n }} · máx. {{ formatearDuracion(r.resumen.tiempoProductos.maximoMs) }}</span></div>
+  </div>
+
+  <div class="aviso-linea">
+    <span class="aviso-chip aviso-chip--neutro">{{ r.totalFilas | number }} filas de log leídas</span>
+    <span class="aviso-chip" *ngIf="r.truncado">La consulta se cortó por el tope de filas: puede faltar actividad. Acota el periodo.</span>
+    <span class="aviso-chip" *ngIf="r.tablasFaltantes.length">Tablas de log no encontradas: {{ r.tablasFaltantes.join(', ') }}</span>
+    <span class="aviso-chip aviso-chip--neutro">Catálogo ACE: {{ r.catalogoAce.servicios }} servicios · {{ r.catalogoAce.operaciones }} operaciones</span>
+  </div>
+
+  <div class="barra-acciones" *ngIf="r.cargas.length">
+    <div class="rango-selector" role="group" aria-label="Qué cargas ver">
+      <button type="button" class="rango-boton" [class.activo]="filtroVeredicto === 'todas'" (click)="filtroVeredicto = 'todas'">Todas</button>
+      <button type="button" class="rango-boton" [class.activo]="filtroVeredicto === 'problemas'" (click)="filtroVeredicto = 'problemas'">Solo con problemas</button>
+    </div>
+    <button type="button" class="btn-secundario btn-mini" (click)="copiarTodas()">{{ copiadoId === 'todas' ? '¡Copiado!' : 'Copiar resumen de todas' }}</button>
+  </div>
+
+  <div class="vacio" *ngIf="r.cargas.length && !cargasVisibles.length"><p>Ninguna carga del periodo tuvo problemas.</p></div>
+
+  <!-- CARGAS -->
+  <article class="carga" *ngFor="let c of cargasVisibles; trackBy: trackId" [class.carga--abierta]="abiertas.has(c.id)"
+           [ngClass]="'carga--' + c.veredicto">
+    <header class="carga__cabecera" (click)="alternar(c.id)" tabindex="0" (keyup.enter)="alternar(c.id)" role="button" [attr.aria-expanded]="abiertas.has(c.id)">
+      <span class="carga__flecha" aria-hidden="true">{{ abiertas.has(c.id) ? '▾' : '▸' }}</span>
+      <div class="carga__titulo">
+        <strong class="mono">{{ c.inicio.replace('T', ' ') }}</strong>
+        <span class="carga__sub">{{ c.alcanceTexto }} · {{ c.disparoTexto }}</span>
+      </div>
+      <div class="carga__datos">
+        <span class="pill" [ngClass]="clasePill(c.veredicto)">{{ textoVeredicto(c.veredicto) }}</span>
+        <span class="carga__tiempo" *ngIf="c.tiempoProductosMs !== null" title="Desde que empezó la carga hasta que cada lista de productos tuvo su primera respuesta correcta (±1 s)">
+          productos en <strong>{{ formatearDuracion(c.tiempoProductosMs) }}</strong>
+        </span>
+        <span class="carga__tiempo" *ngIf="c.duracionTotalMs !== null">total {{ formatearDuracion(c.duracionTotalMs) }}</span>
+      </div>
+    </header>
+
+    <div class="carga__cuerpo" *ngIf="abiertas.has(c.id)">
+      <p class="carga__veredicto" [ngClass]="clasePill(c.veredicto)">
+        <strong>{{ textoProductos(c.productos) }}.</strong> {{ c.veredictoTexto }}
+      </p>
+      <p class="sub" *ngIf="c.inicioParcial">La carga empezó antes del periodo consultado o sin fila de inicio: el tiempo total puede estar incompleto.</p>
+
+      <!-- COMPONENTES -->
+      <div class="tabla-scroll">
+        <table class="tabla-componentes">
+          <thead>
+            <tr><th>Componente</th><th>Resultado</th><th class="num">Solicitudes</th><th class="num">Falló</th><th>Inicio</th><th class="num">Tardó</th><th></th></tr>
+          </thead>
+          <tbody>
+            <ng-container *ngFor="let k of c.componentes; trackBy: trackClave">
+              <tr [class.fila-error]="k.veredicto === 'ERROR'" [class.fila-apagada]="k.veredicto === 'NO_REGISTRADO'">
+                <td class="celda-nombre">
+                  <strong>{{ k.nombre }}</strong>
+                  <span class="opcional" *ngIf="!k.requerido">complementario</span>
+                  <small>{{ k.que }}</small>
+                </td>
+                <td>
+                  <span class="pill" [ngClass]="clasePill(k.veredicto)">{{ textoComponente(k.veredicto) }}</span>
+                  <small class="resultado-texto">{{ k.veredictoTexto }}</small>
+                </td>
+                <td class="num">{{ k.numIntentos || '—' }}</td>
+                <td class="num">{{ k.fallidos === null ? '—' : k.fallidos }}</td>
+                <td class="mono">{{ k.inicio ? k.inicio.slice(11) : '—' }}</td>
+                <td class="num">
+                  {{ formatearDuracion(k.duracionMs) }}
+                  <small *ngIf="k.duracionMaxMs !== null && k.duracionMinMs !== null && k.duracionMaxMs !== k.duracionMinMs">{{ formatearDuracion(k.duracionMinMs) }} – {{ formatearDuracion(k.duracionMaxMs) }}</small>
+                </td>
+                <td>
+                  <button type="button" class="btn-link" *ngIf="k.intentos.length" (click)="alternarComponente(c, k)">
+                    {{ componentesAbiertos.has(claveComponente(c, k)) ? 'Ocultar' : 'Ver llamadas' }}
+                  </button>
+                </td>
+              </tr>
+
+              <tr class="fila-detalle" *ngIf="componentesAbiertos.has(claveComponente(c, k))">
+                <td colspan="7">
+                  <div class="ace-resumen" *ngIf="k.ace.length">
+                    <span class="ace-resumen__etq">Servicios ACE de este componente</span>
+                    <span class="chip-ace" *ngFor="let a of k.ace" [title]="a.descripcion || ''">
+                      <b class="mono">{{ a.codigo || '—' }}</b> {{ a.servicio }}.{{ a.operacion }}
+                      <i *ngIf="a.aproximado">≈</i>
+                      <em *ngIf="a.veces">× {{ a.veces }}<ng-container *ngIf="a.errores"> · {{ a.errores }} con error</ng-container></em>
+                    </span>
+                  </div>
+                  <div class="intento" *ngFor="let i of intentosVisibles(k); let n = index">
+                    <div class="intento__cabecera">
+                      <strong>Solicitud {{ n + 1 }}</strong>
+                      <span class="mono">{{ i.inicio.slice(11) }}<ng-container *ngIf="i.finTexto"> → {{ i.finTexto.slice(11) }}</ng-container></span>
+                      <span class="pill" [ngClass]="claseIntento(i)">{{ estadoIntento(i) }}</span>
+                      <span class="intento__dur" *ngIf="i.duracionMs !== null">tardó {{ formatearDuracion(i.duracionMs) }}</span>
+                      <span class="intento__dur" *ngIf="i.lentitud">{{ i.lentitud === 'muy_lenta' ? 'muy lenta' : 'lenta' }}</span>
+                      <span class="intento__meta" *ngIf="i.nodo">nodo {{ i.nodo }}</span>
+                      <span class="intento__meta" *ngIf="i.version">v{{ i.version }}</span>
+                      <span class="intento__meta" *ngIf="i.equipo">{{ i.equipo }}</span>
+                    </div>
+                    <p class="sub" *ngIf="i.mensaje">{{ i.mensaje }}</p>
+                    <p class="sub" *ngIf="i.pasoLento">Mayor espera: {{ i.pasoLento }}</p>
+                    <app-pasos-analisis [pasos]="i.pasos"></app-pasos-analisis>
+                  </div>
+                </td>
+              </tr>
+            </ng-container>
+          </tbody>
+        </table>
+      </div>
+
+      <!-- EVIDENCIA / HIPÓTESIS -->
+      <div class="dos-columnas">
+        <section class="bloque" *ngIf="c.evidencia.length">
+          <h3>Evidencia <span class="bloque__nota">dato directo del log</span></h3>
+          <ul class="lista-ev">
+            <li *ngFor="let e of c.evidencia"><span class="etq-ev">{{ etiquetaEvidencia(e.tipo) }}</span><span>{{ e.texto }}</span></li>
+          </ul>
+        </section>
+
+        <section class="bloque bloque--hipotesis" *ngIf="c.hipotesis.length">
+          <h3>Hipótesis <span class="bloque__nota">interpretación, no certeza</span></h3>
+          <ul class="lista-hip">
+            <li *ngFor="let h of c.hipotesis">
+              <div class="hip__cabecera"><span class="pill" [ngClass]="h.confianza === 'alta' ? 'pill--ok' : h.confianza === 'media' ? 'pill--warn' : ''">{{ textoConfianza(h.confianza) }}</span></div>
+              <p>{{ h.texto }}</p>
+              <ul class="hip__soporte" *ngIf="h.soporte.length"><li *ngFor="let s of h.soporte">{{ s }}</li></ul>
+            </li>
+          </ul>
+        </section>
+      </div>
+
+      <div class="carga__pie">
+        <button type="button" class="btn-secundario btn-mini" (click)="copiar(c)">{{ copiadoId === c.id ? '¡Copiado!' : 'Copiar resumen de esta carga' }}</button>
+        <span class="sub">Texto listo para pegar en un ticket o correo.</span>
+      </div>
+    </div>
+  </article>
+
+  <p class="sub" *ngIf="r.cargasOmitidas > 0">Se muestran las 30 cargas más recientes; hay {{ r.cargasOmitidas }} más en el periodo. Acota las fechas para verlas.</p>
+
+  <!-- EVENTOS SUELTOS -->
+  <section class="sueltos" *ngIf="r.eventosSueltos.length">
+    <button type="button" class="btn-link" (click)="verSueltos = !verSueltos">
+      {{ verSueltos ? 'Ocultar' : 'Ver' }} {{ r.resumen.eventosSueltos }} llamada(s) de productos que no se pudieron asociar a una carga
+      <ng-container *ngIf="r.resumen.erroresSueltos"> ({{ r.resumen.erroresSueltos }} con error)</ng-container>
+    </button>
+    <div class="tabla-scroll" *ngIf="verSueltos">
+      <table>
+        <thead><tr><th>Hora</th><th>Componente</th><th>Resultado</th><th class="num">Tardó</th><th>Nodo</th><th>Versión</th></tr></thead>
+        <tbody>
+          <tr *ngFor="let e of r.eventosSueltos" [class.fila-error]="e.estado === 'error'">
+            <td class="mono">{{ e.inicio.replace('T', ' ') }}</td>
+            <td>{{ e.componente }}</td>
+            <td>{{ e.estado === 'exito' ? 'Correcto' : e.estado === 'error' ? 'Error' : e.estado === 'advertencia' ? 'Aviso' : 'Sin respuesta registrada' }}<small *ngIf="e.mensaje"> · {{ e.mensaje }}</small></td>
+            <td class="num">{{ e.sinInicio ? 'sin inicio' : formatearDuracion(e.duracionMs) }}</td>
+            <td>{{ e.nodo ?? '—' }}</td>
+            <td>{{ e.version ?? '—' }}</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="sub">Son respuestas sueltas (por ejemplo, la respuesta tardía de una carga anterior). Sin la fila de inicio no se puede medir cuánto tardaron.</p>
+  </section>
+
+  <p class="detalle-aviso detalle-aviso--precision">
+    <strong>Precisión.</strong> {{ r.precision }}
+    Umbrales: lenta ≥ {{ formatearDuracion(r.umbrales.lentaMs) }}, muy lenta ≥ {{ formatearDuracion(r.umbrales.muyLentaMs) }}; una carga nueva empieza tras {{ formatearDuracion(r.umbrales.huecoCargaMs) }} sin llamadas de productos.
+  </p>
+</ng-container>

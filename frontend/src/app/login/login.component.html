@@ -1,0 +1,74 @@
+<div
+  class="modern-hero-wrapper"
+  [class.dark-theme]="tema === 'oscuro'">
+
+  <!-- Escena: cielo, montañas, pagoda, torii y hojas cayendo -->
+  <app-auth-escena [oscuro]="tema === 'oscuro'" [hojas]="26"></app-auth-escena>
+
+  <!-- ===================== Tarjeta de login ===================== -->
+  <main class="login-card glass-card">
+
+    <header class="card-header">
+      <!-- Pagoda · logo · torii -->
+      <div class="sello">
+        <app-jp-ico tipo="pagoda" class="sello-ico sello-pagoda"></app-jp-ico>
+        <span class="sello-logo">
+          <img src="https://segurosfinandina.cardif.com.co/documents/1227672/1234990/favicon.ico" alt="Banco Finandina" class="brand-logo">
+        </span>
+        <app-jp-ico tipo="torii" class="sello-ico sello-torii"></app-jp-ico>
+      </div>
+      <div class="brand-title">AXIS</div>
+      <h2>Iniciar Sesión</h2>
+      <p>Ingresa tus credenciales para acceder al portal</p>
+    </header>
+
+    <div class="info-msg" *ngIf="mensajeInfo" role="status">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="info-icon" aria-hidden="true">
+        <circle cx="12" cy="12" r="10"></circle>
+        <line x1="12" y1="16" x2="12" y2="12"></line>
+        <line x1="12" y1="8" x2="12.01" y2="8"></line>
+      </svg>
+      {{ mensajeInfo }}
+    </div>
+
+    <div class="error-msg" *ngIf="mensajeError" role="alert">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="error-icon" aria-hidden="true">
+        <circle cx="12" cy="12" r="10"></circle>
+        <line x1="12" y1="8" x2="12" y2="12"></line>
+        <line x1="12" y1="16" x2="12.01" y2="16"></line>
+      </svg>
+      {{ mensajeError }}
+    </div>
+
+    <div class="form-group">
+      <label for="login-usuario">Usuario</label>
+      <div class="campo">
+        <svg class="campo-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+        <input id="login-usuario" type="text" autocomplete="username" [(ngModel)]="username" placeholder="Ej: admin" (keyup.enter)="iniciarSesion()">
+      </div>
+    </div>
+
+    <div class="form-group">
+      <label for="login-password">Contraseña</label>
+      <div class="campo">
+        <svg class="campo-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+        <input id="login-password" [type]="verPassword ? 'text' : 'password'" autocomplete="current-password" [(ngModel)]="password" placeholder="••••••••" (keyup.enter)="iniciarSesion()">
+        <button type="button" class="ojo" (click)="verPassword = !verPassword"
+                [attr.aria-label]="verPassword ? 'Ocultar contraseña' : 'Mostrar contraseña'"
+                [attr.aria-pressed]="verPassword" [title]="verPassword ? 'Ocultar contraseña' : 'Mostrar contraseña'">
+          <svg *ngIf="!verPassword" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+          <svg *ngIf="verPassword" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
+        </button>
+      </div>
+    </div>
+
+    <a class="olvido" routerLink="/recuperar-password">¿Olvidaste tu contraseña?</a>
+
+    <button class="btn-primary" type="button" (click)="iniciarSesion()" [disabled]="cargando">
+      {{ cargando ? 'Ingresando…' : 'Ingresar' }}
+    </button>
+  </main>
+
+  <!-- Unas pocas hojas grandes pasan por delante de la tarjeta (da profundidad) -->
+
+</div>

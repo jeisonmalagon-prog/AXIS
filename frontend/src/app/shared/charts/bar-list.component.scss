@@ -1,0 +1,57 @@
+:host {
+  display: block;
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+}
+
+.bar-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.bar-list-fila {
+  display: grid;
+  grid-template-columns: 120px 1fr 34px;
+  align-items: center;
+  gap: 10px;
+}
+
+.bar-list-nombre {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--ax-text-muted, #64748b);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.bar-list-pista {
+  display: block;
+  height: 10px;
+  border-radius: 5px;
+  background: var(--ax-surface-2, #f1f5f9);
+  overflow: hidden;
+}
+
+.bar-list-barra {
+  display: block;
+  height: 100%;
+  border-radius: 5px;
+  min-width: 6px;
+  transition: width 0.3s ease;
+}
+
+.bar-list-valor {
+  font-size: 12.5px;
+  font-weight: 800;
+  color: var(--ax-text, #1e293b);
+  text-align: right;
+  white-space: nowrap;
+}
+
+.bar-list-vacio {
+  padding: 16px 4px;
+  text-align: center;
+  font-size: 13px;
+  color: var(--ax-text-muted, #94a3b8);
+}

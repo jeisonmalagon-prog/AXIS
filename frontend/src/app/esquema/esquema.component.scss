@@ -1,0 +1,242 @@
+$border: #e2e8f0;
+$text-dark: var(--ax-text, #1e293b);
+$text-muted: var(--ax-text-muted, #64748b);
+$success: #16a34a;
+$error: #dc2626;
+
+.esquema-layout {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  background: var(--ax-surface-2, #f1f5f9);
+  margin: -20px;
+  overflow: hidden;
+  font-family: inherit;
+}
+
+// --- BARRA SUPERIOR --------------------------------------------------
+
+.top-bar {
+  height: 60px;
+  flex-shrink: 0;
+  background: var(--ax-surface, #ffffff);
+  border-bottom: 1px solid $border;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.04);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0 24px;
+  z-index: 20;
+}
+
+.top-left {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  min-width: 0;
+}
+
+.btn-volver {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: none;
+  border: none;
+  color: var(--ax-brand-primary, #673ab7);
+  font-weight: 600;
+  cursor: pointer;
+  font-size: 13px;
+  padding: 6px 10px;
+  border-radius: 6px;
+  transition: background 0.15s ease;
+
+  &:hover {
+    background: rgba(var(--ax-brand-primary-rgb, 103, 58, 183), 0.12);
+  }
+
+  &__icon {
+    font-size: 15px;
+    line-height: 1;
+  }
+}
+
+.divider {
+  width: 1px;
+  height: 22px;
+  background: $border;
+}
+
+.title {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 700;
+  color: $text-dark;
+  white-space: nowrap;
+}
+
+.top-center {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+
+  label {
+    font-size: 12px;
+    font-weight: 600;
+    color: $text-muted;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+  }
+}
+
+.app-selector {
+  padding: 8px 14px;
+  border-radius: 8px;
+  border: 1px solid $border;
+  background: var(--ax-surface-2, #f8fafc);
+  min-width: 260px;
+  font-weight: 600;
+  font-size: 13px;
+  color: $text-dark;
+  outline: none;
+  cursor: pointer;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+
+  &:hover {
+    border-color: darken($border, 10%);
+  }
+
+  &:focus {
+    border-color: var(--ax-brand-primary, #673ab7);
+    box-shadow: 0 0 0 3px rgba(var(--ax-brand-primary-rgb, 103, 58, 183), 0.15);
+  }
+}
+
+.top-right {
+  display: flex;
+  align-items: center;
+  min-width: 130px;
+  justify-content: flex-end;
+}
+
+.estado-guardado {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  color: $text-muted;
+  padding: 6px 12px;
+  border-radius: 999px;
+  background: var(--ax-surface-2, #f1f5f9);
+
+  &--ok {
+    color: $success;
+    background: rgba($success, 0.1);
+  }
+
+  &--error {
+    color: $error;
+    background: rgba($error, 0.1);
+  }
+}
+
+// --- CANVAS / IFRAME ---------------------------------------------------
+
+.canvas-container {
+  flex: 1;
+  position: relative;
+  width: 100%;
+  min-height: 0;
+  background: var(--ax-surface, #ffffff);
+}
+
+.drawio-iframe {
+  width: 100%;
+  height: 100%;
+  border: none;
+  display: block;
+}
+
+// --- ESTADO VACÍO (sin aplicación seleccionada) -------------------------
+
+.overlay-bloqueo {
+  position: absolute;
+  inset: 0;
+  background: rgba(248, 250, 252, 0.97);
+  z-index: 50;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+
+  &__card {
+    text-align: center;
+    max-width: 360px;
+    padding: 32px;
+  }
+
+  &__icon {
+    font-size: 40px;
+    margin-bottom: 12px;
+  }
+
+  h3 {
+    margin: 0 0 8px;
+    color: $text-dark;
+    font-weight: 700;
+    font-size: 17px;
+  }
+
+  p {
+    margin: 0;
+    color: $text-muted;
+    font-size: 13px;
+    line-height: 1.5;
+  }
+}
+
+// --- OVERLAY DE CARGA (editor / xml) -------------------------------------
+
+.overlay-carga {
+  position: absolute;
+  inset: 0;
+  background: var(--ax-glass-bg, rgba(255, 255, 255, 0.9));
+  z-index: 40;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+
+  &__card {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+
+    p {
+      margin: 0;
+      color: $text-muted;
+      font-size: 13px;
+      font-weight: 600;
+    }
+  }
+}
+
+// --- SPINNER --------------------------------------------------------------
+
+.spinner {
+  width: 28px;
+  height: 28px;
+  border: 3px solid rgba(var(--ax-brand-primary-rgb, 103, 58, 183), 0.12);
+  border-top-color: var(--ax-brand-primary, #673ab7);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+
+  &--sm {
+    width: 14px;
+    height: 14px;
+    border-width: 2px;
+  }
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}

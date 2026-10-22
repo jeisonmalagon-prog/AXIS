@@ -1,0 +1,291 @@
+<div class="ps">
+  @if (aviso) { <div class="toast" [class.toast--error]="aviso.tipo === 'error'" role="status">{{ aviso.texto }}</div> }
+
+  <div class="barra">
+    <span class="barra__info">
+      @if (generadoEn) { Actualizado {{ hace(generadoEn) }} · se refresca solo cada minuto } @else { Consultando Portainer… }
+    </span>
+    <button type="button" class="btn-secundario btn-mini" (click)="cargar(true)" [disabled]="cargando">{{ cargando ? 'Consultando…' : '↻ Actualizar ahora' }}</button>
+  </div>
+
+  @if (!configurado) {
+    <div class="vacio-g"><h3>Portainer no está configurado</h3><p>Define PORTAINER_URL, PORTAINER_USER y PORTAINER_PASS en el .env del backend.</p></div>
+  } @else if (error) {
+    <div class="error-banner">{{ error }}</div>
+  }
+
+  @if (cargando && !salud && vista === 'salud' || cargando && !stacks && vista === 'stacks' || cargando && !higiene && vista === 'higiene') {
+    <div class="esq"><div class="esq__fila"></div><div class="esq__fila"></div><div class="esq__bloque"></div></div>
+  }
+
+  <!-- ================================================= SALUD -->
+  @if (vista === 'salud' && salud && configurado) {
+    <section class="resumen">
+      <div class="semaforo" [class]="'semaforo semaforo--' + salud.semaforo">
+        <span class="semaforo__luz"></span>
+        <div><strong>{{ etiquetaSemaforo(salud.semaforo) }}</strong>
+          <span>{{ salud.resumen.criticos }} críticos · {{ salud.resumen.avisos }} aviso{{ salud.resumen.avisos === 1 ? "" : "s" }} · {{ salud.resumen.sanos }} sanos de {{ salud.resumen.contenedores }} contenedores</span></div>
+      </div>
+      <div class="kpis">
+        <div class="kpi" [class.kpi--ok]="!salud.resumen.entornosCaidos" [class.kpi--danger]="salud.resumen.entornosCaidos"><span>Entornos conectados</span><strong>{{ salud.resumen.entornosArriba }}/{{ salud.resumen.entornos }}</strong></div>
+        <div class="kpi" [class.kpi--ok]="(salud.resumen.porcentajeSano || 0) >= 95" [class.kpi--warn]="(salud.resumen.porcentajeSano || 0) < 95 && (salud.resumen.porcentajeSano || 0) >= 80" [class.kpi--danger]="(salud.resumen.porcentajeSano || 0) < 80"><span>Contenedores sanos</span><strong>{{ salud.resumen.porcentajeSano === null ? '—' : salud.resumen.porcentajeSano + ' %' }}</strong></div>
+        <div class="kpi" [class.kpi--danger]="salud.resumen.criticos"><span>Críticos</span><strong>{{ salud.resumen.criticos }}</strong></div>
+        <div class="kpi" [class.kpi--warn]="salud.resumen.avisos"><span>Avisos</span><strong>{{ salud.resumen.avisos }}</strong></div>
+        <div class="kpi" [class.kpi--warn]="salud.resumen.oom"><span>Terminados por memoria</span><strong>{{ salud.resumen.oom }}</strong></div>
+        <div class="kpi"><span>Sin healthcheck</span><strong>{{ salud.resumen.sinHealthcheck }}</strong><em>corriendo sin verificación</em></div>
+      </div>
+    </section>
+
+    <section class="panel">
+      <header><h3>Entornos</h3><p>Toca un entorno para filtrar la lista de problemas.</p></header>
+      <div class="entornos">
+        @for (e of salud.entornos; track e.id) {
+          <button type="button" class="ent" [class]="'ent ent--' + e.semaforo" [class.ent--sel]="entornoFiltro === e.id" (click)="elegirEntorno(e.id)">
+            <span class="ent__cab"><i class="dot"></i><strong>{{ e.nombre }}</strong></span>
+            @if (e.conexion === 'down') { <span class="ent__msg">Sin conexión con Portainer</span> }
+            @else {
+              <span class="ent__num">{{ e.corriendo }}/{{ e.total }} activos</span>
+              <span class="ent__pie">
+                @if (e.criticos) { <span class="pill pill--error">{{ e.criticos }} crítico{{ e.criticos === 1 ? '' : 's' }}</span> }
+                @if (e.avisos) { <span class="pill pill--warn">{{ e.avisos }} aviso{{ e.avisos === 1 ? '' : 's' }}</span> }
+                @if (!e.criticos && !e.avisos) { <span class="pill pill--ok">Sin problemas</span> }
+              </span>
+              <span class="barra-p"><span [style.width.%]="e.puntaje" [style.background]="colorPuntaje(e.puntaje)"></span></span>
+            }
+          </button>
+        }
+      </div>
+    </section>
+
+    <section class="panel">
+      <header class="panel__cab">
+        <div><h3>Contenedores con problemas</h3><p>{{ problemasFiltrados.length }} de {{ salud.problemas.length }}{{ salud.truncado ? '+' : '' }} · ordenados por gravedad y reinicios</p></div>
+        <div class="filtros">
+          <div class="chips">
+            <button type="button" [class.on]="nivel === 'todos'" (click)="nivel = 'todos'">Todos</button>
+            <button type="button" [class.on]="nivel === 'critico'" (click)="nivel = 'critico'">Críticos</button>
+            <button type="button" [class.on]="nivel === 'aviso'" (click)="nivel = 'aviso'">Avisos</button>
+          </div>
+          <input type="search" class="buscar" placeholder="Buscar contenedor…" [(ngModel)]="buscar" />
+          @if (entornoFiltro) { <button type="button" class="btn-secundario btn-mini" (click)="entornoFiltro = 0">Quitar filtro de entorno</button> }
+        </div>
+      </header>
+
+      @if (!problemasFiltrados.length) {
+        <div class="ok-vacio"><span class="ok-vacio__ico">✓</span><div><strong>Nada que atender con este filtro</strong><span>No hay contenedores con reinicios, falta de memoria, healthcheck fallando ni salidas con error.</span></div></div>
+      } @else {
+        <ul class="lista">
+          @for (c of problemasVisibles; track clave(c)) {
+            <li class="fila" [class]="'fila fila--' + c.nivel">
+              <button type="button" class="fila__cab" (click)="alternar(clave(c))" [attr.aria-expanded]="abiertos.has(clave(c))">
+                <span class="nivel" [class]="'nivel nivel--' + c.nivel">{{ c.nivel === 'critico' ? 'Crítico' : 'Aviso' }}</span>
+                <span class="fila__nombre"><strong>{{ c.nombre }}</strong><span>{{ c.entorno }}{{ c.stack ? ' · stack ' + c.stack : '' }}</span></span>
+                <span class="fila__problemas">
+                  @for (p of c.problemas; track p.codigo) { <span class="etq" [class.etq--crit]="p.nivel === 'critico'">{{ p.titulo }}</span> }
+                </span>
+                <span class="fila__meta">
+                  <span>{{ estadoTexto(c) }}</span>
+                  <span class="suave">{{ c.estado === 'running' ? 'inició ' + hace(c.iniciadoEn) : (c.terminadoEn ? 'paró ' + hace(c.terminadoEn) : '') }}</span>
+                </span>
+                <span class="chev" [class.chev--on]="abiertos.has(clave(c))">›</span>
+              </button>
+              @if (abiertos.has(clave(c))) {
+                <div class="fila__det">
+                  <ul>@for (p of c.problemas; track p.codigo) { <li><strong>{{ p.titulo }}.</strong> {{ p.detalle }}</li> }</ul>
+                  <dl>
+                    <div><dt>Imagen</dt><dd>{{ c.imagen }}</dd></div>
+                    <div><dt>Estado Docker</dt><dd>{{ c.estadoTexto || '—' }}</dd></div>
+                    <div><dt>Healthcheck</dt><dd>{{ saludTexto(c.salud) }}</dd></div>
+                    <div><dt>Reinicios</dt><dd>{{ c.reinicios === null ? '—' : c.reinicios }}</dd></div>
+                    <div><dt>Política de reinicio</dt><dd>{{ c.politica || '—' }}</dd></div>
+                    @if (c.codigoSalida !== null && c.estado !== 'running') { <div><dt>Código de salida</dt><dd>{{ c.codigoSalida }}</dd></div> }
+                  </dl>
+                  @if (puedeEditar) {
+                    <div class="fila__acc">
+                      <button type="button" class="btn-secundario btn-mini" [class.btn-confirmar]="confirmando === 'c:' + clave(c)" (click)="reiniciarContenedor(c)" [disabled]="trabajando !== null">
+                        {{ trabajando === 'c:' + clave(c) ? 'Reiniciando…' : (confirmando === 'c:' + clave(c) ? '¿Reiniciar ahora?' : 'Reiniciar contenedor') }}
+                      </button>
+                      <span class="suave">Los logs y el detalle completo están en la pestaña «Entornos».</span>
+                    </div>
+                  }
+                </div>
+              }
+            </li>
+          }
+        </ul>
+        @if (problemasFiltrados.length > 15) {
+          <button type="button" class="ver-mas" (click)="verTodoProblemas = !verTodoProblemas">{{ verTodoProblemas ? 'Ver menos' : 'Ver los ' + problemasFiltrados.length + ' contenedores' }}</button>
+        }
+      }
+    </section>
+
+    @if (alertas) {
+      <section class="panel">
+        <header><h3>Alertas automáticas</h3></header>
+        <div class="vigilancia">
+          <span class="pill" [class.pill--ok]="alertas.activa" [class.pill--error]="!alertas.activa">{{ alertas.activa ? 'Vigilancia activa' : 'Vigilancia apagada' }}</span>
+          <span>Revisa la flota cada {{ alertas.cadaMin }} min y avisa por la campana de AXIS a quienes tienen el módulo Servidores@if (alertas.correo) { y por correo }. Repite el aviso cada {{ alertas.repetirHoras }} h si el problema sigue.</span>
+          @if (alertas.ultima) { <span class="suave">Última revisión {{ hace(alertas.ultima.en) }}.</span> }
+        </div>
+        @if (alertas.recientes.length) {
+          <ul class="alertas">
+            @for (a of alertas.recientes.slice(0, 8); track a.clave + a.en) {
+              <li [class]="'al al--' + alertaIcono(a)"><span class="al__i">{{ a.nivel === 'ok' ? '✓' : '!' }}</span><span class="al__t"><strong>{{ a.titulo }}</strong><span>{{ a.mensaje }}</span></span><span class="suave">{{ hace(a.en) }}</span></li>
+            }
+          </ul>
+        } @else { <p class="suave sin-alertas">Sin alertas desde que arrancó el servidor.</p> }
+      </section>
+    }
+  }
+
+  <!-- ================================================= STACKS -->
+  @if (vista === 'stacks' && stacks && configurado) {
+    <section class="kpis kpis--5">
+      <div class="kpi"><span>Stacks</span><strong>{{ stacks.resumen.stacks }}</strong><em>{{ stacks.resumen.gestionados }} gestionados en Portainer</em></div>
+      <div class="kpi" [class.kpi--danger]="stacks.resumen.conProblemas" [class.kpi--ok]="!stacks.resumen.conProblemas"><span>Con problemas</span><strong>{{ stacks.resumen.conProblemas }}</strong></div>
+      <div class="kpi" [class.kpi--warn]="stacks.resumen.mezclaVersiones"><span>Mezclan versiones</span><strong>{{ stacks.resumen.mezclaVersiones }}</strong><em>misma imagen, etiquetas distintas</em></div>
+      <div class="kpi" [class.kpi--warn]="stacks.resumen.imagenesConDesfase"><span>Imágenes desfasadas</span><strong>{{ stacks.resumen.imagenesConDesfase }}</strong><em>distinta versión entre entornos</em></div>
+      <div class="kpi"><span>Contenedores sueltos</span><strong>{{ stacks.resumen.contenedoresSueltos }}</strong><em>fuera de un stack</em></div>
+    </section>
+
+    <section class="panel">
+      <header class="panel__cab">
+        <div><h3>Stacks</h3><p>{{ stacksFiltrados.length }} de {{ stacks.stacks.length }}</p></div>
+        <div class="filtros">
+          <div class="chips">
+            <button type="button" [class.on]="estadoStack === 'todos'" (click)="estadoStack = 'todos'">Todos</button>
+            <button type="button" [class.on]="estadoStack === 'atencion'" (click)="estadoStack = 'atencion'">Requieren atención</button>
+            <button type="button" [class.on]="estadoStack === 'ok'" (click)="estadoStack = 'ok'">Sanos</button>
+          </div>
+          <select class="buscar" [(ngModel)]="entornoFiltro">
+            <option [ngValue]="0">Todos los entornos</option>
+            @for (e of entornosStacks; track e.id) { <option [ngValue]="e.id">{{ e.nombre }}</option> }
+          </select>
+          <input type="search" class="buscar" placeholder="Buscar stack o imagen…" [(ngModel)]="buscar" />
+        </div>
+      </header>
+      @if (!stacksFiltrados.length) { <p class="suave centro">No hay stacks con ese filtro.</p> }
+      <div class="stacks">
+        @for (s of stacksFiltrados; track s.entornoId + ':' + s.nombre) {
+          <article class="stack" [class]="'stack stack--' + s.estado">
+            <header>
+              <div class="stack__tit"><strong>{{ s.nombre }}</strong><span class="suave">{{ s.entorno }}</span></div>
+              <span class="pill" [class.pill--ok]="s.estado === 'ok'" [class.pill--warn]="s.estado === 'avisos' || s.estado === 'parcial'" [class.pill--error]="s.estado === 'problemas' || s.estado === 'caido'">{{ estadoStackTexto(s.estado) }}</span>
+            </header>
+            <div class="stack__badges">
+              <span class="badge">{{ s.corriendo }}/{{ s.total }} activos</span>
+              @if (s.tipo) { <span class="badge">{{ s.tipo === 'compose' ? 'Compose' : 'Swarm' }}</span> }
+              @if (s.gestionadoPortainer) { <span class="badge badge--brand" title="Creado desde Portainer">Portainer</span> }
+              @if (s.git?.rama) { <span class="badge" [title]="s.git?.url || ''">git · {{ s.git?.rama }}</span> }
+              @if (s.mezclaVersiones) { <span class="badge badge--warn">Versiones mezcladas</span> }
+            </div>
+            <ul class="stack__cont">
+              @for (c of s.contenedores; track c.id) {
+                <li [class]="'cs cs--' + c.nivel + (c.estado !== 'running' ? ' cs--off' : '')">
+                  <i class="dot"></i><span class="cs__n" [title]="c.estadoTexto">{{ c.servicio || c.nombre }}</span>
+                  <span class="tag" [title]="c.imagen">{{ c.tag || '—' }}</span>
+                </li>
+              }
+            </ul>
+            <footer>
+              <span class="suave" title="Fecha de despliegue o de creación de los contenedores">Desplegado {{ fecha(s.desplegadoEn) }} · último inicio {{ hace(s.ultimoInicio) }}</span>
+              @if (puedeEditar) {
+                <button type="button" class="btn-secundario btn-mini" [class.btn-confirmar]="confirmando === 's:' + s.entornoId + ':' + s.nombre" (click)="reiniciarStack(s)" [disabled]="trabajando !== null">
+                  {{ trabajando === 's:' + s.entornoId + ':' + s.nombre ? 'Reiniciando…' : (confirmando === 's:' + s.entornoId + ':' + s.nombre ? '¿Reiniciar los ' + s.total + '?' : 'Reiniciar stack') }}
+                </button>
+              }
+            </footer>
+          </article>
+        }
+      </div>
+    </section>
+
+    <section class="panel">
+      <header><h3>Desfase de versiones entre entornos</h3><p>La misma imagen corriendo con etiquetas distintas: típico de un despliegue que quedó a medias.</p></header>
+      @if (!stacks.desfase.length) { <p class="suave centro">Todas las imágenes en ejecución usan la misma versión en todos los entornos.</p> }
+      @else {
+        <div class="tabla-w">
+          <table class="tabla">
+            <thead><tr><th>Imagen</th><th>Versiones en ejecución</th></tr></thead>
+            <tbody>
+              @for (d of stacks.desfase; track d.repo) {
+                <tr><td class="mono" [title]="d.repo">{{ repoCorto(d.repo) }}</td>
+                  <td><div class="vers">@for (v of d.versiones; track v.tag) { <span class="ver"><b>{{ v.tag }}</b> en {{ v.entornos.join(', ') }}</span> }</div></td></tr>
+              }
+            </tbody>
+          </table>
+        </div>
+      }
+    </section>
+  }
+
+  <!-- ================================================= HIGIENE -->
+  @if (vista === 'higiene' && higiene && configurado) {
+    <section class="kpis kpis--4">
+      <div class="kpi" [class.kpi--warn]="higiene.resumen.espacioRecuperableBytes > 5368709120"><span>Espacio recuperable</span><strong>{{ higiene.resumen.espacioRecuperableTexto }}</strong><em>imágenes que nadie usa</em></div>
+      <div class="kpi"><span>Sin etiqueta</span><strong>{{ higiene.resumen.espacioSinEtiquetaTexto }}</strong><em>seguro de limpiar en bloque</em></div>
+      <div class="kpi"><span>Antiguas (+{{ higiene.diasImagenAntigua }} días)</span><strong>{{ higiene.resumen.espacioAntiguasTexto }}</strong><em>sin uso</em></div>
+      <div class="kpi" [class.kpi--ok]="(higiene.resumen.puntajePromedio || 0) >= 80" [class.kpi--warn]="(higiene.resumen.puntajePromedio || 0) < 80"><span>Puntaje de higiene</span><strong>{{ higiene.resumen.puntajePromedio === null ? '—' : higiene.resumen.puntajePromedio + '/100' }}</strong><em>promedio de los entornos</em></div>
+    </section>
+
+    <section class="panel">
+      <header><h3>Por entorno</h3><p>Ordenado del que más necesita atención al que menos.</p></header>
+      <div class="henvs">
+        @for (e of higiene.entornos; track e.id) {
+          <article class="henv">
+            <div class="henv__id">
+              <strong>{{ e.nombre }}</strong>
+              @if (e.conexion !== 'up') { <span class="pill pill--error">sin conexión</span> }
+            </div>
+            <div class="henv__pt">
+              <span class="henv__lbl">Puntaje</span>
+              @if (e.puntaje !== null) { <span class="pt"><span class="barra-p barra-p--s"><span [style.width.%]="e.puntaje" [style.background]="colorPuntaje(e.puntaje)"></span></span><b>{{ e.puntaje }}</b></span> } @else { <span class="suave">—</span> }
+            </div>
+            <div class="henv__m"><span class="henv__lbl">Espacio recuperable</span><b>{{ bytesTexto(e.bytesRecuperables) }} <span class="suave">({{ e.imagenesSinUso }})</span></b></div>
+            <div class="henv__m"><span class="henv__lbl">Volúmenes huérfanos</span><b>{{ e.volumenesHuerfanos }}</b></div>
+            <div class="henv__m" [class.malo]="e.privilegiados"><span class="henv__lbl">Privilegiados</span><b>{{ e.privilegiados }}</b></div>
+            <div class="henv__m"><span class="henv__lbl">Sin límite de memoria</span><b>{{ e.sinLimiteMemoria }}<span class="suave"> / {{ e.corriendo }}</span></b></div>
+            <div class="henv__m"><span class="henv__lbl">Puertos abiertos</span><b>{{ e.puertosExpuestos }}</b></div>
+            @if (puedeEditar) {
+              <div class="henv__acc">
+                <button type="button" class="btn-secundario btn-mini" [class.btn-confirmar]="confirmando === 'l:' + e.id + ':huerfanas'" (click)="limpiar(e.id, e.nombre, 'huerfanas')" [disabled]="trabajando !== null || e.conexion !== 'up'" title="Elimina las imágenes sin etiqueta que ningún contenedor usa">
+                  {{ trabajando === 'l:' + e.id + ':huerfanas' ? 'Limpiando…' : (confirmando === 'l:' + e.id + ':huerfanas' ? '¿Confirmar?' : 'Limpiar sin etiqueta') }}
+                </button>
+                <button type="button" class="btn-secundario btn-mini" [class.btn-confirmar]="confirmando === 'l:' + e.id + ':antiguas'" (click)="limpiar(e.id, e.nombre, 'antiguas')" [disabled]="trabajando !== null || e.conexion !== 'up'" [title]="'Elimina imágenes sin uso con más de ' + higiene.diasImagenAntigua + ' días'">
+                  {{ trabajando === 'l:' + e.id + ':antiguas' ? 'Limpiando…' : (confirmando === 'l:' + e.id + ':antiguas' ? '¿Confirmar?' : 'Limpiar antiguas') }}
+                </button>
+              </div>
+            }
+          </article>
+        }
+      </div>
+      @if (puedeEditar) { <p class="nota">«Sin etiqueta» borra capas huérfanas; «Antiguas» borra imágenes sin uso de más de {{ higiene.diasImagenAntigua }} días. Nunca toca una imagen que un contenedor esté usando. Cada limpieza queda en la auditoría.</p> }
+    </section>
+
+    <section class="panel">
+      <header><h3>Revisión detallada</h3><p>Qué hay que mejorar y dónde. Los de nivel «aviso» son los que más conviene atender.</p></header>
+      <div class="cats">
+        @for (c of higiene.categorias; track c.codigo) {
+          <div class="cat" [class.cat--aviso]="c.nivel === 'aviso' && c.cantidad > 0" [class.cat--cero]="c.cantidad === 0">
+            <button type="button" class="cat__cab" (click)="alternarCategoria(c)" [disabled]="!c.cantidad" [attr.aria-expanded]="categoriasAbiertas.has(c.codigo)">
+              <span class="cat__n">{{ c.cantidad }}</span>
+              <span class="cat__t"><strong>{{ c.titulo }}</strong><span>{{ c.descripcion }}</span></span>
+              @if (c.bytes) { <span class="pill">{{ bytesTexto(c.bytes) }}</span> }
+              @if (c.cantidad) { <span class="chev" [class.chev--on]="categoriasAbiertas.has(c.codigo)">›</span> }
+            </button>
+            @if (categoriasAbiertas.has(c.codigo) && c.cantidad) {
+              <div class="tabla-w">
+                <table class="tabla tabla--s">
+                  <tbody>
+                    @for (i of itemsDe(c); track $index) { <tr><td class="suave">{{ i.entorno }}</td><td class="mono">{{ i.nombre }}</td><td class="suave">{{ i.extra }}</td></tr> }
+                  </tbody>
+                </table>
+              </div>
+              @if (c.cantidad > 8) { <button type="button" class="ver-mas" (click)="alternarVerTodas(c)">{{ verTodasCat.has(c.codigo) ? 'Ver menos' : 'Ver todos (' + (c.items.length) + ')' }}</button> }
+            }
+          </div>
+        }
+      </div>
+    </section>
+  }
+</div>

@@ -1,0 +1,136 @@
+<div class="visor">
+  <nav class="migas"><a routerLink="/informes">← Todos los informes</a></nav>
+
+  @if (sinAcceso) {
+    <div class="vacio-grande">
+      <h2>No encontramos este informe</h2>
+      <p>El informe no existe o tu usuario no tiene habilitado el módulo que lo alimenta.</p>
+      <a routerLink="/informes" class="btn-primario enlace">Ver los informes disponibles</a>
+    </div>
+  } @else {
+    <header class="cabecera">
+      <div class="cabecera__titulo">
+        <h1>{{ informe?.titulo || def?.titulo || 'Informe' }}</h1>
+        @if (informe) {
+          <p class="subtitulo">{{ informe.subtitulo }}</p>
+          <p class="meta"><span>{{ resumenPeriodo }}</span><span>Generado {{ fechaHora(informe.generadoEn) }}</span></p>
+        } @else if (def) { <p class="subtitulo">{{ def.descripcion }}</p> }
+      </div>
+      <div class="acciones">
+        <button type="button" class="btn-secundario" (click)="cargar()" [disabled]="cargando">{{ cargando ? 'Actualizando…' : 'Actualizar' }}</button>
+        <button type="button" class="btn-secundario" (click)="descargar('xlsx')" [disabled]="!informe || descargando !== null">{{ descargando === 'xlsx' ? 'Generando…' : 'Excel' }}</button>
+        <button type="button" class="btn-secundario" (click)="descargar('pdf')" [disabled]="!informe || descargando !== null">{{ descargando === 'pdf' ? 'Generando…' : 'PDF' }}</button>
+        <button type="button" class="btn-secundario" (click)="abrirDialogo('enviar')" [disabled]="!informe || !cat">Enviar por correo</button>
+        @if (puedeProgramar) { <button type="button" class="btn-primario" (click)="abrirDialogo('programar')" [disabled]="!cat">Programar envío</button> }
+      </div>
+    </header>
+
+    @if (aviso) { <div class="toast" [class.toast--error]="aviso.tipo === 'error'" role="status">{{ aviso.texto }}</div> }
+
+    <section class="filtros">
+      <div class="rango-selector" role="group" aria-label="Periodo del informe">
+        @for (p of cat?.periodos || []; track p.clave) {
+          <button type="button" class="rango-boton" [class.activo]="!personalizado && periodo === p.clave" (click)="elegirPeriodo(p.clave)">{{ p.etiqueta }}</button>
+        }
+        <button type="button" class="rango-boton rango-boton--pers" [class.activo]="personalizado" (click)="abrirPersonalizado()">Personalizado</button>
+      </div>
+      @if (personalizado) {
+        <div class="fechas">
+          <label>Desde <input type="date" [(ngModel)]="desde" /></label>
+          <label>Hasta <input type="date" [(ngModel)]="hasta" /></label>
+          <button type="button" class="btn-primario btn-mini" (click)="aplicarFechas()">Aplicar</button>
+          @if (errorFechas) { <span class="error-texto">{{ errorFechas }}</span> }
+        </div>
+      }
+      @if (def?.secciones?.length) {
+        <button type="button" class="btn-secundario btn-mini" (click)="mostrarSecciones = !mostrarSecciones">Secciones ({{ seccionesSel.length }}/{{ def?.secciones?.length }})</button>
+      }
+    </section>
+    @if (mostrarSecciones && def?.secciones) {
+      <section class="secciones-elegir">
+        <div class="chips">
+          @for (s of def?.secciones || []; track s.clave) {
+            <label class="check-label"><input type="checkbox" [checked]="seccionesSel.includes(s.clave)" (change)="alternarSeccion(s.clave)" />{{ s.titulo }}</label>
+          }
+        </div>
+        <div class="chips__acc">
+          <button type="button" class="btn-link" (click)="marcarTodas()">{{ todasMarcadas ? 'Quitar todas' : 'Marcar todas' }}</button>
+          <button type="button" class="btn-primario btn-mini" (click)="aplicarSecciones()">Aplicar</button>
+        </div>
+      </section>
+    }
+
+    @if (error) { <div class="error-banner">{{ error }} <button type="button" class="btn-link" (click)="cargar()">Reintentar</button></div> }
+
+    @if (cargando && !informe) {
+      <div class="esqueleto" aria-busy="true" aria-label="Generando el informe">
+        <div class="esq-kpis">@for (i of [1,2,3,4,5,6]; track i) { <div class="esq esq--kpi"></div> }</div>
+        <div class="esq esq--bloque"></div>
+        <div class="esq-par"><div class="esq esq--grafico"></div><div class="esq esq--grafico"></div></div>
+      </div>
+    }
+
+    @if (informe) {
+      <div class="contenido" [class.atenuado]="cargando">
+        @if (informe.kpis.length) {
+          <div class="kpis">
+            @for (k of informe.kpis; track k.etiqueta) {
+              <article class="kpi" [class.kpi--ok]="k.tono === 'ok'" [class.kpi--warn]="k.tono === 'warn'" [class.kpi--danger]="k.tono === 'danger'" [class.kpi--brand]="k.tono === 'brand'">
+                <span class="kpi__etiqueta">{{ k.etiqueta }}</span>
+                <strong class="kpi__valor">{{ kpiValor(k) }}</strong>
+                @if (k.delta) { <span class="delta" [class.delta--ok]="k.delta.tono === 'ok'" [class.delta--danger]="k.delta.tono === 'danger'">{{ k.delta.texto }}</span> }
+                @if (k.nota) { <span class="kpi__nota">{{ k.nota }}</span> }
+              </article>
+            }
+          </div>
+        }
+
+        @if (informe.hallazgos.length) {
+          <section class="hallazgos">
+            <header><h2>Lo más importante</h2><p class="sub">Calculado automáticamente con los datos del periodo.</p></header>
+            <ul>
+              @for (h of informe.hallazgos; track $index) {
+                <li class="hallazgo" [class]="'hallazgo hallazgo--' + h.nivel">
+                  <span class="hallazgo__icono"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path [attr.d]="iconoNivel(h.nivel)" /></svg></span>
+                  <span class="hallazgo__texto"><strong>{{ h.titulo }}</strong>@if (h.detalle) { <span>{{ h.detalle }}</span> }</span>
+                </li>
+              }
+            </ul>
+          </section>
+        }
+
+        @if (informe.secciones.length > 1) {
+          <nav class="indice" aria-label="Contenido del informe">
+            <span>Ir a:</span>
+            @for (s of informe.secciones; track s.id) { <button type="button" (click)="irASeccion(s.id)">{{ s.titulo }}</button> }
+          </nav>
+        }
+
+        @for (s of informe.secciones; track s.id) {
+          <section class="seccion" [id]="'sec-' + s.id">
+            <header class="seccion__cab"><h2>{{ s.titulo }}</h2>@if (s.descripcion) { <p class="sub">{{ s.descripcion }}</p> }</header>
+            <div class="bloques">
+              @for (b of s.bloques; track $index) {
+                @if (esGrafico(b)) { <div class="bloque" [class.bloque--medio]="medio(b)"><app-informe-grafico [g]="b" /></div> }
+                @else if (esTabla(b)) { <div class="bloque"><app-informe-tabla [t]="b" /></div> }
+                @else if (esTexto(b)) { <p class="bloque texto">{{ b.texto }}</p> }
+              }
+            </div>
+          </section>
+        }
+
+        @if (informe.notas.length) {
+          <aside class="notas">
+            <strong>Notas del informe</strong>
+            <ul>@for (n of informe.notas; track $index) { <li>{{ n }}</li> }</ul>
+          </aside>
+        }
+      </div>
+    }
+  }
+</div>
+
+@if (dialogo && cat && informe) {
+  <app-informe-dialogo [modo]="dialogo" [cat]="cat" [clave]="clave" [params]="params" [resumenPeriodo]="resumenPeriodo" [seccionesInicial]="seccionesSel"
+    (cerrar)="dialogo = null" (hecho)="alHecho($event)" />
+}

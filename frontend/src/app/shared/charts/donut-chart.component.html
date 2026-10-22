@@ -1,0 +1,28 @@
+<div class="donut-wrap" *ngIf="total > 0; else sinDatosTpl">
+  <svg viewBox="0 0 140 140" class="donut-svg">
+    <circle
+      *ngFor="let seg of segmentosCalculados"
+      class="donut-segmento"
+      cx="70" cy="70" [attr.r]="radio"
+      [attr.stroke]="seg.colorVar"
+      [attr.stroke-width]="grosor"
+      [attr.stroke-dasharray]="seg.dashArray"
+      [attr.stroke-dashoffset]="seg.dashOffset"
+      fill="none"></circle>
+    <text x="70" y="66" class="donut-total">{{ total }}</text>
+    <text x="70" y="82" class="donut-total-label">{{ centroEtiqueta }}</text>
+  </svg>
+
+  <div class="donut-leyenda">
+    <div class="donut-leyenda-item" *ngFor="let seg of segmentosCalculados">
+      <span class="leyenda-swatch" [style.background]="seg.colorVar"></span>
+      <span class="leyenda-etiqueta">{{ seg.etiqueta }}</span>
+      <span class="leyenda-valor">{{ seg.valor }}</span>
+      <span class="leyenda-porcentaje">({{ seg.porcentaje | number: '1.0-0' }}%)</span>
+    </div>
+  </div>
+</div>
+
+<ng-template #sinDatosTpl>
+  <div class="donut-vacio">Sin datos para mostrar.</div>
+</ng-template>

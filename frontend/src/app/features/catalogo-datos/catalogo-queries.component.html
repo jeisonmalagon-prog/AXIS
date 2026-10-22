@@ -1,0 +1,304 @@
+<div class="modal-overlay" (click)="cerrar.emit()">
+  <div class="modal-card modal-queries" (click)="$event.stopPropagation()" role="dialog" aria-modal="true" aria-label="Queries del equipo">
+    <header class="mq-cab">
+      <div class="mq-titulo">
+        <h2>Queries del equipo</h2>
+        <span class="mq-sub">Todo lo que se ejecuta desde aquí es de solo lectura</span>
+      </div>
+      <div class="pestanas mq-tabs" role="tablist">
+        <button type="button" role="tab" [class.activa]="pestana === 'repositorio'" [attr.aria-selected]="pestana === 'repositorio'" (click)="irA('repositorio')">Repositorio<span class="cnt" *ngIf="resumen?.total">{{ resumen?.total }}</span></button>
+        <button type="button" role="tab" [class.activa]="pestana === 'constructor'" [attr.aria-selected]="pestana === 'constructor'" (click)="irA('constructor')">Constructor guiado</button>
+        <button type="button" role="tab" [class.activa]="pestana === 'ia'" [attr.aria-selected]="pestana === 'ia'" (click)="irA('ia')">Asistente IA</button>
+      </div>
+      <button type="button" class="close-btn" (click)="cerrar.emit()" aria-label="Cerrar">✕</button>
+    </header>
+
+    <div class="mq-cuerpo">
+
+    <!-- ===================== Repositorio ===================== -->
+    <section class="repo" [hidden]="pestana !== 'repositorio'">
+      <div class="aviso-aviso" *ngIf="sinTabla">
+        <strong>Falta crear la tabla del repositorio.</strong> Pídele a quien tenga permisos de DDL que ejecute <span class="mono">crear_tabla_catalogo_queries.sql</span>. Mientras tanto el constructor guiado y la IA funcionan, pero sin aprender de tus queries.
+      </div>
+      <div class="error-state" *ngIf="error">{{ error }}</div>
+
+      <ng-container *ngIf="!sinTabla">
+        <div class="repo-barra">
+          <label class="buscar"><span aria-hidden="true">⌕</span>
+            <input type="search" [(ngModel)]="q" (ngModelChange)="buscar()" name="rq-q" placeholder="Buscar por texto, tabla, base o archivo…" aria-label="Buscar queries" autocomplete="off" />
+          </label>
+          <select class="sel" [(ngModel)]="bd" (ngModelChange)="buscar()" name="rq-bd" aria-label="Base de datos">
+            <option value="">Todas las bases</option>
+            <option *ngFor="let b of resumen?.porBase || []" [value]="b.nombre">{{ b.nombre }} ({{ b.total }})</option>
+          </select>
+          <select class="sel" [(ngModel)]="tipo" (ngModelChange)="buscar()" name="rq-tipo" aria-label="Tipo">
+            <option value="">Todos los tipos</option>
+            <option *ngFor="let t of tipos" [value]="t">{{ t }}</option>
+          </select>
+          <select class="sel" [(ngModel)]="riesgo" (ngModelChange)="buscar()" name="rq-riesgo" aria-label="Riesgo">
+            <option value="">Cualquier riesgo</option>
+            <option value="lectura">Solo lectura</option>
+            <option value="modifica">Modifican datos</option>
+            <option value="procedimiento">Ejecutan procedimientos</option>
+          </select>
+          <span class="espacio"></span>
+          <button type="button" class="btn btn-ghost btn-sm" *ngIf="puedeEditar" (click)="abrirImport()">Importar</button>
+          <button type="button" class="btn btn-purple btn-sm" *ngIf="puedeEditar" (click)="nuevo()">+ Nuevo</button>
+        </div>
+        <div class="repo-resumen">
+          <span class="gris" *ngIf="lista">{{ lista.total | number }} query(s)<ng-container *ngIf="!hayFiltros && resumen?.modifican"> · {{ resumen?.modifican }} modifican datos</ng-container></span>
+          <span class="chip chip-marca" *ngIf="tablaTxt">Tabla: {{ tablaTxt }} <button type="button" class="x-mini" (click)="limpiarTabla()" aria-label="Quitar filtro de tabla">✕</button></span>
+          <button type="button" class="enlace peq" *ngIf="hayFiltros" (click)="limpiarFiltros()">Limpiar filtros</button>
+        </div>
+
+        <div class="repo-grid">
+          <!-- Lista -->
+          <div class="repo-lista">
+            <div class="cargando" *ngIf="cargando && !lista"><div class="spinner"></div><p>Cargando…</p></div>
+            <p class="vacio" *ngIf="lista && !lista.queries.length && !hayFiltros">
+              Aún no hay queries guardados.
+              <ng-container *ngIf="puedeEditar">Usa <strong>Importar archivos</strong> para cargar tus .sql, o <strong>+ Nuevo query</strong> para pegar uno.</ng-container>
+            </p>
+            <p class="vacio" *ngIf="lista && !lista.queries.length && hayFiltros">Ningún query coincide con estos filtros.</p>
+            <button type="button" class="q-fila" *ngFor="let x of lista?.queries || []; trackBy: trackQuery" [class.sel]="sel?.id === x.id" (click)="abrirQuery(x.id)">
+              <span class="q-punto" [ngClass]="'r-' + x.nivelRiesgo" [title]="etiquetaRiesgo(x.nivelRiesgo)"></span>
+              <span class="q-cuerpo">
+                <span class="q-titulo">{{ x.titulo }}</span>
+                <span class="q-meta">
+                  <span *ngIf="x.baseDatos">{{ x.baseDatos }}</span>
+                  <span *ngIf="x.tablas.length">{{ x.tablas.length }} tabla{{ x.tablas.length === 1 ? '' : 's' }}</span>
+                  <span class="mono" *ngIf="x.archivo">{{ x.archivo }}</span>
+                </span>
+              </span>
+              <span class="chip chip-alta chip-mini" *ngIf="x.modifica">Modifica</span>
+              <span class="chip chip-media chip-mini" *ngIf="!x.modifica && x.nivelRiesgo === 'procedimiento'">SP</span>
+            </button>
+          </div>
+
+          <!-- Panel derecho -->
+          <div class="repo-panel">
+            <!-- Importación (2 pasos) -->
+            <div class="tarjeta panel" *ngIf="mostrarImport">
+              <div class="panel-cab"><h3>Importar archivos .sql / .txt</h3><button type="button" class="btn-mini" (click)="cerrarImport()">Cerrar</button></div>
+
+              <!-- Paso 1: archivos -->
+              <ng-container *ngIf="!itemsImp">
+                <p class="ayuda">Elige uno o varios archivos (o una carpeta completa). Cada archivo se divide en queries individuales; antes de guardar podrás <strong>revisar y ponerle nombre a cada uno</strong>. Se detectan tablas y JOIN, se marcan los que modifican datos y se enmascaran claves, tokens, documentos y correos.</p>
+                <div class="imp-botones">
+                  <label class="btn btn-ghost btn-sm">Elegir archivos<input type="file" multiple accept=".sql,.txt" (change)="alElegirArchivos($event)" hidden /></label>
+                  <label class="btn btn-ghost btn-sm">Elegir carpeta<input type="file" multiple webkitdirectory (change)="alElegirArchivos($event)" hidden /></label>
+                </div>
+                <label class="check"><input type="checkbox" [(ngModel)]="dividir" name="imp-dividir" /> <span>Separar cada archivo en queries individuales <small class="gris">(recomendado)</small></span></label>
+                <label class="check"><input type="checkbox" [(ngModel)]="enmascarar" name="imp-masc" /> <span>Enmascarar valores sensibles <small class="gris">(recomendado)</small></span></label>
+
+                <div class="imp-lista" *ngIf="archivosImp.length">
+                  <div class="imp-fila" *ngFor="let a of archivosImp; let i = index; trackBy: trackIdx">
+                    <span class="mono cortar">{{ a.nombre }}</span>
+                    <small class="gris">{{ tamKb(a.tam) }}</small>
+                    <span class="peq t-mal" *ngIf="a.error">{{ a.error }}</span>
+                    <button type="button" class="btn-mini" (click)="quitarArchivo(i)" aria-label="Quitar archivo">✕</button>
+                  </div>
+                </div>
+                <div class="error-state" *ngIf="errorImp">{{ errorImp }}</div>
+                <div class="panel-pie">
+                  <span class="gris peq" *ngIf="progresoImp">{{ progresoImp }}</span>
+                  <button type="button" class="btn btn-purple" [disabled]="!archivosValidos.length || importando" (click)="previsualizar()">{{ importando ? 'Leyendo…' : 'Revisar ' + archivosValidos.length + ' archivo(s)' }}</button>
+                </div>
+              </ng-container>
+
+              <!-- Paso 2: revisión -->
+              <ng-container *ngIf="itemsImp as items">
+                <p class="ayuda">Encontré <strong>{{ items.length }}</strong> query(s): {{ nuevosImp }} nuevo(s)<ng-container *ngIf="yaExistenImp"> y {{ yaExistenImp }} que ya están en el repositorio o repetidos</ng-container>. Corrige el nombre de los que quieras y desmarca los que no te sirvan.</p>
+                <div class="imp-barra">
+                  <input type="search" class="entrada" [(ngModel)]="filtroItemsImp" name="imp-filtro" placeholder="Filtrar por nombre, archivo o tabla…" aria-label="Filtrar" autocomplete="off" />
+                  <button type="button" class="btn-mini" (click)="marcarTodosImp(true)">Marcar todos</button>
+                  <button type="button" class="btn-mini" (click)="marcarTodosImp(false)">Quitar todos</button>
+                </div>
+                <div class="imp-items">
+                  <div class="imp-item" *ngFor="let x of itemsVisibles; trackBy: trackItemImp" [class.imp-no]="x.duplicadoDe || x.repetidoEnLote">
+                    <input type="checkbox" [(ngModel)]="x.incluir" [name]="'imp-inc-' + x.k" [disabled]="!!x.duplicadoDe || x.repetidoEnLote" [attr.aria-label]="'Incluir ' + x.titulo" />
+                    <div class="imp-item-cuerpo">
+                      <input class="entrada imp-titulo" [(ngModel)]="x.titulo" [name]="'imp-tit-' + x.k" maxlength="200" [disabled]="!!x.duplicadoDe || x.repetidoEnLote" aria-label="Nombre del query" autocomplete="off" />
+                      <div class="imp-item-meta">
+                        <span class="chip chip-mini chip-marca">{{ x.tipo }}</span>
+                        <span class="chip chip-mini" [ngClass]="claseRiesgo(x.nivelRiesgo)" *ngIf="x.nivelRiesgo !== 'lectura'">{{ etiquetaRiesgo(x.nivelRiesgo) }}</span>
+                        <span class="chip chip-mini" *ngIf="x.baseDatos">{{ x.baseDatos }}</span>
+                        <span class="chip chip-mini chip-media" *ngIf="x.enmascarado">Enmascarado</span>
+                        <span class="mono peq gris cortar" *ngIf="x.tablas.length" [title]="x.tablas.join(', ')">{{ x.tablas.slice(0, 4).join(', ') }}<ng-container *ngIf="x.tablas.length > 4"> +{{ x.tablas.length - 4 }}</ng-container></span>
+                        <span class="mono peq gris cortar" *ngIf="x.archivo">{{ x.archivo }}</span>
+                      </div>
+                      <div class="peq" *ngIf="x.duplicadoDe">Ya existe en el repositorio · <button type="button" class="enlace peq" (click)="abrirQuery(x.duplicadoDe)">ver el existente</button></div>
+                      <div class="peq gris" *ngIf="!x.duplicadoDe && x.repetidoEnLote">Repetido dentro de estos mismos archivos</div>
+                    </div>
+                  </div>
+                </div>
+                <div class="peq t-mal" *ngFor="let e of erroresPrevia.slice(0, 5)">{{ e }}</div>
+                <div class="error-state" *ngIf="errorImp">{{ errorImp }}</div>
+                <div class="panel-pie">
+                  <button type="button" class="btn btn-ghost btn-sm" (click)="volverAArchivos()" [disabled]="importando">Volver</button>
+                  <span class="gris peq" *ngIf="progresoImp">{{ progresoImp }}</span>
+                  <button type="button" class="btn btn-purple" [disabled]="!seleccionadosImp.length || importando" (click)="confirmarImport()">{{ importando ? 'Guardando…' : 'Guardar ' + seleccionadosImp.length + ' query(s)' }}</button>
+                </div>
+              </ng-container>
+
+              <div class="aviso-ok" *ngIf="resultadoImp as r">
+                <strong>{{ r.creadas }} query(s) nuevo(s)</strong><ng-container *ngIf="r.duplicadas"> · {{ r.duplicadas }} ya existían</ng-container>.
+                <div class="imp-chips">
+                  <span class="chip chip-alta" *ngIf="r.modifican">{{ r.modifican }} modifican datos (marcados)</span>
+                  <span class="chip chip-media" *ngIf="r.enmascaradas">{{ r.enmascaradas }} con valores enmascarados</span>
+                </div>
+                <div class="peq t-mal" *ngFor="let e of r.errores.slice(0, 6)">{{ e }}</div>
+              </div>
+            </div>
+
+            <!-- Formulario -->
+            <div class="tarjeta panel" *ngIf="form as f">
+              <div class="panel-cab"><h3>{{ f.id ? 'Editar query' : 'Guardar query' }}</h3><button type="button" class="btn-mini" (click)="cancelarForm()">Cancelar</button></div>
+              <label class="etiqueta" for="qf-titulo">Título <small class="gris">(si lo dejas vacío se arma con los comentarios del script)</small></label>
+              <input id="qf-titulo" class="entrada" [(ngModel)]="f.titulo" (ngModelChange)="alEscribirConsulta()" name="qf-titulo" maxlength="200" autocomplete="off" />
+              <label class="etiqueta" for="qf-desc">Descripción</label>
+              <input id="qf-desc" class="entrada" [(ngModel)]="f.descripcion" name="qf-desc" maxlength="1000" autocomplete="off" />
+              <label class="etiqueta" for="qf-tags">Etiquetas <small class="gris">(separadas por coma; si no pones, se deducen de las bases)</small></label>
+              <input id="qf-tags" class="entrada" [(ngModel)]="f.etiquetas" name="qf-tags" maxlength="400" autocomplete="off" />
+              <label class="etiqueta" for="qf-sql">Consulta *</label>
+              <textarea id="qf-sql" class="entrada mono area-sql" rows="12" [(ngModel)]="f.consulta" (ngModelChange)="alEscribirConsulta()" name="qf-sql" spellcheck="false" placeholder="Pega aquí el script T-SQL"></textarea>
+              <label class="check"><input type="checkbox" [(ngModel)]="f.enmascarar" (ngModelChange)="alEscribirConsulta()" name="qf-masc" /> <span>Enmascarar valores sensibles al guardar <small class="gris">(documentos, claves, tokens, correos)</small></span></label>
+
+              <div class="analisis" *ngIf="analisis as a">
+                <div class="q-chips">
+                  <span class="chip chip-marca">{{ a.tipo }}</span>
+                  <span class="chip" *ngIf="a.baseDatos">{{ a.baseDatos }}</span>
+                  <span class="chip" [ngClass]="claseRiesgo(a.nivelRiesgo)">{{ etiquetaRiesgo(a.nivelRiesgo) }}</span>
+                  <span class="chip chip-ok" *ngIf="a.ejecutable">Se puede ejecutar desde aquí</span>
+                  <span class="chip chip-media" *ngIf="a.enmascarado">Se enmascararán {{ a.cambios.secretos + a.cambios.personales }} valor(es)</span>
+                </div>
+                <div class="peq" *ngIf="a.tablas.length"><span class="gris">Tablas:</span> <span class="mono">{{ a.tablas.length }}</span> · <span class="mono">{{ nombresTablas(a.tablas, 6) }}</span><span *ngIf="a.tablas.length > 6"> …</span></div>
+                <div class="peq" *ngIf="a.joins.length"><span class="gris">JOIN detectados:</span> <span class="mono" *ngFor="let j of a.joins.slice(0, 4)">{{ textoJoin(j) }}; </span></div>
+                <div class="peq gris" *ngIf="!a.ejecutable && a.motivoNoEjecutable">No ejecutable desde aquí: {{ a.motivoNoEjecutable }}</div>
+              </div>
+              <div class="gris peq" *ngIf="analizando">Analizando…</div>
+
+              <div class="error-state" *ngIf="errorForm">{{ errorForm }} <button type="button" class="btn-mini" *ngIf="duplicadoDe" (click)="verDuplicado()">Ver el existente</button></div>
+              <div class="panel-pie">
+                <button type="button" class="btn btn-purple" [disabled]="!puedeGuardar" (click)="guardar()">{{ guardando ? 'Guardando…' : 'Guardar en el repositorio' }}</button>
+              </div>
+            </div>
+
+            <!-- Detalle -->
+            <div class="det" *ngIf="sel as s">
+              <div class="det-cab">
+                <div class="det-tit">
+                  <ng-container *ngIf="!renombrando">
+                    <h3 [title]="s.titulo">{{ s.titulo }}</h3>
+                    <div class="det-meta">
+                      <span class="chip" [ngClass]="claseRiesgo(s.nivelRiesgo)">{{ etiquetaRiesgo(s.nivelRiesgo) }}</span>
+                      <span class="chip chip-media" *ngIf="s.enmascarado" title="Se ocultaron valores sensibles (documentos, claves)">Enmascarado</span>
+                      <span *ngIf="s.baseDatos"><strong>{{ s.baseDatos }}</strong></span>
+                      <span class="mono" *ngIf="s.archivo">{{ s.archivo }}</span>
+                      <span *ngIf="s.creadoPor">por {{ s.creadoPor }}</span>
+                      <span *ngIf="s.ejecuciones" title="Veces que se ha ejecutado desde AXIS">{{ s.ejecuciones }} ejecución(es)</span>
+                    </div>
+                    <div class="det-tags" *ngIf="s.etiquetas.length">
+                      <span class="tag" *ngFor="let e of s.etiquetas.slice(0, 5)">#{{ e }}</span>
+                      <span class="tag tag-mas" *ngIf="s.etiquetas.length > 5" [title]="s.etiquetas.slice(5).join(', ')">+{{ s.etiquetas.length - 5 }}</span>
+                    </div>
+                    <div class="det-acciones">
+                      <button type="button" class="btn-mini" *ngIf="puedeEditar" (click)="iniciarRenombre()">Renombrar</button>
+                      <button type="button" class="btn-mini btn-mini-marca" *ngIf="puedeAbrirEnConstructor" (click)="abrirEnConstructor()" title="Abre el constructor guiado con este query para ajustarlo o armarlo con otras columnas">Abrir en constructor</button>
+                    </div>
+                  </ng-container>
+                  <div class="renombrar" *ngIf="renombrando">
+                    <label class="etiqueta" for="rn-nombre">Nombre del query</label>
+                    <input id="rn-nombre" class="entrada" [(ngModel)]="nombreEdit" name="rn-nombre" maxlength="200" autocomplete="off" />
+                    <label class="etiqueta" for="rn-desc">Descripción / alias</label>
+                    <input id="rn-desc" class="entrada" [(ngModel)]="descEdit" name="rn-desc" maxlength="1000" autocomplete="off" />
+                    <label class="etiqueta" for="rn-tags">Etiquetas <small class="gris">(separadas por coma)</small></label>
+                    <input id="rn-tags" class="entrada" [(ngModel)]="etiquetasEdit" name="rn-tags" maxlength="400" autocomplete="off" />
+                    <div class="error-state" *ngIf="errorNombre">{{ errorNombre }}</div>
+                    <div class="renombrar-botones">
+                      <button type="button" class="btn btn-ghost btn-sm" (click)="sugerirNombre()" [disabled]="sugiriendo">{{ sugiriendo ? 'Pensando…' : 'Sugerir nombre' }}</button>
+                      <span class="espacio"></span>
+                      <button type="button" class="btn btn-ghost btn-sm" (click)="cancelarRenombre()">Cancelar</button>
+                      <button type="button" class="btn btn-purple btn-sm" (click)="guardarRenombre()" [disabled]="guardandoNombre">{{ guardandoNombre ? 'Guardando…' : 'Guardar' }}</button>
+                    </div>
+                  </div>
+                </div>
+                <button type="button" class="close-btn" (click)="cerrarDetalle()" aria-label="Cerrar detalle">✕</button>
+              </div>
+              <p class="desc" *ngIf="descripcionExtra(s) as d">{{ d }}</p>
+              <div class="aviso-aviso aviso-compacto" *ngIf="s.modifica"><strong>Este script modifica datos.</strong> Revísalo con cuidado antes de correrlo con tu cuenta; desde AXIS no se ejecuta.</div>
+
+              <div class="codigo">
+                <div class="codigo-cab">
+                  <span>Consulta <small>· puedes ajustarla antes de ejecutar; no cambia lo guardado</small></span>
+                  <span class="codigo-acciones">
+                    <button type="button" (click)="copiarSql(sqlEdit, 'sql')">{{ copiado === 'sql' ? '¡Copiado!' : 'Copiar' }}</button>
+                    <button type="button" *ngIf="puedeEditar" (click)="editar()">Editar</button>
+                    <button type="button" class="peligro" *ngIf="puedeEditar" (click)="quitar()" (blur)="quitando = false">{{ quitando ? 'Confirmar: quitar' : 'Quitar' }}</button>
+                  </span>
+                </div>
+                <textarea id="qd-sql" class="codigo-area mono" [(ngModel)]="sqlEdit" name="qd-sql" spellcheck="false" aria-label="Consulta SQL"></textarea>
+              </div>
+
+              <app-query-ejecucion [sql]="sqlEdit" [origenes]="origenes" [bd]="s.baseDatos" [queryId]="s.id" [puede]="puedeEditar" [motivo]="motivoEjecucion"></app-query-ejecucion>
+
+              <details class="plegable" *ngIf="s.tablas.length" [open]="s.tablas.length <= 8">
+                <summary>Tablas que usa <span class="n">{{ s.tablas.length }}</span><small>clic en el nombre para ver otros queries · ↗ para ver la tabla en el catálogo</small></summary>
+                <div class="plegable-cuerpo">
+                  <div class="aviso-aviso aviso-compacto" *ngIf="fueraDelCatalogo">{{ fueraDelCatalogo }} tabla(s) no aparecen en el catálogo de datos (línea punteada): puede que sean temporales, vistas nuevas o de otra base aún no leída.</div>
+                  <div class="chips-tablas">
+                    <span class="chip-tabla-grupo" *ngFor="let t of s.tablas; let i = index" [class.fuera]="tablaCatalogo(i) && !tablaCatalogo(i)?.enCatalogo && !tablaCatalogo(i)?.servidor">
+                      <button type="button" class="chip-tabla" (click)="filtrarPorTabla(t.tabla)" [title]="nombreCompleto(t)">{{ t.tabla }}<span *ngIf="t.escribe" class="t-mal"> ✎</span></button>
+                      <button type="button" class="chip-tabla-ir" *ngIf="tablaCatalogo(i)?.enCatalogo && tablaCatalogo(i)?.ref" (click)="irATabla(i)" [title]="'Ver ' + t.tabla + ' en el catálogo'" aria-label="Ver la tabla en el catálogo">↗</button>
+                      <span class="chip-tabla-nota" *ngIf="tablaCatalogo(i)?.servidor" title="Servidor vinculado: no se lee desde aquí">⛓</span>
+                    </span>
+                  </div>
+                </div>
+              </details>
+              <details class="plegable" *ngIf="s.joins.length">
+                <summary>Cómo se relacionan <span class="n">{{ s.joins.length }}</span></summary>
+                <div class="plegable-cuerpo">
+                  <div class="linea-join-fila" *ngFor="let j of s.joins; let i = index">
+                    <span class="mono peq linea-join">{{ textoJoin(j) }}</span>
+                    <span class="chip chip-mini chip-ok" *ngIf="joinCatalogo(i)?.fk" title="Coincide con una llave foránea definida en la base">FK</span>
+                    <span class="chip chip-mini" *ngIf="joinCatalogo(i) && joinCatalogo(i)?.enCatalogo && !joinCatalogo(i)?.fk" title="Las dos tablas existen en el catálogo pero la base no define esta relación: es una relación que solo conoce el equipo">sin FK</span>
+                    <span class="chip chip-mini chip-media" *ngIf="joinCatalogo(i) && joinCatalogo(i)?.columnasOk === false" title="Alguna de las columnas no existe en el catálogo">columna?</span>
+                  </div>
+                </div>
+              </details>
+              <details class="plegable" *ngIf="s.parametros.length">
+                <summary>Variables <span class="n">{{ s.parametros.length }}</span></summary>
+                <div class="plegable-cuerpo"><span class="chip mono" *ngFor="let p of s.parametros">{{ p }}</span></div>
+              </details>
+              <details class="plegable" *ngIf="similares.length" open>
+                <summary>Queries parecidos <span class="n">{{ similares.length }}</span></summary>
+                <div class="plegable-cuerpo">
+                  <button type="button" class="q-item" *ngFor="let x of similares" (click)="abrirQuery(x.id)">
+                    <span class="q-tit">{{ x.titulo }}</span>
+                    <span class="chip chip-alta chip-mini" *ngIf="x.modifica">Modifica</span>
+                    <small class="gris" *ngIf="x.similitud">{{ x.similitud }}% en común</small>
+                  </button>
+                </div>
+              </details>
+            </div>
+            <div class="cargando" *ngIf="cargandoSel"><div class="spinner"></div></div>
+
+            <div class="panel-vacio" *ngIf="!sel && !form && !mostrarImport && !cargandoSel"><div class="pv-icono" aria-hidden="true">⌥</div><p>Elige un query de la lista para ver su detalle, copiarlo o ejecutarlo.</p></div>
+          </div>
+        </div>
+      </ng-container>
+    </section>
+
+    <!-- ===================== Constructor ===================== -->
+    <section class="seccion-scroll" [hidden]="pestana !== 'constructor'" *ngIf="visitado.cons">
+      <app-catalogo-constructor [origenes]="origenes" [puedeEditar]="puedeEditar" [tablasIniciales]="tablasIniciales" [peticion]="peticionConstructor"
+                                (guardar)="guardarDesdeOtraPestana($event)" (tablasCambian)="tablasConstructor = $event" (verQuery)="verDesdeConstructor($event)"></app-catalogo-constructor>
+    </section>
+
+    <!-- ===================== Asistente IA ===================== -->
+    <section class="seccion-scroll" [hidden]="pestana !== 'ia'" *ngIf="visitado.ia">
+      <app-catalogo-ia [origenes]="origenes" [puedeEditar]="puedeEditar" [tablasElegidas]="tablasConstructor" (guardar)="guardarDesdeOtraPestana($event)"></app-catalogo-ia>
+    </section>
+    </div>
+  </div>
+</div>

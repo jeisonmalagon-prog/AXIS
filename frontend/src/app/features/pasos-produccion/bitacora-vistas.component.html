@@ -1,0 +1,47 @@
+<div class="error-banner" *ngIf="estado && !estado.disponible && estado.mensaje">{{ estado.mensaje }}</div>
+
+<ng-container *ngIf="estado?.disponible">
+  <div class="vistas">
+    <div class="vistas__fila">
+      <span class="vistas__et">Bitácora de</span>
+      <button type="button" class="pastilla" [class.activa]="activa('yo')" (click)="alternarPropietario('yo')">
+        <strong>Mi bitácora</strong><span class="pastilla__num" *ngIf="vistas">{{ vistas.mios }}</span>
+      </button>
+      <button type="button" class="pastilla" *ngFor="let p of vistas?.personas" [class.activa]="activa('' + p.id)" (click)="alternarPropietario('' + p.id)">
+        <strong>{{ p.nombre }}</strong><span class="pastilla__num">{{ p.total }}</span>
+        <small *ngIf="p.permiso">{{ etiquetaPermiso(p.permiso) }}</small><small *ngIf="!p.permiso && p.porAdmin">admin</small>
+      </button>
+      <button type="button" class="pastilla" *ngIf="vistas && vistas.compartidosConmigo" [class.activa]="!todos && compartidos" (click)="alternarCompartidos()">
+        <strong>Pasos compartidos conmigo</strong><span class="pastilla__num">{{ vistas.compartidosConmigo }}</span>
+      </button>
+      <button type="button" class="pastilla pastilla--todo" *ngIf="vistas && (vistas.personas.length || vistas.compartidosConmigo || vistas.esAdmin)" [class.activa]="todos" (click)="elegirTodo()">
+        <strong>{{ vistas.esAdmin ? 'Todas (admin)' : 'Todo lo que puedo ver' }}</strong><span class="pastilla__num">{{ vistas.todo }}</span>
+      </button>
+      <span class="vistas__acciones">
+        <button type="button" class="btn btn-outline-purple btn-sm" (click)="abrirPanelAccesos()">
+          Accesos <span class="contador" *ngIf="pendientes" [title]="pendientes + ' cosa(s) esperan tu respuesta'">{{ pendientes }}</span>
+        </button>
+        <button type="button" class="btn btn-sm" (click)="mostrarEquipos = true">Equipos</button>
+      </span>
+    </div>
+
+    <div class="vistas__fila" *ngIf="vistas?.equipos?.length">
+      <span class="vistas__et">Equipos</span>
+      <button type="button" class="pastilla pastilla--equipo" *ngFor="let e of vistas?.equipos" [class.activa]="equipoActivo(e.id)" (click)="alternarEquipo(e.id)"
+              [title]="e.miembros + ' integrante(s). Solo ves los pasos a los que tienes acceso.'">
+        <strong>{{ e.nombre }}</strong><span class="pastilla__num">{{ e.total }}</span><small *ngIf="e.soyMiembro">soy parte</small>
+      </button>
+      <span class="vistas__ayuda">Puedes marcar varios.</span>
+      <button type="button" class="vistas__volver" *ngIf="hayFiltroExtra" (click)="soloMia()">Volver a mi bitácora</button>
+    </div>
+    <div class="vistas__fila" *ngIf="vistas && !vistas.equipos.length && hayFiltroExtra">
+      <button type="button" class="vistas__volver" (click)="soloMia()">Volver a mi bitácora</button>
+    </div>
+    <p class="vistas__nota" *ngIf="vistas && !vistas.personas.length && !vistas.compartidosConmigo && !vistas.esAdmin">
+      Solo ves tu bitácora. Para ver la de otra persona o equipo, usa «Accesos» → «Pedir acceso».
+    </p>
+  </div>
+
+  <app-bitacora-accesos *ngIf="mostrarAccesos" [esAdmin]="!!estado?.esAdmin" (cerrar)="cerrarAccesos()" (cambioDatos)="alCambiarDatos()" (pendientes)="pendientes = $event"></app-bitacora-accesos>
+  <app-bitacora-equipos *ngIf="mostrarEquipos" [esAdmin]="!!estado?.esAdmin" (cerrar)="mostrarEquipos = false" (cambioDatos)="alCambiarDatos()"></app-bitacora-equipos>
+</ng-container>

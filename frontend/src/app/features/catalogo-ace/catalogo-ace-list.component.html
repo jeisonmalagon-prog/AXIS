@@ -1,0 +1,281 @@
+<header class="page-header">
+  <div>
+    <h1>Catálogo ACE</h1>
+    <p class="subtitle">Servicios ACE y sus operaciones — {{ nodos.length }} servicios cargados</p>
+  </div>
+
+  <div class="header-actions">
+    <div class="search-box">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <circle cx="11" cy="11" r="8"></circle>
+        <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+      </svg>
+      <input type="text" [(ngModel)]="terminoBusqueda" placeholder="Buscar servicio u operación..." />
+    </div>
+    <div class="select-box">
+      <select [(ngModel)]="orden" (ngModelChange)="ordenarNodos()" title="Ordenar servicios">
+        <option *ngFor="let o of opcionesOrden" [value]="o.valor">{{ o.etiqueta }}</option>
+      </select>
+    </div>
+    <button type="button" class="btn" (click)="expandirTodo()">Expandir todo</button>
+    <button type="button" class="btn" (click)="colapsarTodo()">Colapsar todo</button>
+    <button type="button" class="btn" (click)="exportar()" [disabled]="!nodosFiltrados.length" title="Descargar en CSV (Excel) lo que estás viendo, con el filtro y orden actuales">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2M7 10l5 5 5-5M12 15V3" /></svg>
+      Exportar
+    </button>
+    <button *ngIf="puedeEditar" type="button" class="btn btn-primary" (click)="abrirFormularioServicio()">+ Nuevo servicio</button>
+  </div>
+</header>
+
+<div class="empty" *ngIf="cargando">Cargando catálogo…</div>
+
+<ng-container *ngIf="!cargando">
+  <div class="servicio-card" *ngFor="let n of nodosFiltrados">
+    <div class="servicio-header" (click)="toggleServicio(n)">
+      <button type="button" class="chevron-btn" [class.rotated]="n.expandido" title="Expandir/colapsar">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <polyline points="6 9 12 15 18 9"></polyline>
+        </svg>
+      </button>
+
+      <span class="servicio-id">
+        <svg class="node-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+          <path d="M20 7h-9M14 17H5"></path>
+          <circle cx="17" cy="17" r="3"></circle>
+          <circle cx="7" cy="7" r="3"></circle>
+        </svg>
+        <span class="codigo-badge mono">{{ n.Codigo }}</span>
+        <span class="servicio-nombre">{{ n.Nombre }}</span>
+      </span>
+
+      <div class="servicio-resumen">
+        <span class="contador">{{ totalOperaciones(n) }} {{ totalOperaciones(n) === 1 ? 'operación' : 'operaciones' }}</span>
+        <ng-container *ngIf="puedeEditar">
+          <button type="button" class="icon-btn" title="Editar servicio" (click)="editarServicio(n, $event)">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+              <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+            </svg>
+          </button>
+          <button type="button" class="icon-btn icon-btn--danger" title="Eliminar servicio" (click)="eliminarServicio(n, $event)">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <polyline points="3 6 5 6 21 6"></polyline>
+              <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"></path>
+              <path d="M10 11v6"></path>
+              <path d="M14 11v6"></path>
+              <path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"></path>
+            </svg>
+          </button>
+        </ng-container>
+      </div>
+    </div>
+
+    <div class="servicio-body" *ngIf="n.expandido">
+      <div class="body-actions" *ngIf="puedeEditar">
+        <button type="button" class="btn btn-sm" (click)="abrirFormularioOperacion(n)">+ Nueva operación</button>
+      </div>
+
+      <div class="operaciones-tabla" *ngIf="n.Operaciones?.length; else sinOperaciones">
+        <div class="operacion-fila operacion-fila--header" [class.operacion-fila--conAcciones]="puedeEditar">
+          <span>Operación</span>
+          <span>Backend</span>
+          <span>Versión</span>
+          <span>Arq.</span>
+          <span>Compuestos</span>
+          <span>Atómicos</span>
+          <span>Tipo</span>
+          <span *ngIf="puedeEditar">Acciones</span>
+        </div>
+        <div
+          class="operacion-fila"
+          [class.operacion-fila--conAcciones]="puedeEditar"
+          *ngFor="let op of n.Operaciones"
+          role="button"
+          tabindex="0"
+          (click)="abrirDetalleOperacion(n, op)"
+          (keydown.enter)="abrirDetalleOperacion(n, op)"
+          (keydown.space)="abrirDetalleOperacion(n, op)"
+        >
+          <span class="op-nombre">
+            <span class="op-codigo mono" *ngIf="op.CodigoOperacion">{{ op.CodigoOperacion }}</span>
+            {{ op.Operacion || '—' }}
+          </span>
+          <span class="mono">{{ op.OperacionBackend || '—' }}</span>
+          <span>{{ op.Version || '—' }}</span>
+          <span>{{ op.Arquitectura || '—' }}</span>
+          <span>{{ op.Compuestos ?? '—' }}</span>
+          <span>{{ op.Atomicos ?? '—' }}</span>
+          <span class="tipo-tags">
+            <span class="tag-chip tag-sync" *ngIf="op.Sincrono">Síncrono</span>
+            <span class="tag-chip tag-async" *ngIf="op.Asincrono">Asíncrono</span>
+            <span class="tag-chip tag-otro" *ngIf="!op.Sincrono && !op.Asincrono">—</span>
+          </span>
+          <span class="op-acciones" *ngIf="puedeEditar" (click)="$event.stopPropagation()">
+            <button type="button" class="icon-btn" title="Editar operación" (click)="editarOperacion(n, op, $event)">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+                <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+              </svg>
+            </button>
+            <button type="button" class="icon-btn icon-btn--danger" title="Eliminar operación" (click)="eliminarOperacion(n, op, $event)">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <polyline points="3 6 5 6 21 6"></polyline>
+                <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"></path>
+                <path d="M10 11v6"></path>
+                <path d="M14 11v6"></path>
+                <path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"></path>
+              </svg>
+            </button>
+          </span>
+        </div>
+      </div>
+      <ng-template #sinOperaciones>
+        <p class="sin-datos">Este servicio no tiene operaciones registradas.</p>
+      </ng-template>
+    </div>
+  </div>
+
+  <div class="empty" *ngIf="!nodosFiltrados.length">
+    No se encontraron servicios que coincidan con tu búsqueda, o todavía no se ha importado el catálogo.
+  </div>
+</ng-container>
+
+<!-- PANEL DE DETALLE DE UNA OPERACIÓN -->
+<div class="overlay" *ngIf="detalle" (click)="cerrarDetalle()">
+  <div class="modal detalle-modal" (click)="$event.stopPropagation()">
+    <div class="modal-header">
+      <div class="breadcrumb">
+        <span class="crumb">{{ detalle.servicio.Nombre }}</span>
+        <span class="crumb-sep">›</span>
+        <span class="crumb crumb-activo">{{ detalle.operacion.Operacion || 'Operación' }}</span>
+      </div>
+      <button class="btn-close" (click)="cerrarDetalle()" type="button">✕</button>
+    </div>
+
+    <div class="modal-body">
+      <h2>{{ detalle.operacion.Operacion || 'Sin nombre' }}</h2>
+      <p class="detalle-subtitulo">
+        de <strong>{{ detalle.servicio.Nombre }}</strong>
+        <span class="mono" *ngIf="detalle.servicio.Codigo"> ({{ detalle.servicio.Codigo }})</span>
+      </p>
+
+      <div class="detalle-grid">
+        <div><span class="detalle-label">Código operación</span><span class="mono">{{ detalle.operacion.CodigoOperacion || '—' }}</span></div>
+        <div><span class="detalle-label">Operación backend</span><span class="mono">{{ detalle.operacion.OperacionBackend || '—' }}</span></div>
+        <div><span class="detalle-label">Versión</span><span>{{ detalle.operacion.Version || '—' }}</span></div>
+        <div><span class="detalle-label">Arquitectura</span><span>{{ detalle.operacion.Arquitectura || '—' }}</span></div>
+        <div><span class="detalle-label">Instancias</span><span>{{ detalle.operacion.Instancias ?? '—' }}</span></div>
+        <div><span class="detalle-label">Compuestos</span><span>{{ detalle.operacion.Compuestos ?? '—' }}</span></div>
+        <div><span class="detalle-label">Atómicos</span><span>{{ detalle.operacion.Atomicos ?? '—' }}</span></div>
+        <div>
+          <span class="detalle-label">Tipo</span>
+          <span class="tipo-tags">
+            <span class="tag-chip tag-sync" *ngIf="detalle.operacion.Sincrono">Síncrono</span>
+            <span class="tag-chip tag-async" *ngIf="detalle.operacion.Asincrono">Asíncrono</span>
+            <span *ngIf="!detalle.operacion.Sincrono && !detalle.operacion.Asincrono">—</span>
+          </span>
+        </div>
+      </div>
+
+      <ng-container *ngIf="detalle.operacion.Descripcion || detalle.operacion.DescripcionExcel">
+        <p class="detalle-nota">Descripción</p>
+        <p class="detalle-observaciones">{{ detalle.operacion.Descripcion || detalle.operacion.DescripcionExcel }}</p>
+      </ng-container>
+    </div>
+
+    <div class="modal-footer">
+      <button class="btn" type="button" (click)="cerrarDetalle()">Cerrar</button>
+    </div>
+  </div>
+</div>
+
+<!-- FORMULARIO DE ALTA / EDICIÓN DE SERVICIO -->
+<div class="overlay" *ngIf="mostrarFormServicio" (click)="cerrarFormularioServicio()">
+  <div class="modal form-modal" (click)="$event.stopPropagation()">
+    <div class="modal-header">
+      <h2>{{ editandoServicio ? 'Editar servicio' : 'Nuevo servicio' }}</h2>
+      <button class="btn-close" type="button" (click)="cerrarFormularioServicio()">✕</button>
+    </div>
+
+    <div class="modal-body">
+      <label class="form-label">Código</label>
+      <input class="form-input mono" [(ngModel)]="formServicio.Codigo" placeholder="Ej. C165" />
+
+      <label class="form-label">Nombre del servicio *</label>
+      <input class="form-input" [(ngModel)]="formServicio.Nombre" placeholder="Ej. NuevoServicioMng" />
+    </div>
+
+    <div class="modal-footer">
+      <button class="btn" type="button" (click)="cerrarFormularioServicio()">Cancelar</button>
+      <button class="btn btn-primary" type="button" [disabled]="guardandoServicio" (click)="guardarServicio()">
+        {{ guardandoServicio ? 'Guardando…' : 'Guardar' }}
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- FORMULARIO DE ALTA / EDICIÓN DE OPERACIÓN -->
+<div class="overlay" *ngIf="mostrarFormOperacion" (click)="cerrarFormularioOperacion()">
+  <div class="modal form-modal form-modal--ancho" (click)="$event.stopPropagation()">
+    <div class="modal-header">
+      <h2>{{ editandoOperacion ? 'Editar operación' : 'Nueva operación' }}</h2>
+      <button class="btn-close" type="button" (click)="cerrarFormularioOperacion()">✕</button>
+    </div>
+
+    <div class="modal-body">
+      <p class="detalle-subtitulo" *ngIf="servicioDeOperacion">
+        del servicio <strong>{{ servicioDeOperacion.Nombre }}</strong>
+      </p>
+
+      <div class="form-grid">
+        <div>
+          <label class="form-label">Código operación</label>
+          <input class="form-input mono" [(ngModel)]="formOperacion.CodigoOperacion" placeholder="Ej. OP01" />
+        </div>
+        <div>
+          <label class="form-label">Nombre de la operación *</label>
+          <input class="form-input" [(ngModel)]="formOperacion.Operacion" placeholder="Ej. ConsultarSaldo" />
+        </div>
+        <div>
+          <label class="form-label">Operación backend</label>
+          <input class="form-input mono" [(ngModel)]="formOperacion.OperacionBackend" />
+        </div>
+        <div>
+          <label class="form-label">Arquitectura</label>
+          <input class="form-input" [(ngModel)]="formOperacion.Arquitectura" placeholder="Ej. SOAP, REST..." />
+        </div>
+        <div>
+          <label class="form-label">Versión</label>
+          <input class="form-input" [(ngModel)]="formOperacion.Version" />
+        </div>
+        <div>
+          <label class="form-label">Instancias</label>
+          <input class="form-input" type="number" [(ngModel)]="formOperacion.Instancias" />
+        </div>
+        <div>
+          <label class="form-label">Compuestos</label>
+          <input class="form-input" type="number" [(ngModel)]="formOperacion.Compuestos" />
+        </div>
+        <div>
+          <label class="form-label">Atómicos</label>
+          <input class="form-input" type="number" [(ngModel)]="formOperacion.Atomicos" />
+        </div>
+      </div>
+
+      <div class="checkbox-row">
+        <label><input type="checkbox" [(ngModel)]="formOperacion.Sincrono" /> Síncrono</label>
+        <label><input type="checkbox" [(ngModel)]="formOperacion.Asincrono" /> Asíncrono</label>
+      </div>
+
+      <label class="form-label">Descripción</label>
+      <textarea class="form-input form-textarea" [(ngModel)]="formOperacion.Descripcion" rows="3"></textarea>
+    </div>
+
+    <div class="modal-footer">
+      <button class="btn" type="button" (click)="cerrarFormularioOperacion()">Cancelar</button>
+      <button class="btn btn-primary" type="button" [disabled]="guardandoOperacion" (click)="guardarOperacion()">
+        {{ guardandoOperacion ? 'Guardando…' : 'Guardar' }}
+      </button>
+    </div>
+  </div>
+</div>

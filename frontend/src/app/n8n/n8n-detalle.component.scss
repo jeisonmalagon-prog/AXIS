@@ -1,0 +1,43 @@
+@use './n8n-base' as *;
+
+:host { display: block; font-family: 'Inter', sans-serif; }
+@include base;
+
+.modal-card.modal-detalle { max-width: 1200px; padding: 24px; }
+.cab-titulo { min-width: 0; flex: 1; h2 { font-size: 20px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; } }
+.cab-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; margin-top: 6px; font-size: 12px; color: $brand-gray; }
+.motivos { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 14px; }
+
+.kpis { display: grid; grid-template-columns: repeat(6, 1fr); gap: 10px; margin-bottom: 16px; @media (max-width: 900px) { grid-template-columns: repeat(3, 1fr); } @media (max-width: 520px) { grid-template-columns: repeat(2, 1fr); } }
+.kpi { background: $surface-bg; border: 1px solid $border-light; border-radius: 12px; padding: 10px 12px; display: flex; flex-direction: column; gap: 3px; min-width: 0;
+  .kpi-et { font-size: 10px; font-weight: 700; text-transform: uppercase; color: $brand-gray; }
+  .kpi-v { font-size: 20px; font-weight: 800; line-height: 1.1; &.kpi-v-chico { font-size: 15px; } }
+  .kpi-s { font-size: 11px; color: $brand-gray; }
+  .t-ok { color: $ok; } .t-aviso { color: $warn; } .t-mal { color: $danger; }
+}
+
+.grilla-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 14px; @media (max-width: 800px) { grid-template-columns: 1fr; } }
+.tarjeta { margin-bottom: 14px; padding: 16px; box-shadow: none; }
+.grilla-2 .tarjeta { margin-bottom: 0; }
+.nota { margin: 10px 0 0; display: block; }
+
+.errores { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 10px;
+  li { border: 1px solid rgba(239, 68, 68, 0.25); background: rgba(239, 68, 68, 0.05); border-radius: 10px; padding: 10px 12px; }
+  .err-cab { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; font-size: 12px; }
+  .err-fecha { color: $brand-gray; }
+  .err-msg { margin: 6px 0 0; font-size: 12.5px; line-height: 1.45; word-break: break-word; }
+}
+
+.ficha { display: grid; grid-template-columns: auto 1fr; gap: 8px 14px; margin: 0; font-size: 13px;
+  dt { color: $brand-gray; font-weight: 600; font-size: 12px; }
+  dd { margin: 0; display: flex; flex-wrap: wrap; gap: 4px; align-items: center; min-width: 0; }
+}
+.nodos { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 12px; max-height: 160px; overflow-y: auto; }
+
+.tabla-wrap { overflow-x: auto; max-height: 320px; overflow-y: auto; }
+.tabla { width: 100%; border-collapse: collapse; font-size: 12.5px;
+  th { position: sticky; top: 0; background: $surface; text-align: left; font-size: 10.5px; text-transform: uppercase; color: $brand-gray; padding: 6px 10px; border-bottom: 1px solid $border-light; }
+  td { padding: 7px 10px; border-bottom: 1px solid $border-light; white-space: nowrap; }
+  .num { text-align: right; }
+}
+.modal-footer { margin-top: 18px; display: flex; justify-content: flex-end; gap: 10px; flex-wrap: wrap; }

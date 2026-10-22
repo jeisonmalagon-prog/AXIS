@@ -1,0 +1,24 @@
+@use '../../repositorio/azure/azure-base' as *;
+@include base;
+
+.modal-config { max-width: 1080px; }
+.cab-modal { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; margin-bottom: 14px; h2 { margin: 0; font-size: 18px; } }
+.sub { margin: 4px 0 0; font-size: 13px; color: $brand-gray; line-height: 1.5; }
+code { font-size: 12px; background: $surface-bg; border: 1px solid $border-light; border-radius: 6px; padding: 1px 6px; }
+.lista-cfg { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 10px; }
+.lista-cfg li {
+  display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 14px; align-items: center;
+  border: 1px solid $border-light; background: $surface-bg; border-radius: 12px; padding: 12px 14px;
+  &.apagado { opacity: 0.6; }
+  @media (max-width: 760px) { grid-template-columns: auto minmax(0, 1fr); .ajustes { grid-column: 1 / -1; } }
+}
+.orden { display: flex; flex-direction: column; gap: 4px; }
+.check { display: flex; align-items: flex-start; gap: 10px; cursor: pointer; input { margin-top: 3px; accent-color: var(--ax-brand-primary, #673ab7); width: 16px; height: 16px; }
+  span { display: flex; flex-direction: column; gap: 2px; } strong { font-size: 14px; } small { font-size: 12px; color: $brand-gray; line-height: 1.4; } }
+.chips { display: flex; gap: 6px; flex-wrap: wrap; margin: 8px 0 0 26px; }
+.ajustes { display: flex; gap: 10px 14px; align-items: center; flex-wrap: wrap; justify-content: flex-end;
+  .campo input[type='number'] { width: 76px; } }
+.check-pequeno { gap: 6px; cursor: pointer; input { accent-color: var(--ax-brand-primary, #673ab7); } }
+.aviso-ok { background: rgba(16, 185, 129, 0.1); border: 1px solid rgba(16, 185, 129, 0.35); color: $brand-dark; border-radius: 10px; padding: 10px 14px; font-size: 13px; margin-top: 12px; }
+.error-state { margin-top: 12px; }
+.pie-form { display: flex; align-items: center; gap: 10px; margin-top: 16px; padding-top: 12px; border-top: 1px solid $border-light; flex-wrap: wrap; .espacio { flex: 1; } .resumen { font-size: 12px; color: $brand-gray; } }

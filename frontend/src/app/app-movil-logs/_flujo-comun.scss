@@ -1,0 +1,158 @@
+// Estilos compartidos por las pestañas de diagrama (recorrido del cliente y
+// mapa global). Se incluyen en cada componente con @use (encapsulado por
+// componente). Todos los colores salen de variables CSS para que el modo
+// oscuro (clase .dark-theme en un ancestro) cambie la paleta completa.
+$texto:    var(--ax-text, #1e293b);
+$suave:    var(--ax-text-muted, #64748b);
+$surface:  var(--ax-surface, #ffffff);
+$surface2: var(--ax-surface-2, #f8fafc);
+$borde:    var(--ax-border, #e2e8f0);
+$brand:    var(--ax-brand-primary, #673ab7);
+
+* { box-sizing: border-box; }
+
+:host {
+  display: block; font-family: 'Inter', sans-serif; color: $texto;
+  --f-ok: #059669;      --f-ok-bg: #d1fae5;     --f-ok-ink: #047857;
+  --f-err: #dc2626;     --f-err-bg: #fee2e2;    --f-err-soft: #fef2f2;  --f-err-ink: #b91c1c; --f-err-line: #fca5a5;
+  --f-warn: #d97706;    --f-warn-bg: #fef3c7;   --f-warn-soft: #fffbeb; --f-warn-ink: #b45309; --f-warn-line: #fcd34d;
+  --f-info: #2563eb;    --f-info-bg: #dbeafe;   --f-info-ink: #1d4ed8;
+  --f-neutro-bg: #e2e8f0; --f-neutro-ink: #475569; --f-edge: #94a3b8;
+  --f-brand-soft: var(--ax-brand-soft, #ede9fe); --f-brand-ink: var(--ax-brand-ink, #5b21b6);
+  --f-sombra: 0 10px 25px rgba(var(--ax-brand-primary-rgb, 103, 58, 183), 0.04);
+}
+:host-context(.dark-theme) {
+  --f-ok: #34d399;      --f-ok-bg: rgba(16, 185, 129, 0.18);  --f-ok-ink: #6ee7b7;
+  --f-err: #f87171;     --f-err-bg: rgba(239, 68, 68, 0.2);   --f-err-soft: rgba(239, 68, 68, 0.1); --f-err-ink: #fca5a5; --f-err-line: rgba(248, 113, 113, 0.55);
+  --f-warn: #fbbf24;    --f-warn-bg: rgba(245, 158, 11, 0.2); --f-warn-soft: rgba(245, 158, 11, 0.1); --f-warn-ink: #fcd34d; --f-warn-line: rgba(251, 191, 36, 0.5);
+  --f-info: #60a5fa;    --f-info-bg: rgba(59, 130, 246, 0.2); --f-info-ink: #93c5fd;
+  --f-neutro-bg: rgba(148, 163, 184, 0.2); --f-neutro-ink: #cbd5e1; --f-edge: #64748b;
+  --f-brand-soft: rgba(var(--ax-brand-primary-rgb, 103, 58, 183), 0.22); --f-brand-ink: var(--ax-brand-primary-claro, #c4b5fd);
+  --f-sombra: 0 10px 25px rgba(0, 0, 0, 0.25);
+}
+
+.mono { font-family: 'JetBrains Mono', monospace; font-size: 12px; }
+.sub { color: $suave; font-size: 12.5px; margin: 4px 0 0; }
+
+// --- Filtros ---
+.filtros-panel {
+  background: $surface; border: 1px solid $borde; border-radius: 20px; padding: 20px 24px; margin-bottom: 14px; box-shadow: var(--f-sombra);
+}
+.filtros-grid { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 18px; }
+.campo {
+  display: flex; flex-direction: column; gap: 6px; min-width: 150px;
+  label, .campo__etiqueta { font-size: 12px; font-weight: 700; color: $suave; text-transform: uppercase; }
+  input[type="text"], input[type="date"], select {
+    padding: 9px 12px; border-radius: 10px; border: 1px solid $borde; font-size: 13px; font-family: inherit;
+    background: $surface2; color: $texto; width: 100%; color-scheme: light dark;
+  }
+}
+.campo--documento { flex: 1 1 260px; max-width: 360px; }
+.campo--accion { justify-content: flex-end; min-width: 0; }
+
+.rango-selector { display: inline-flex; align-items: center; gap: 2px; background: $surface2; border: 1px solid $borde; border-radius: 12px; padding: 4px; flex-wrap: wrap; }
+.rango-boton {
+  border: none; background: transparent; border-radius: 9px; padding: 7px 14px; font-size: 13px; font-weight: 700; font-family: inherit;
+  color: $suave; cursor: pointer; transition: background 0.2s, color 0.2s, box-shadow 0.2s;
+  &:hover:not(.activo) { color: $texto; background: rgba(var(--ax-brand-primary-rgb, 103, 58, 183), 0.1); }
+  &.activo { background: $surface; color: var(--f-brand-ink); box-shadow: 0 2px 8px rgba(var(--ax-brand-primary-rgb, 103, 58, 183), 0.14); }
+}
+
+.btn-primario, .btn-secundario {
+  padding: 9px 18px; border-radius: 10px; font-size: 13px; font-weight: 700; cursor: pointer; border: 1px solid transparent; font-family: inherit;
+  &:disabled { opacity: 0.55; cursor: default; }
+}
+.btn-primario { background: $brand; color: #fff; min-width: 120px; &:hover:not(:disabled) { opacity: 0.9; } }
+.btn-secundario { background: transparent; border-color: $borde; color: $texto; &:hover:not(:disabled) { background: $surface2; } }
+.btn-mini { padding: 6px 12px; font-size: 12px; border-radius: 8px; }
+
+.detalle-aviso { font-size: 12.5px; color: $suave; background: $surface2; border-radius: 10px; padding: 10px 14px; margin: 0 0 14px; }
+.error-banner { background: var(--f-err-soft); color: var(--f-err-ink); border: 1px solid var(--f-err-line); border-radius: 12px; padding: 12px 16px; font-size: 13px; font-weight: 600; margin-bottom: 14px; }
+.carga-inicial { text-align: center; color: $suave; padding: 40px 0; font-weight: 600; }
+.vacio { text-align: center; color: $suave; padding: 32px 20px; background: $surface; border: 1px solid $borde; border-radius: 16px; }
+.empty-inline { color: $suave; text-align: center; padding: 24px; }
+
+// --- Pills / chips ---
+.pill {
+  display: inline-flex; align-items: center; gap: 4px; padding: 3px 10px; border-radius: 999px; font-size: 11.5px; font-weight: 700; white-space: nowrap;
+  background: var(--f-neutro-bg); color: var(--f-neutro-ink);
+  &--ok { background: var(--f-ok-bg); color: var(--f-ok-ink); }
+  &--error { background: var(--f-err-bg); color: var(--f-err-ink); }
+  &--warn { background: var(--f-warn-bg); color: var(--f-warn-ink); }
+  &--info { background: var(--f-info-bg); color: var(--f-info-ink); }
+}
+.aviso-chip { font-size: 12px; font-weight: 600; color: var(--f-warn-ink); background: var(--f-warn-bg); border-radius: 999px; padding: 4px 12px; }
+.aviso-chip--neutro { background: var(--f-neutro-bg); color: var(--f-neutro-ink); }
+
+.check-label { display: inline-flex; align-items: center; gap: 6px; font-size: 12.5px; font-weight: 600; color: $texto; cursor: pointer; input { width: 15px; height: 15px; cursor: pointer; accent-color: var(--ax-brand-primary, #673ab7); } }
+
+.zoom {
+  display: inline-flex; border: 1px solid $borde; border-radius: 10px; overflow: hidden;
+  button { border: none; background: $surface; color: $texto; padding: 6px 12px; font-size: 12.5px; font-weight: 700; cursor: pointer; font-family: inherit; border-right: 1px solid $borde; &:last-child { border-right: none; } &:hover { background: $surface2; } }
+}
+
+// --- Sub-pestañas internas ---
+.subpestanas { display: flex; gap: 2px; flex-wrap: wrap; border-bottom: 1px solid $borde; margin: 14px 0 16px; }
+.subpestana {
+  border: none; background: transparent; padding: 10px 16px; font-size: 13px; font-weight: 700; font-family: inherit; color: $suave; cursor: pointer;
+  border-bottom: 3px solid transparent; margin-bottom: -1px; transition: color 0.2s, border-color 0.2s;
+  &:hover:not(.activa) { color: $texto; }
+  &.activa { color: var(--f-brand-ink); border-bottom-color: $brand; }
+}
+
+// --- KPI ---
+.kpis-flujo { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; margin-bottom: 14px; }
+.kpi-flujo {
+  background: $surface; border: 1px solid $borde; border-radius: 14px; padding: 12px 14px; display: flex; flex-direction: column; gap: 3px; min-width: 0;
+  &__etiqueta { font-size: 11px; font-weight: 700; color: $suave; text-transform: uppercase; letter-spacing: 0.3px; }
+  &__valor { font-size: 22px; font-weight: 800; letter-spacing: -0.4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  &__pie { font-size: 11.5px; color: $suave; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  &--ok .kpi-flujo__valor { color: var(--f-ok); }
+  &--warn .kpi-flujo__valor { color: var(--f-warn); }
+  &--error .kpi-flujo__valor { color: var(--f-err); }
+}
+
+// --- Panel y leyenda ---
+.panel-diagrama {
+  background: $surface; border: 1px solid $borde; border-radius: 20px; padding: 20px 22px; min-width: 0; box-shadow: var(--f-sombra);
+  &__cabecera { display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 12px; margin-bottom: 12px; h2 { font-size: 17px; font-weight: 800; margin: 0; } .sub { max-width: 620px; } }
+  .herramientas { display: flex; align-items: center; flex-wrap: wrap; gap: 10px 16px; }
+}
+.leyenda {
+  display: flex; flex-wrap: wrap; gap: 6px 18px; font-size: 12px; color: $suave; margin: 0 0 12px; align-items: center;
+  span { display: inline-flex; align-items: center; gap: 6px; }
+}
+.punto { display: inline-block; width: 10px; height: 10px; border-radius: 3px; font-style: normal; }
+.punto--ok { background: var(--f-ok); }
+.punto--error { background: var(--f-err); }
+.punto--warn { background: var(--f-warn); }
+.punto--info { background: var(--f-info); }
+
+// --- Tablas ---
+.tabla-scroll { overflow-x: auto; }
+table { width: 100%; border-collapse: collapse; min-width: 640px; }
+th, td { text-align: left; padding: 10px 14px; border-bottom: 1px solid $borde; font-size: 13px; white-space: nowrap; }
+th { color: $suave; font-weight: 700; font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; background: $surface2; }
+th.orden { cursor: pointer; user-select: none; &:hover { color: $texto; } }
+td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
+.detalle-mensaje { white-space: normal; max-width: 380px; font-size: 12.5px; color: $suave; }
+tbody tr:hover td { background: $surface2; }
+tr.fila-error td { background: var(--f-err-soft); }
+
+.barra-celda { display: inline-flex; align-items: center; gap: 8px; width: 100%; min-width: 120px; i { display: block; height: 7px; border-radius: 4px; background: $brand; opacity: 0.75; min-width: 2px; } }
+
+// --- Detalle desplegable ---
+.detalle-nodo {
+  margin-top: 14px; border: 1px solid $borde; border-radius: 14px; padding: 14px 16px; background: $surface2;
+  &__titulo { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 12px; margin-bottom: 8px; font-size: 14px; .cerrar { margin-left: auto; } }
+  .cerrar { border: none; background: transparent; font-size: 22px; line-height: 1; cursor: pointer; color: $suave; padding: 0 4px; &:hover { color: $texto; } }
+}
+.datos { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 10px 18px; margin: 4px 0 4px;
+  div { display: flex; flex-direction: column; gap: 2px; min-width: 0; span { font-size: 11px; font-weight: 700; color: $suave; text-transform: uppercase; } strong { font-size: 14.5px; overflow-wrap: anywhere; } } }
+
+.tip-flotante {
+  position: fixed; z-index: 1000; pointer-events: none; max-width: 340px; background: $surface; color: $texto; border: 1px solid $borde; border-radius: 10px;
+  padding: 9px 12px; font-size: 12px; line-height: 1.5; box-shadow: 0 10px 28px rgba(0, 0, 0, 0.22);
+  strong { display: block; font-size: 12.5px; margin-bottom: 2px; }
+  .linea { display: flex; justify-content: space-between; gap: 14px; color: $suave; b { color: $texto; font-weight: 700; } }
+}

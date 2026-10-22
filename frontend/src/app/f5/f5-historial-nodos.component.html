@@ -1,0 +1,207 @@
+<section class="historial" aria-label="Histórico de tráfico por nodo">
+  <header class="hist-cabecera">
+    <div>
+      <h4 class="hist-titulo">Histórico de tráfico por nodo</h4>
+      <p class="hist-sub" *ngIf="datos">
+        Cada punto resume {{ bucketTexto }} · lecturas del F5 cada {{ intervaloTexto }}
+        <span *ngIf="actualizadoEn"> · actualizado {{ actualizadoEn | date: 'HH:mm:ss' }}</span>
+      </p>
+    </div>
+    <div class="hist-acciones">
+      <div class="pildoras" role="group" aria-label="Rango de tiempo">
+        <button type="button" *ngFor="let r of rangos" class="pildora" [class.activa]="r.horas === horas"
+                [attr.aria-pressed]="r.horas === horas" (click)="cambiarRango(r.horas)">{{ r.texto }}</button>
+      </div>
+      <button type="button" class="btn-mini" (click)="cargar()" [disabled]="cargando" title="Actualizar">↻</button>
+      <button type="button" class="btn-mini" (click)="exportarCsv()" [disabled]="!datos || !totalMuestras" title="Descargar los datos en CSV">CSV</button>
+    </div>
+  </header>
+
+  <div class="hist-estado" *ngIf="cargando && !datos">Cargando histórico…</div>
+  <div class="hist-error" *ngIf="error">⚠ {{ error }}</div>
+  <div class="hist-aviso" *ngIf="datos?.aviso">⚠ {{ datos?.aviso }}</div>
+  <div class="hist-aviso" *ngIf="datos?.fuente === 'memoria'">
+    ⚠ El histórico se está guardando solo en memoria: se pierde al reiniciar el backend. Para conservarlo, ejecuta <code>crear_tabla_f5_nodo_trafico.sql</code>.
+  </div>
+
+  <ng-container *ngIf="datos">
+    <div class="hist-estado" *ngIf="!nodos.length">Este pool no tiene nodos con lecturas todavía.</div>
+
+    <ng-container *ngIf="nodos.length">
+      <div class="hist-estado hist-info" *ngIf="!totalMuestras">
+        Aún no hay lecturas guardadas de este pool. El histórico se llena solo, una lectura cada {{ intervaloTexto }}, a partir de que el backend está en marcha.
+      </div>
+
+      <!-- Métrica -->
+      <div class="hist-controles">
+        <div class="pildoras" role="group" aria-label="Métrica">
+          <button type="button" *ngFor="let m of metricas" class="pildora" [class.activa]="m.id === metricaId"
+                  [attr.aria-pressed]="m.id === metricaId" (click)="cambiarMetrica(m.id)">{{ m.nombre }}</button>
+        </div>
+        <label class="chk-total">
+          <input type="checkbox" [checked]="mostrarTotal" (change)="alternarTotal()" /> Total del pool
+        </label>
+        <button type="button" class="btn-mini" (click)="alternarTabla()">{{ verTabla ? 'Ver gráfica' : 'Ver tabla' }}</button>
+      </div>
+
+      <!-- Leyenda / selección de nodos (siempre visible) -->
+      <div class="hist-leyenda" role="group" aria-label="Nodos en la gráfica">
+        <button type="button" *ngFor="let n of nodos; trackBy: trackNodo" class="chip-hist"
+                [class.sel]="estaSeleccionado(n.miembro)" [attr.aria-pressed]="estaSeleccionado(n.miembro)"
+                (click)="alternarNodo(n.miembro)" [title]="n.miembro">
+          <i class="swatch" *ngIf="estaSeleccionado(n.miembro)" [attr.data-slot]="slotDe(n.miembro)"></i>
+          <span>{{ n.miembro }}</span>
+        </button>
+        <span class="leyenda-total" *ngIf="mostrarTotal"><i class="swatch-total"></i>Total del pool</span>
+        <button type="button" class="enlace" (click)="seleccionarTop()">Los 4 con más tráfico</button>
+        <button type="button" class="enlace" (click)="ninguno()" *ngIf="seleccion.length">Ninguno</button>
+      </div>
+      <p class="hist-aviso hist-aviso-chico" *ngIf="avisoSeleccion">{{ avisoSeleccion }}</p>
+
+      <!-- Gráfica -->
+      <div class="hist-grafica" *ngIf="!verTabla">
+        <h5 class="grafica-nombre">{{ metrica.titulo }}</h5>
+        <p class="hist-aviso hist-aviso-chico" *ngIf="seleccionSinAvr.length">Sin datos de AVR para: {{ seleccionSinAvr.join(', ') }} (ya no están en el pool).</p>
+        <p class="hist-error" *ngIf="esAvr && avrHistError">⚠ {{ avrHistError }}</p>
+        <p class="hist-aviso hist-aviso-chico" *ngIf="esAvr && avrDatos?.aviso">⚠ {{ avrDatos?.aviso }}</p>
+        <div class="lienzo" #lienzo>
+          <div class="cargando-avr" *ngIf="esAvr && avrHistCargando">Leyendo el histórico del F5 (AVR)… puede tardar unos segundos</div>
+          <svg [attr.width]="ancho" [attr.height]="alto" role="img"
+               [attr.aria-label]="metrica.titulo + ' por nodo en las últimas ' + horas + ' horas'">
+            <g class="rejilla">
+              <ng-container *ngFor="let t of ejeY; trackBy: trackIdx">
+                <line [attr.x1]="58" [attr.x2]="ancho - (etiquetasDirectas ? 132 : 12)" [attr.y1]="t.y" [attr.y2]="t.y" />
+                <text class="eje-y" [attr.x]="52" [attr.y]="t.y + 4" text-anchor="end">{{ t.texto }}</text>
+              </ng-container>
+              <text class="eje-x" *ngFor="let t of ejeX; trackBy: trackIdx" [attr.x]="t.x" [attr.y]="alto - 8"
+                    [attr.text-anchor]="t.ancla">{{ t.texto }}</text>
+            </g>
+
+            <g *ngFor="let s of series; trackBy: trackSerie" class="serie" [class.total]="s.slot < 0" [attr.data-slot]="s.slot">
+              <path *ngFor="let d of s.segmentos" [attr.d]="d" class="linea" />
+              <circle *ngFor="let p of s.aislados" [attr.cx]="p.x" [attr.cy]="p.y" r="3" class="punto" />
+              <ng-container *ngIf="etiquetasDirectas && s.etiquetaY !== null">
+                <text class="etiqueta-directa" [attr.x]="ancho - 126" [attr.y]="s.etiquetaY + 4">{{ etiquetaCorta(s.nombre) }}</text>
+              </ng-container>
+            </g>
+
+            <ng-container *ngIf="indiceHover !== null">
+              <line class="cruz" [attr.x1]="xHover" [attr.x2]="xHover" [attr.y1]="10" [attr.y2]="alto - 26" />
+              <ng-container *ngFor="let s of series; trackBy: trackSerie">
+                <circle *ngIf="yHoverDe(s) !== null" class="marca" [attr.data-slot]="s.slot" [attr.cx]="xHover" [attr.cy]="yHoverDe(s)" r="4.5" />
+              </ng-container>
+            </ng-container>
+
+            <text *ngIf="!hayDatosGrafica" class="sin-datos" [attr.x]="ancho / 2" [attr.y]="alto / 2" text-anchor="middle">
+              {{ seleccion.length || mostrarTotal ? 'Sin lecturas en este rango' : 'Elige al menos un nodo para ver la gráfica' }}
+            </text>
+
+            <rect class="captura" x="0" y="0" [attr.width]="ancho" [attr.height]="alto"
+                  (pointermove)="moverPuntero($event)" (pointerdown)="moverPuntero($event)" (pointerleave)="salirPuntero()" />
+          </svg>
+
+          <div class="tooltip" *ngIf="indiceHover !== null && filasHover.length" role="status"
+               [style.left.px]="tooltipIzquierda ? null : xHover + 14" [style.right.px]="tooltipIzquierda ? ancho - xHover + 14 : null">
+            <div class="tt-hora">{{ tiempoHover }}</div>
+            <div class="tt-fila" *ngFor="let f of filasHover">
+              <i class="swatch" [class.swatch-total]="f.slot < 0" [attr.data-slot]="f.slot"></i>
+              <strong>{{ f.texto }}</strong>
+              <span class="tt-nombre">{{ f.nombre }}</span>
+            </div>
+          </div>
+        </div>
+        <p class="hist-nota" *ngIf="esAvr">
+          Datos de <strong>AVR (Statistics &gt; Analytics) del F5</strong>: transacciones HTTP, con días anteriores a esta aplicación. Cada punto suma {{ bucketTexto }}.
+          Solo aparecen los nodos de Virtual Servers con perfil de analítica HTTP; un cero es «sin transacciones» y un hueco, «AVR sin datos de ese tramo».
+        </p>
+        <p class="hist-nota" *ngIf="!esAvr && historiaCorta">Hay datos desde {{ formatearFechaLarga(datosDesde) }}: el histórico empieza cuando el backend empezó a guardar lecturas.</p>
+        <p class="hist-nota" *ngIf="!esAvr">Promedio de cada tramo de {{ bucketTexto }}. Los huecos en la línea son tramos sin lecturas (backend apagado o F5 sin respuesta), no ceros.</p>
+      </div>
+
+      <!-- Tabla de la gráfica -->
+      <div class="hist-tabla-wrap" *ngIf="verTabla">
+        <h5 class="grafica-nombre">{{ metrica.titulo }} — tabla</h5>
+        <div class="tabla-scroll tabla-scroll-alta">
+          <table class="hist-tabla">
+            <thead>
+              <tr>
+                <th>Hora</th>
+                <th *ngFor="let s of series; trackBy: trackSerie">
+                  <i class="swatch" [class.swatch-total]="s.slot < 0" [attr.data-slot]="s.slot"></i>{{ s.nombre }}
+                </th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr *ngFor="let f of filasTabla; trackBy: trackIdx">
+                <td>{{ formatearFechaLarga(f.t) }}</td>
+                <td *ngFor="let v of f.valores; trackBy: trackIdx" class="num">{{ v === null ? '—' : formatearValor(v, metrica.tipo) }}</td>
+              </tr>
+              <tr *ngIf="!series.length"><td class="vacio-td">Elige al menos un nodo.</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Resumen por nodo -->
+      <h5 class="grafica-nombre resumen-titulo">Resumen por nodo · últimas {{ horas >= 48 ? (horas / 24) + ' días' : horas + ' h' }}</h5>
+      <div class="tabla-scroll">
+        <table class="hist-tabla resumen">
+          <thead>
+            <tr>
+              <th>Nodo</th>
+              <th>Estado</th>
+              <th class="num">Entrada ↓ prom.</th>
+              <th class="num">Entrada ↓ pico</th>
+              <th class="num">Salida ↑ prom.</th>
+              <th class="num">Salida ↑ pico</th>
+              <th class="num">Conex. prom. / pico</th>
+              <th class="num">Conex. nuevas</th>
+              <th class="num">Datos ↓ / ↑</th>
+              <th class="num" *ngIf="avrDatos">Transacciones (F5)</th>
+              <th class="num">Con tráfico</th>
+              <th>Último tráfico</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr *ngFor="let n of nodos; trackBy: trackNodo" [class.fila-sel]="estaSeleccionado(n.miembro)">
+              <td class="celda-nodo">
+                <label>
+                  <input type="checkbox" [checked]="estaSeleccionado(n.miembro)" (change)="alternarNodo(n.miembro)"
+                         [attr.aria-label]="'Mostrar ' + n.miembro + ' en la gráfica'" />
+                  <i class="swatch" [class.swatch-oculto]="!estaSeleccionado(n.miembro)" [attr.data-slot]="slotDe(n.miembro)"></i>
+                  <strong>{{ n.miembro }}</strong>
+                </label>
+              </td>
+              <td><span class="badge-hist" [ngClass]="estadoNodo(n).clase">{{ estadoNodo(n).texto }}</span></td>
+              <td class="num">{{ formatearBps(n.resumen.entradaPromBps) }}</td>
+              <td class="num">{{ n.resumen.entradaPicoEn ? formatearBps(n.resumen.entradaPicoBps) : '—' }}<small *ngIf="n.resumen.entradaPicoEn"> {{ formatearFechaLarga(n.resumen.entradaPicoEn) }}</small></td>
+              <td class="num">{{ formatearBps(n.resumen.salidaPromBps) }}</td>
+              <td class="num">{{ n.resumen.salidaPicoEn ? formatearBps(n.resumen.salidaPicoBps) : '—' }}<small *ngIf="n.resumen.salidaPicoEn"> {{ formatearFechaLarga(n.resumen.salidaPicoEn) }}</small></td>
+              <td class="num">{{ formatearNumero(n.resumen.conexionesProm, 1) }} / {{ n.resumen.muestras ? formatearNumero(n.resumen.conexionesPico) : '—' }}<small *ngIf="n.resumen.conexionesPicoEn"> {{ formatearFechaLarga(n.resumen.conexionesPicoEn) }}</small></td>
+              <td class="num">{{ n.resumen.muestras ? formatearNumero(n.resumen.conexionesNuevas) : '—' }}</td>
+              <td class="num">{{ n.resumen.muestras ? formatearBytes(n.resumen.datosEntradaBytes) + ' / ' + formatearBytes(n.resumen.datosSalidaBytes) : '—' }}</td>
+              <td class="num" *ngIf="avrDatos">{{ formatearNumero(transDe(n.miembro)) }}</td>
+              <td class="num">{{ n.resumen.muestras ? textoMinutos(n.resumen.minutosConTrafico) : '—' }}</td>
+              <td>{{ n.resumen.ultimoTraficoEn ? formatearFechaLarga(n.resumen.ultimoTraficoEn) : (n.resumen.muestras ? 'Sin tráfico en el rango' : '—') }}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="avr-caja">
+        <p class="hist-nota">
+          ¿Necesitas días anteriores? El F5 guarda su propio histórico en <strong>Statistics &gt; Analytics (AVR)</strong>.
+          <button type="button" class="enlace" (click)="probarAvr()" [disabled]="avrCargando">Probar si el F5 lo entrega por API</button>
+        </p>
+        <ng-container *ngIf="avrAbierto">
+          <p class="hist-estado" *ngIf="avrCargando">Consultando el F5…</p>
+          <p class="hist-error" *ngIf="avrError">⚠ {{ avrError }}</p>
+          <ng-container *ngIf="avrTexto">
+            <button type="button" class="btn-mini" (click)="copiarAvr()">{{ avrCopiado ? 'Copiado' : 'Copiar resultado' }}</button>
+            <pre class="avr-pre">{{ avrTexto }}</pre>
+          </ng-container>
+        </ng-container>
+      </div>
+      <p class="hist-nota">Los picos son la velocidad media de la lectura más alta (un tramo de {{ intervaloTexto }}); ráfagas más cortas no se ven. «Con tráfico» es el tiempo en que el nodo tuvo conexiones o bytes.</p>
+    </ng-container>
+  </ng-container>
+</section>

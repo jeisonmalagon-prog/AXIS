@@ -1,0 +1,42 @@
+// Ventana de conexiones de BREB (ADMIN_POD). Mismos tokens --ax-* que el resto de AXIS.
+$brand-dark:   var(--ax-text, #1e293b);
+$brand-gray:   var(--ax-text-muted, #64748b);
+$surface:      var(--ax-surface, #ffffff);
+$surface-bg:   var(--ax-surface-2, #f8fafc);
+$border-light: var(--ax-border, #e2e8f0);
+$brand:        var(--ax-brand-primary, #673ab7);
+$brand-rgb:    var(--ax-brand-primary-rgb, 103, 58, 183);
+$ok:           var(--ax-chart-ok, #10b981);
+$warn:         var(--ax-chart-warn, #f59e0b);
+$danger:       var(--ax-chart-danger, #ef4444);
+
+* { box-sizing: border-box; }
+:host { font-family: 'Inter', system-ui, -apple-system, sans-serif; color: $brand-dark; }
+.suave { color: $brand-gray; font-size: 12.5px; margin: 0; line-height: 1.5; }
+.origen { font-weight: 700; }
+
+.overlay { position: fixed; inset: 0; background: rgba(15, 23, 42, 0.6); backdrop-filter: blur(4px); display: flex; align-items: center; justify-content: center; z-index: 9999; padding: 20px; }
+.modal { background: $surface; border-radius: 20px; padding: 24px; width: 100%; max-width: 680px; max-height: 94vh; overflow-y: auto; overflow-x: hidden; box-shadow: 0 25px 50px rgba(0, 0, 0, 0.25); display: flex; flex-direction: column; gap: 12px;
+  h2 { margin: 0; font-size: 21px; font-weight: 800; } }
+.modal__cab { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; p { margin: 4px 0 0; } }
+.cerrar { background: none; border: 0; font-size: 18px; color: $brand-gray; cursor: pointer; padding: 4px 8px; border-radius: 6px; line-height: 1; &:hover { background: $surface-bg; color: $brand-dark; } }
+
+.pestanas { display: flex; gap: 4px; flex-wrap: wrap; border-bottom: 1px solid $border-light; }
+.pestana { font-family: inherit; font-size: 13px; font-weight: 700; padding: 9px 12px; background: none; border: 0; border-bottom: 3px solid transparent; color: $brand-gray; cursor: pointer; margin-bottom: -1px; display: inline-flex; align-items: center; gap: 8px;
+  &:hover { color: $brand-dark; } &--act { color: $brand; border-bottom-color: $brand; } }
+.punto { width: 9px; height: 9px; border-radius: 50%; background: $border-light; flex: none; &--ok { background: $ok; } &--mal { background: $warn; } }
+
+.form { display: flex; flex-direction: column; gap: 12px; }
+.dos { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; @media (max-width: 560px) { grid-template-columns: minmax(0, 1fr); } }
+.campo { display: flex; flex-direction: column; gap: 4px; font-size: 11.5px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.3px; color: $brand-gray;
+  input { width: 100%; font-family: inherit; font-size: 13px; font-weight: 500; text-transform: none; letter-spacing: 0; padding: 8px 10px; border: 1px solid $border-light; border-radius: 8px; background: $surface-bg; color: $brand-dark; &:focus { outline: none; border-color: $brand; } }
+  &--corto input { max-width: 160px; } }
+.check { display: inline-flex; align-items: flex-start; gap: 8px; font-size: 13px; cursor: pointer; line-height: 1.4; input { margin-top: 3px; } }
+.btn { font-family: inherit; display: inline-flex; align-items: center; justify-content: center; gap: 6px; padding: 8px 14px; border-radius: 10px; font-size: 13px; font-weight: 700; border: 1px solid $border-light; background: $surface; color: $brand-dark; cursor: pointer;
+  &:hover:not(:disabled) { border-color: rgba($brand-rgb, 0.5); } &:disabled { opacity: 0.55; cursor: not-allowed; }
+  &--marca { background: $brand; color: #fff; border-color: $brand; &:hover:not(:disabled) { filter: brightness(1.08); } }
+  &--peligro { color: #e11d48; border-color: #fecdd3; background: transparent; } }
+.error-banner { border: 1px solid rgba(239, 68, 68, 0.4); border-left: 4px solid $danger; background: rgba(239, 68, 68, 0.08); border-radius: 10px; padding: 9px 14px; font-size: 13px; line-height: 1.45; overflow-wrap: anywhere; }
+.prueba { border: 1px solid rgba(16, 185, 129, 0.4); border-left: 4px solid $ok; background: rgba(16, 185, 129, 0.08); border-radius: 10px; padding: 9px 14px; font-size: 13px; line-height: 1.45; overflow-wrap: anywhere;
+  &--mal { border-color: rgba(239, 68, 68, 0.4); border-left-color: $danger; background: rgba(239, 68, 68, 0.08); } }
+.pie { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-top: 4px; padding-top: 12px; border-top: 1px solid $border-light; .espacio { flex: 1; } }

@@ -1,0 +1,79 @@
+<div class="modal-overlay" (click)="cerrar.emit()">
+  <div class="modal-card modal-cuentas" (click)="$event.stopPropagation()">
+    <div class="modal-header">
+      <h2>API keys de n8n</h2>
+      <button class="close-btn" (click)="cerrar.emit()" aria-label="Cerrar">✕</button>
+    </div>
+
+    <p class="cuentas-ayuda">
+      n8n solo entrega los flujos del dueño de cada API key. Agrega aquí la key de otros usuarios de n8n
+      (n8n &gt; Settings &gt; n8n API) para ver sus flujos junto a los demás. La key se guarda cifrada y no se vuelve a mostrar.
+    </p>
+
+    <div class="aviso-cuentas" *ngIf="!cuentasTablaLista">
+      Falta crear la tabla de API keys en la base de datos. Ejecuta una sola vez el script <code>crear_tabla_n8n_cuentas.sql</code>.
+    </div>
+    <div class="aviso-cuentas" *ngIf="cuentasError">{{ cuentasError }}</div>
+    <div class="aviso-ok" *ngIf="cuentasMensaje">{{ cuentasMensaje }}</div>
+
+    <ul class="lista-cuentas">
+      <li class="cuenta-fila cuenta-principal">
+        <div class="cuenta-info">
+          <strong>Principal (servidor)</strong>
+          <span class="cuenta-meta">Key del servidor · no se edita desde aquí</span>
+        </div>
+        <span class="status-badge status-active">Activa</span>
+      </li>
+
+      <li class="cuenta-fila" *ngFor="let c of cuentasAdmin; trackBy: trackCuenta" [class.cuenta-inactiva]="!c.activo">
+        <ng-container *ngIf="cuentaEditandoId !== c.id; else editando">
+          <div class="cuenta-info">
+            <strong>{{ c.nombre }}</strong>
+            <span class="cuenta-meta">
+              Key terminada en <span class="mono">{{ c.apiKeyFin || '····' }}</span>
+              <ng-container *ngIf="c.creadoPor"> · agregada por {{ c.creadoPor }}</ng-container>
+            </span>
+            <span class="cuenta-meta cuenta-alerta" *ngIf="c.legible === false">No se puede leer la key guardada: reemplázala.</span>
+            <span class="cuenta-meta" *ngIf="pruebasCuenta[c.id] as p" [class.prueba-ok]="p.ok" [class.prueba-mal]="p.ok === false">
+              {{ p.cargando ? 'Probando…' : p.texto }}
+            </span>
+          </div>
+          <div class="cuenta-acciones">
+            <span class="status-badge" [ngClass]="c.activo ? 'status-active' : 'status-inactive'">{{ c.activo ? 'Activa' : 'Deshabilitada' }}</span>
+            <button type="button" class="btn-mini" (click)="probarCuenta(c)" [disabled]="c.legible === false">Probar</button>
+            <button type="button" class="btn-mini" (click)="editarCuenta(c)">Editar</button>
+            <button type="button" class="btn-mini" (click)="alternarCuenta(c)">{{ c.activo ? 'Deshabilitar' : 'Habilitar' }}</button>
+            <button type="button" class="btn-mini btn-mini-peligro" (click)="quitarCuenta(c)">Quitar</button>
+          </div>
+        </ng-container>
+        <ng-template #editando>
+          <form class="cuenta-form" (ngSubmit)="guardarEdicion(c)">
+            <label>Nombre
+              <input type="text" name="nombreEd" [(ngModel)]="cuentaEdicion.nombre" maxlength="100" required>
+            </label>
+            <label>Nueva API key <small>(déjala vacía para conservar la actual)</small>
+              <input type="password" name="keyEd" [(ngModel)]="cuentaEdicion.apiKey" autocomplete="new-password" placeholder="Pega la nueva key">
+            </label>
+            <div class="cuenta-acciones">
+              <button type="submit" class="btn btn-sm btn-purple" [disabled]="cuentasGuardando">{{ cuentasGuardando ? 'Guardando…' : 'Guardar' }}</button>
+              <button type="button" class="btn-mini" (click)="cancelarEdicion()">Cancelar</button>
+            </div>
+          </form>
+        </ng-template>
+      </li>
+    </ul>
+    <p class="sin-cuentas" *ngIf="cuentasTablaLista && !cuentasCargando && !cuentasAdmin.length">Aún no hay API keys adicionales.</p>
+
+    <form class="cuenta-form cuenta-nueva" *ngIf="cuentasTablaLista" (ngSubmit)="agregarCuenta()">
+      <h3>Agregar API key</h3>
+      <label>Propietario (nombre para mostrar)
+        <input type="text" name="nombreNuevo" [(ngModel)]="cuentaNueva.nombre" maxlength="100" placeholder="Ej.: María Pérez" required>
+      </label>
+      <label>API key de n8n
+        <input type="password" name="keyNueva" [(ngModel)]="cuentaNueva.apiKey" autocomplete="new-password" placeholder="Pega aquí la API key" required>
+      </label>
+      <p class="cuentas-ayuda">Se prueba contra n8n antes de guardarse; si n8n la rechaza no se guarda.</p>
+      <button type="submit" class="btn btn-sm btn-purple" [disabled]="cuentasGuardando">{{ cuentasGuardando ? 'Verificando…' : 'Agregar' }}</button>
+    </form>
+  </div>
+</div>

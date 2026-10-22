@@ -1,0 +1,749 @@
+<div class="subapps-container">
+  <div class="header-section">
+    <div>
+      <h2 class="titulo-vista">Inventario de Sub-aplicativos</h2>
+      <p>Cada sub-aplicativo es un componente que corre en un servidor (microservicio, API, contenedor, sitio). Aquí se crean y se editan; las aplicaciones de negocio los agrupan en la pestaña «Aplicaciones de negocio».</p>
+    </div>
+    <div class="header-actions">
+      <button *ngIf="puedeEditar" class="btn-primary" (click)="abrirNuevo()">+ Nuevo sub-aplicativo</button>
+    </div>
+  </div>
+
+  <!-- INDICADORES (sobre lo que se está viendo con los filtros actuales) -->
+  <div class="kpis" *ngIf="!cargando && !errorCarga">
+    <div class="kpi"><strong>{{ kpi.total }}</strong><span>sub-aplicativos</span></div>
+    <button class="kpi kpi-btn" [class.activo]="filtros.negocio === 'SIN'" (click)="filtros.negocio = filtros.negocio === 'SIN' ? '' : 'SIN'; aplicarFiltros()"
+            title="Componentes que no pertenecen a ninguna aplicación de negocio">
+      <strong>{{ kpi.sinNegocio }}</strong><span>sin aplicación de negocio</span>
+    </button>
+    <button class="kpi kpi-btn" [class.activo]="filtros.ficha === 'pendiente'" (click)="filtros.ficha = filtros.ficha === 'pendiente' ? '' : 'pendiente'; aplicarFiltros()"
+            title="Componentes a los que todavía no se les ha completado el detalle">
+      <strong>{{ kpi.sinFicha }}</strong><span>sin ficha de detalle</span>
+    </button>
+    <button class="kpi kpi-btn" [class.activo]="filtros.criticidad === 'Alta'" (click)="filtros.criticidad = filtros.criticidad === 'Alta' ? '' : 'Alta'; aplicarFiltros()">
+      <strong>{{ kpi.criticos }}</strong><span>criticidad alta</span>
+    </button>
+  </div>
+
+  <!-- FILTROS -->
+  <div class="filtros-barra" *ngIf="!errorCarga">
+    <input class="filtro-busqueda" type="text" [(ngModel)]="filtros.busqueda" (ngModelChange)="aplicarFiltros()"
+           placeholder="Buscar por nombre, servidor, IP, puerto, propietario, versión..." />
+
+    <select [(ngModel)]="filtros.negocio" (ngModelChange)="aplicarFiltros()" title="Aplicación de negocio">
+      <option value="">Aplicación de negocio: todas</option>
+      <option value="SIN">— Sin aplicación de negocio —</option>
+      <option *ngFor="let n of opcionesNegocio" [value]="n.id">{{ n.nombre }}</option>
+    </select>
+    <select [(ngModel)]="filtros.servidor" (ngModelChange)="aplicarFiltros()" title="Servidor">
+      <option value="">Servidor: todos</option>
+      <option *ngFor="let s of opcionesServidor" [value]="s.id">{{ s.hostname }}</option>
+    </select>
+    <select [(ngModel)]="filtros.tipo" (ngModelChange)="aplicarFiltros()" title="Tipo de componente">
+      <option value="">Tipo: todos</option>
+      <option *ngFor="let t of tipos" [value]="t.valor">{{ t.etiqueta }}</option>
+    </select>
+    <select [(ngModel)]="filtros.plataforma" (ngModelChange)="aplicarFiltros()" title="Plataforma">
+      <option value="">Plataforma: todas</option>
+      <option *ngFor="let p of opcionesPlataforma" [value]="p">{{ p }}</option>
+    </select>
+    <select [(ngModel)]="filtros.ambiente" (ngModelChange)="aplicarFiltros()" title="Ambiente">
+      <option value="">Ambiente: todos</option>
+      <option *ngFor="let a of opcionesAmbiente" [value]="a">{{ a }}</option>
+    </select>
+    <select [(ngModel)]="filtros.criticidad" (ngModelChange)="aplicarFiltros()" title="Criticidad">
+      <option value="">Criticidad: todas</option>
+      <option *ngFor="let c of criticidades" [value]="c">{{ c }}</option>
+    </select>
+    <select [(ngModel)]="filtros.estado" (ngModelChange)="aplicarFiltros()" title="Estado">
+      <option value="">Estado: todos</option>
+      <option *ngFor="let e of estados" [value]="e">{{ e }}</option>
+    </select>
+    <select [(ngModel)]="filtros.ficha" (ngModelChange)="aplicarFiltros()" title="Ficha de detalle">
+      <option value="">Ficha: todas</option>
+      <option value="pendiente">Sin ficha de detalle</option>
+      <option value="completa">Con ficha de detalle</option>
+    </select>
+    <button class="btn-secondary btn-sm" *ngIf="hayFiltros" (click)="limpiarFiltros()">Limpiar filtros</button>
+  </div>
+
+  <div class="empty-state" *ngIf="errorCarga">{{ errorCarga }}
+    <div style="margin-top: 12px;"><button class="btn-secondary" (click)="cargar()">Reintentar</button></div>
+  </div>
+
+  <div class="loading-state text-center py-4" *ngIf="cargando && !errorCarga">Cargando sub-aplicativos...</div>
+
+  <!-- TABLA -->
+  <ng-container *ngIf="!cargando && !errorCarga">
+    <div class="tabla-contenedor" *ngIf="filtrados.length; else sinResultados">
+    <div class="table-card tabla-compacta">
+      <table>
+        <thead>
+          <tr>
+            <th class="th-orden" (click)="cambiarOrden('nombre')">Sub-aplicativo {{ flechaOrden('nombre') }}</th>
+            <th class="th-orden" (click)="cambiarOrden('negocio')">Aplicación de negocio {{ flechaOrden('negocio') }}</th>
+            <th class="th-orden" (click)="cambiarOrden('servidor')">Servidor / ambiente {{ flechaOrden('servidor') }}</th>
+            <th class="th-orden th-corta" (click)="cambiarOrden('puerto')">Puerto {{ flechaOrden('puerto') }}</th>
+            <th class="th-orden col-opcional" (click)="cambiarOrden('plataforma')">Plataforma {{ flechaOrden('plataforma') }}</th>
+            <th class="th-orden th-corta" (click)="cambiarOrden('criticidad')">Criticidad {{ flechaOrden('criticidad') }}</th>
+            <th class="th-orden th-corta" (click)="cambiarOrden('estado')">Estado {{ flechaOrden('estado') }}</th>
+            <th class="th-orden col-opcional" (click)="cambiarOrden('propietario')">Propietario {{ flechaOrden('propietario') }}</th>
+            <th class="th-orden col-ancho" (click)="cambiarOrden('despliegue')">Despliegue {{ flechaOrden('despliegue') }}</th>
+            <th class="col-ancho" title="Integraciones / conexiones a base de datos">Rel.</th>
+            <th class="col-sticky" *ngIf="puedeEditar">Acciones</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr *ngFor="let s of pagina; trackBy: trackSub" class="fila-clic" (click)="verFicha(s.id)">
+            <td class="celda-principal">
+              <div class="celda-nombre">
+                <span class="chip-tipo" [style.color]="colorTipo(tipoEfectivo(s)).fg" [style.background]="colorTipo(tipoEfectivo(s)).bg"
+                      [title]="etiquetaTipo(tipoEfectivo(s))">{{ tipoEfectivo(s) }}</span>
+                <strong class="font-bold">{{ s.nombre }}</strong>
+                <span class="marca-sin-ficha" *ngIf="!s.aplicativo_id" title="Todavía no tiene ficha de detalle">●</span>
+              </div>
+            </td>
+            <td data-label="Aplicación de negocio" class="celda-negocio">
+              <ng-container *ngIf="s.aplicaciones_negocio.length; else sinNegocio">
+                <span class="badge badge-negocio" *ngFor="let n of s.aplicaciones_negocio" style="margin-right: 4px;">{{ n.nombre }}</span>
+              </ng-container>
+              <ng-template #sinNegocio><span class="text-gray">—</span></ng-template>
+            </td>
+            <td data-label="Servidor / ambiente" class="celda-servidor">
+              <div>{{ s.servidor_hostname }}<span class="amb-chico">{{ s.ambiente }}</span></div>
+              <code class="ip-chica">{{ s.servidor_ip }}</code>
+            </td>
+            <td data-label="Puerto" class="celda-corta"><code *ngIf="s.puerto; else guion">:{{ s.puerto }}</code></td>
+            <td class="col-opcional" data-label="Plataforma"><span class="badge badge-plataforma" *ngIf="s.plataforma; else guion">{{ s.plataforma }}</span></td>
+            <td data-label="Criticidad" class="celda-corta"><span class="badge" *ngIf="s.criticidad; else guion" [ngClass]="claseCriticidad(s.criticidad)">{{ s.criticidad }}</span></td>
+            <td data-label="Estado" class="celda-corta"><span class="badge" [ngClass]="claseEstado(s.estado)">{{ s.estado || 'Activo' }}</span></td>
+            <td class="col-opcional" data-label="Propietario">{{ s.propietario || '—' }}</td>
+            <td class="col-ancho" data-label="Último despliegue">{{ (s.fecha_ultimo_despliegue | date:'dd/MM/yyyy') || '—' }}</td>
+            <td class="col-ancho" data-label="Relaciones">
+              <span class="rel" title="Integraciones">🔗 {{ s.total_integraciones || 0 }}</span>
+              <span class="rel" title="Integraciones con servicios ACE / BUS 10">⚙ {{ s.total_servicios_bus || 0 }}</span>
+              <span class="rel" title="Conexiones a base de datos">🗄 {{ s.total_conexiones_bd || 0 }}</span>
+            </td>
+            <td class="col-sticky celda-acciones" *ngIf="puedeEditar" (click)="$event.stopPropagation()">
+              <div class="acciones">
+                <button class="btn-icon edit" (click)="abrirEditar(s)" title="Editar">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="icon-svg"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>
+                </button>
+                <button class="btn-icon delete" (click)="eliminar(s, $event)" title="Eliminar">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="icon-svg"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
+                </button>
+              </div>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+    </div>
+
+    <ng-template #guion><span class="text-gray">—</span></ng-template>
+    <ng-template #sinResultados>
+      <div class="empty-state">
+        <ng-container *ngIf="subs.length">Ningún sub-aplicativo coincide con los filtros.</ng-container>
+        <ng-container *ngIf="!subs.length">Todavía no hay sub-aplicativos registrados.</ng-container>
+      </div>
+    </ng-template>
+
+    <div class="paginacion" *ngIf="totalPaginas > 1">
+      <button class="btn-secondary btn-sm" [disabled]="paginaActual === 1" (click)="irAPagina(paginaActual - 1)">‹ Anterior</button>
+      <span>Página {{ paginaActual }} de {{ totalPaginas }} · {{ filtrados.length }} resultados</span>
+      <button class="btn-secondary btn-sm" [disabled]="paginaActual === totalPaginas" (click)="irAPagina(paginaActual + 1)">Siguiente ›</button>
+    </div>
+  </ng-container>
+</div>
+
+<!-- ==========================================================
+     FICHA DE DETALLE
+     ========================================================== -->
+<div class="modal-overlay" *ngIf="detalle" (click)="cerrarFicha()">
+  <div class="modal-content modal-lg" (click)="$event.stopPropagation()">
+    <header class="detail-header">
+      <div>
+        <span class="chip-tipo" [style.color]="colorTipo(tipoEfectivo(detalle)).fg" [style.background]="colorTipo(tipoEfectivo(detalle)).bg">{{ etiquetaTipo(tipoEfectivo(detalle)) }}</span>
+        <span class="badge" style="margin-left: 6px;" [ngClass]="claseEstado(detalle.estado)">{{ detalle.estado || 'Activo' }}</span>
+        <span class="badge" style="margin-left: 6px;" *ngIf="detalle.criticidad" [ngClass]="claseCriticidad(detalle.criticidad)">Criticidad {{ detalle.criticidad }}</span>
+        <h2 style="margin: 8px 0 0 0;">{{ detalle.nombre }}</h2>
+        <p class="ip-subtitle">
+          <strong>{{ detalle.servidor_hostname }}</strong> · <code>{{ detalle.servidor_ip }}</code><span *ngIf="detalle.puerto"> · <code>:{{ detalle.puerto }}</code></span>
+        </p>
+      </div>
+      <button class="btn-close" (click)="cerrarFicha()">✕</button>
+    </header>
+
+    <!-- 1. Identificación y ubicación -->
+    <h3 class="section-title">Identificación y ubicación</h3>
+    <div class="grid-3">
+      <div class="info-card" style="grid-column: span 3;">
+        <label>Aplicación(es) de negocio</label>
+        <p>
+          <ng-container *ngIf="detalle.aplicaciones_negocio.length; else ninguna">
+            <span class="badge badge-negocio" *ngFor="let n of detalle.aplicaciones_negocio" style="margin-right: 6px;">{{ n.nombre }}</span>
+          </ng-container>
+          <ng-template #ninguna><span class="text-gray">No pertenece a ninguna aplicación de negocio</span></ng-template>
+        </p>
+      </div>
+      <div class="info-card"><label>Servidor</label><p>{{ detalle.servidor_hostname }}</p></div>
+      <div class="info-card"><label>IP</label><p>{{ detalle.servidor_ip }}</p></div>
+      <div class="info-card"><label>Ambiente</label><p>{{ detalle.ambiente }}</p></div>
+      <div class="info-card"><label>Puerto</label><p>{{ detalle.puerto || 'No definido' }}</p></div>
+      <div class="info-card"><label>Plataforma</label><p>{{ detalle.plataforma || 'No definida' }}</p></div>
+      <div class="info-card"><label>Estado</label><p>{{ detalle.estado || 'Activo' }}</p></div>
+    </div>
+    <div class="info-card" style="margin: 12px 0 16px 0;" *ngIf="detalle.descripcion_uso">
+      <label>Descripción de uso</label>
+      <p>{{ detalle.descripcion_uso }}</p>
+    </div>
+
+    <!-- 2. Responsables y despliegue -->
+    <h3 class="section-title">Responsables y despliegue</h3>
+    <div class="grid-3">
+      <div class="info-card"><label>Propietario</label><p>{{ detalle.propietario || 'No asignado' }}</p></div>
+      <div class="info-card"><label>Dev responsable</label><p>{{ detalle.dev_responsable || 'No asignado' }}</p></div>
+      <div class="info-card"><label>Criticidad</label><p>{{ detalle.criticidad || 'No definida' }}</p></div>
+      <div class="info-card"><label>Último despliegue</label><p>{{ (detalle.fecha_ultimo_despliegue | date:'dd/MM/yyyy') || 'No registrado' }}</p></div>
+      <div class="info-card" style="grid-column: span 2;"><label>Responsable del último despliegue</label><p>{{ detalle.responsable_ultimo_despliegue || 'No asignado' }}</p></div>
+    </div>
+
+    <!-- 3. Técnico -->
+    <h3 class="section-title">Técnico</h3>
+    <div class="grid-3">
+      <div class="info-card"><label>Versión / imagen</label><p>{{ detalle.version_imagen || 'No registrada' }}</p></div>
+      <div class="info-card">
+        <label>Repositorio</label>
+        <p><a *ngIf="detalle.repositorio_url; else noReg" [href]="detalle.repositorio_url" target="_blank" rel="noopener" class="enlace">{{ detalle.repositorio_url }}</a></p>
+      </div>
+      <div class="info-card">
+        <label>Pipeline</label>
+        <p><a *ngIf="detalle.pipeline_url; else noReg" [href]="detalle.pipeline_url" target="_blank" rel="noopener" class="enlace">{{ detalle.pipeline_url }}</a></p>
+      </div>
+      <div class="info-card" style="grid-column: span 3;">
+        <label>URL / endpoint de salud</label>
+        <p><a *ngIf="detalle.url_salud; else noReg" [href]="detalle.url_salud" target="_blank" rel="noopener" class="enlace">{{ detalle.url_salud }}</a></p>
+      </div>
+      <div class="info-card"><label>Seguridad</label><p>{{ detalle.info_seguridad || 'No definida' }}</p></div>
+      <div class="info-card" style="grid-column: span 2;" *ngIf="detalle.info_seguridad === 'Certificado SSl'">
+        <label>Certificado</label>
+        <p>
+          {{ detalle.certificado_nombre || 'Sin certificado seleccionado' }}
+          <span class="text-gray" *ngIf="detalle.certificado_fecha_fin"> · vence {{ detalle.certificado_fecha_fin | date:'dd/MM/yyyy' }}</span>
+        </p>
+      </div>
+    </div>
+    <ng-template #noReg><span class="text-gray">No registrado</span></ng-template>
+
+    <div class="bloque-codigo">
+      <div>
+        <label class="code-label">Comandos</label>
+        <p *ngIf="!detalle.comandos" class="text-gray" style="margin: 4px 0 0 0; font-size: 13px;">No registrado</p>
+        <button *ngIf="detalle.comandos" class="btn-ver-codigo" (click)="abrirVisorCodigo('Comandos — ' + detalle.nombre, detalle.comandos)">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="icon-svg"><polyline points="16 18 22 12 16 6"></polyline><polyline points="8 6 2 12 8 18"></polyline></svg>
+          Ver Comandos
+        </button>
+      </div>
+      <div>
+        <label class="code-label">Configuración</label>
+        <p *ngIf="!detalle.configuracion" class="text-gray" style="margin: 4px 0 0 0; font-size: 13px;">No registrado</p>
+        <button *ngIf="detalle.configuracion" class="btn-ver-codigo" (click)="abrirVisorCodigo('Configuración — ' + detalle.nombre, detalle.configuracion)">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="icon-svg"><polyline points="16 18 22 12 16 6"></polyline><polyline points="8 6 2 12 8 18"></polyline></svg>
+          Ver Configuración
+        </button>
+      </div>
+    </div>
+
+    <!-- 4. Relaciones -->
+    <h3 class="section-title">Relaciones</h3>
+
+    <div class="info-card" style="margin-bottom: 12px;" *ngIf="detalle.dependencias">
+      <label>Dependencias</label>
+      <p>{{ detalle.dependencias }}</p>
+    </div>
+
+    <label class="code-label">Se integra con ({{ detalle.integraciones?.length || 0 }})</label>
+    <div *ngIf="detalle.integraciones?.length; else sinInteg">
+      <div *ngFor="let ig of detalle.integraciones" class="fila-integracion">
+        <div>
+          <span class="badge badge-plataforma" style="margin-right: 8px;">{{ ig.tipo_destino === 'aplicativo' ? 'sub-aplicativo' : 'servidor' }}</span>
+          <strong>{{ ig.nombre_destino }}</strong>
+          <span *ngIf="ig.servidor_relacionado && ig.tipo_destino === 'aplicativo'" class="text-gray"> ({{ ig.servidor_relacionado }})</span>
+          <span *ngIf="ig.descripcion" class="text-gray"> — {{ ig.descripcion }}</span>
+        </div>
+      </div>
+    </div>
+    <ng-template #sinInteg><p class="text-gray sin-datos">Sin integraciones registradas.</p></ng-template>
+
+    <label class="code-label" style="margin-top: 12px; display: block;">Lo usan ({{ detalle.integraciones_entrantes?.length || 0 }})</label>
+    <div *ngIf="detalle.integraciones_entrantes?.length; else sinEntrantes">
+      <div *ngFor="let ig of detalle.integraciones_entrantes" class="fila-integracion">
+        <div>
+          <strong>{{ ig.nombre_origen }}</strong>
+          <span *ngIf="ig.servidor_origen" class="text-gray"> ({{ ig.servidor_origen }})</span>
+          <span *ngIf="ig.descripcion" class="text-gray"> — {{ ig.descripcion }}</span>
+        </div>
+      </div>
+    </div>
+    <ng-template #sinEntrantes><p class="text-gray sin-datos">Ningún otro sub-aplicativo declara usarlo.</p></ng-template>
+
+    <label class="code-label" style="margin-top: 12px; display: block;">Integraciones con servicios ACE / BUS 10 ({{ detalle.integraciones_servicios?.length || 0 }})</label>
+    <div *ngIf="detalle.integraciones_servicios?.length; else sinServicios">
+      <div *ngFor="let sv of detalle.integraciones_servicios" class="fila-integracion">
+        <div>
+          <span class="badge" [ngClass]="sv.bus === 'BUS10' ? 'badge-bus10' : 'badge-ace'" style="margin-right: 8px;">{{ etiquetaBus[sv.bus] }}</span>
+          <strong><span *ngIf="sv.codigo">{{ sv.codigo }} · </span>{{ sv.nombre || 'Servicio eliminado del inventario' }}</strong>
+          <span *ngIf="sv.pod" class="text-gray"> ({{ sv.pod }})</span>
+          <span *ngIf="sv.descripcion" class="text-gray"> — {{ sv.descripcion }}</span>
+        </div>
+      </div>
+    </div>
+    <ng-template #sinServicios><p class="text-gray sin-datos">{{ detalle.integraciones_servicios_disponible === false ? 'Pendiente de crear la tabla de integraciones con servicios (script SQL).' : 'Sin integraciones con servicios registradas.' }}</p></ng-template>
+
+    <label class="code-label" style="margin-top: 12px; display: block;">Conexiones a base de datos ({{ detalle.conexiones_bd?.length || 0 }})</label>
+    <div *ngIf="detalle.conexiones_bd?.length; else sinBd">
+      <div *ngFor="let c of detalle.conexiones_bd" class="fila-integracion">
+        <div>
+          <span class="badge badge-plataforma" style="margin-right: 8px;">{{ c.motor_bd }}</span>
+          <strong>{{ c.servidor_bd_hostname }}</strong>
+          <span class="text-gray"> ({{ c.servidor_bd_ip }})</span>
+          <span class="text-gray"> — {{ c.nombre_base_datos }}<span *ngIf="c.esquema">.{{ c.esquema }}</span><span *ngIf="c.puerto"> :{{ c.puerto }}</span></span>
+          <span *ngIf="c.usuario_servicio" class="text-gray"> · 👤 {{ c.usuario_servicio }}</span>
+        </div>
+      </div>
+    </div>
+    <ng-template #sinBd><p class="text-gray sin-datos">Sin conexiones a base de datos registradas.</p></ng-template>
+
+    <div *ngIf="detalle.puntos_integracion" style="margin-top: 12px;">
+      <label class="code-label">Puntos de integración (texto libre, histórico)</label>
+      <div class="code-box">{{ detalle.puntos_integracion }}</div>
+    </div>
+
+    <div class="modal-actions" style="margin-top: 20px;">
+      <button class="btn-secondary" (click)="cerrarFicha()">Cerrar</button>
+      <button *ngIf="puedeEditar" class="btn-primary" (click)="abrirEditar(detalle, true)">Editar</button>
+    </div>
+  </div>
+</div>
+
+<!-- ==========================================================
+     CREAR / EDITAR
+     ========================================================== -->
+<div class="modal-overlay" *ngIf="mostrarForm" (click)="cerrarForm()">
+  <div class="modal-content modal-lg modal-flex-footer" (click)="$event.stopPropagation()">
+    <h2>{{ modoEdicion ? 'Editar sub-aplicativo' : 'Nuevo sub-aplicativo' }}</h2>
+
+    <div class="modal-scroll-body">
+      <div class="aviso-error" *ngIf="errorForm">{{ errorForm }}</div>
+      <div class="aviso-ok" *ngIf="avisoForm">✓ {{ avisoForm }}</div>
+
+      <!-- 1. Identificación y ubicación -->
+      <h4 class="form-seccion">Identificación y ubicación</h4>
+      <div class="form-row">
+        <div class="form-group" style="flex: 2 1 260px;">
+          <label>Nombre *</label>
+          <input type="text" [(ngModel)]="form.nombre" placeholder="Ej: MS_USUARIOS">
+        </div>
+        <div class="form-group">
+          <label>Tipo</label>
+          <select [(ngModel)]="form.tipo">
+            <option value="">Auto (por nombre)</option>
+            <option *ngFor="let t of tipos" [value]="t.valor">{{ t.etiqueta }}</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="form-row">
+        <div class="form-group" style="flex: 2 1 260px;">
+          <label>Servidor *</label>
+          <app-selector-buscable *ngIf="!modoEdicion"
+            [opciones]="opcionesServidorSelector"
+            [valor]="form.servidor_id"
+            (valorChange)="form.servidor_id = $event"
+            placeholder="Busca por hostname o IP..."
+          ></app-selector-buscable>
+          <ng-container *ngIf="modoEdicion">
+            <input type="text" [value]="fichaEdicion?.servidor_hostname + ' · ' + fichaEdicion?.servidor_ip" disabled>
+            <p class="ayuda">El servidor no se puede cambiar: un sub-aplicativo en otro servidor es otro componente.</p>
+          </ng-container>
+        </div>
+        <div class="form-group">
+          <label>Puerto</label>
+          <input type="number" [(ngModel)]="form.puerto" placeholder="Ej: 8001">
+        </div>
+      </div>
+
+      <div class="form-row">
+        <div class="form-group">
+          <label>Plataforma</label>
+          <select [(ngModel)]="form.plataforma">
+            <option *ngFor="let p of plataformas" [value]="p">{{ p }}</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Estado</label>
+          <select [(ngModel)]="form.estado">
+            <option *ngFor="let e of estados" [value]="e">{{ e }}</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label>Aplicación(es) de negocio a las que pertenece</label>
+        <div class="chips-negocio" *ngIf="form.aplicaciones_negocio_ids.length">
+          <span class="chip-negocio" *ngFor="let id of form.aplicaciones_negocio_ids">
+            {{ nombreNegocio(id) }}
+            <button type="button" (click)="quitarNegocio(id)" title="Quitar">✕</button>
+          </span>
+        </div>
+        <select #selNegocio (change)="agregarNegocio(selNegocio.value); selNegocio.value = ''" [disabled]="!negociosDisponibles.length">
+          <option value="">{{ negociosDisponibles.length ? '+ Agregar a una aplicación de negocio...' : 'No hay más aplicaciones disponibles' }}</option>
+          <option *ngFor="let n of negociosDisponibles" [value]="n.id">{{ n.nombre }}</option>
+        </select>
+        <p class="ayuda">Un mismo sub-aplicativo puede pertenecer a varias aplicaciones de negocio.</p>
+      </div>
+
+      <div class="form-group">
+        <label>Descripción de uso</label>
+        <textarea [(ngModel)]="form.descripcion_uso" rows="2" placeholder="Ej: API que consulta parámetros de negocio"></textarea>
+      </div>
+
+      <!-- 2. Responsables y despliegue -->
+      <h4 class="form-seccion">Responsables y despliegue</h4>
+      <div class="form-row">
+        <div class="form-group">
+          <label>Propietario</label>
+          <app-selector-buscable
+            [opciones]="personasOpciones"
+            [valor]="form.propietario || null"
+            (valorChange)="form.propietario = $event || ''"
+            [permitirAgregar]="true"
+            (agregar)="onAgregarPersona($event)"
+            placeholder="Busca o agrega una persona..."
+          ></app-selector-buscable>
+        </div>
+        <div class="form-group">
+          <label>Dev responsable</label>
+          <app-selector-buscable
+            [opciones]="personasOpciones"
+            [valor]="form.dev_responsable || null"
+            (valorChange)="form.dev_responsable = $event || ''"
+            [permitirAgregar]="true"
+            (agregar)="onAgregarPersona($event)"
+            placeholder="Busca o agrega una persona..."
+          ></app-selector-buscable>
+        </div>
+        <div class="form-group">
+          <label>Criticidad</label>
+          <select [(ngModel)]="form.criticidad">
+            <option *ngFor="let c of criticidades" [value]="c">{{ c }}</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>Fecha del último despliegue</label>
+          <input type="date" [(ngModel)]="form.fecha_ultimo_despliegue">
+        </div>
+        <div class="form-group">
+          <label>Responsable del último despliegue</label>
+          <app-selector-buscable
+            [opciones]="personasOpciones"
+            [valor]="form.responsable_ultimo_despliegue || null"
+            (valorChange)="form.responsable_ultimo_despliegue = $event || ''"
+            [permitirAgregar]="true"
+            (agregar)="onAgregarPersona($event)"
+            placeholder="Busca o agrega una persona..."
+          ></app-selector-buscable>
+        </div>
+      </div>
+
+      <!-- 3. Técnico -->
+      <h4 class="form-seccion">Técnico</h4>
+      <div class="form-row">
+        <div class="form-group">
+          <label>Versión / imagen</label>
+          <input type="text" [(ngModel)]="form.version_imagen" placeholder="Ej: registry/ms-usuarios:1.4.2">
+        </div>
+        <div class="form-group">
+          <label>Seguridad</label>
+          <select [(ngModel)]="form.info_seguridad">
+            <option value="Ninguna">Ninguna</option>
+            <option value="Certificado SSl">Certificado SSl</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-group" *ngIf="form.info_seguridad === 'Certificado SSl'">
+        <label>Certificado</label>
+        <select [(ngModel)]="form.certificado_id">
+          <option [ngValue]="null">— Selecciona un certificado —</option>
+          <option *ngFor="let c of certificados" [ngValue]="c.id">
+            {{ c.nombre_comun }} ({{ c.entidad_emisora }}{{ c.fecha_fin ? ', vence ' + (c.fecha_fin | date:'dd/MM/yyyy') : '' }})
+          </option>
+        </select>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>Repositorio</label>
+          <input type="text" [(ngModel)]="form.repositorio_url" placeholder="https://dev.azure.com/...">
+        </div>
+        <div class="form-group">
+          <label>Pipeline</label>
+          <input type="text" [(ngModel)]="form.pipeline_url" placeholder="https://dev.azure.com/.../_build">
+        </div>
+      </div>
+      <div class="form-group">
+        <label>URL / endpoint de salud</label>
+        <input type="text" [(ngModel)]="form.url_salud" placeholder="Ej: http://192.168.x.x:8071/health">
+      </div>
+      <div class="form-group">
+        <label>Comandos</label>
+        <textarea class="textarea-code" [(ngModel)]="form.comandos" rows="7" placeholder="Ej: docker run -d ..."></textarea>
+      </div>
+      <div class="form-group">
+        <label>Configuración</label>
+        <textarea class="textarea-code" [(ngModel)]="form.configuracion" rows="7" placeholder="Ej: variables de entorno, archivo .env, appsettings..."></textarea>
+      </div>
+
+      <!-- 4. Relaciones -->
+      <h4 class="form-seccion">Relaciones</h4>
+      <div class="form-group">
+        <label>Dependencias</label>
+        <textarea [(ngModel)]="form.dependencias" rows="2" placeholder="Otros servicios o recursos de los que depende"></textarea>
+      </div>
+      <div class="form-group" *ngIf="form.puntos_integracion">
+        <label>Puntos de integración (texto libre, histórico)</label>
+        <textarea [(ngModel)]="form.puntos_integracion" rows="2"></textarea>
+      </div>
+
+      <div class="panel-integraciones" *ngIf="!form.id">
+        <p class="text-gray" style="margin: 0; font-size: 13px;">
+          Guarda el sub-aplicativo para poder registrar sus integraciones con otros sub-aplicativos/servidores, con servicios (ACE / BUS 10) y sus conexiones a base de datos.
+        </p>
+      </div>
+
+      <ng-container *ngIf="form.id">
+        <div class="aviso-error" *ngIf="errorRelacion">{{ errorRelacion }}</div>
+
+        <!-- INTEGRACIONES -->
+        <div class="panel-integraciones">
+          <h4>🔗 Integraciones (sub-aplicativos / servidores)</h4>
+
+          <div *ngIf="fichaEdicion?.integraciones?.length; else sinIntegEd">
+            <div *ngFor="let ig of fichaEdicion?.integraciones" class="fila-integracion">
+              <div>
+                <span class="badge badge-plataforma" style="margin-right: 8px;">{{ ig.tipo_destino === 'aplicativo' ? 'sub-aplicativo' : 'servidor' }}</span>
+                <strong>{{ ig.nombre_destino }}</strong>
+                <span *ngIf="ig.servidor_relacionado && ig.tipo_destino === 'aplicativo'" class="text-gray"> ({{ ig.servidor_relacionado }})</span>
+                <span *ngIf="ig.descripcion" class="text-gray"> — {{ ig.descripcion }}</span>
+              </div>
+              <button class="btn-icon delete" (click)="quitarIntegracion(ig.id)" title="Quitar integración">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="icon-svg"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
+              </button>
+            </div>
+          </div>
+          <ng-template #sinIntegEd><p class="text-gray" style="font-size: 13px; margin: 0;">Sin integraciones registradas todavía.</p></ng-template>
+
+          <div class="form-row" style="margin-top: 12px;">
+            <div class="form-group">
+              <label>Se integra con</label>
+              <select [(ngModel)]="nuevaIntegracion.tipo">
+                <option value="sub">Otro sub-aplicativo</option>
+                <option value="servidor">Un servidor completo</option>
+              </select>
+            </div>
+            <div class="form-group" *ngIf="nuevaIntegracion.tipo === 'sub'">
+              <label>Filtrar por servidor (opcional)</label>
+              <app-selector-buscable
+                [opciones]="opcionesServidorSelector"
+                [valor]="nuevaIntegracion.servidorFiltro"
+                (valorChange)="nuevaIntegracion.servidorFiltro = $event; nuevaIntegracion.destinoCompId = null; recalcularOpcionesDestino()"
+                placeholder="Todos los servidores — escribe hostname o IP..."
+              ></app-selector-buscable>
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="form-group" *ngIf="nuevaIntegracion.tipo === 'sub'">
+              <label>Sub-aplicativo destino <span class="text-gray" style="font-weight: 400;">({{ opcionesDestino.length }} disponibles)</span></label>
+              <app-selector-buscable
+                [opciones]="opcionesDestino"
+                [valor]="nuevaIntegracion.destinoCompId"
+                (valorChange)="nuevaIntegracion.destinoCompId = $event"
+                placeholder="Busca por nombre, servidor, IP, puerto, tipo o aplicación..."
+                textoVacio="No hay sub-aplicativos con ese servidor."
+              ></app-selector-buscable>
+              <p class="ayuda">Puedes escribir varias palabras a la vez, por ejemplo: «api 10.240 8080» o «fabogdock03 ms».</p>
+            </div>
+            <div class="form-group" *ngIf="nuevaIntegracion.tipo === 'servidor'">
+              <label>Servidor destino</label>
+              <app-selector-buscable
+                [opciones]="opcionesServidorSelector"
+                [valor]="nuevaIntegracion.destinoServidorId"
+                (valorChange)="nuevaIntegracion.destinoServidorId = $event"
+                placeholder="Busca por hostname o IP..."
+              ></app-selector-buscable>
+            </div>
+            <div class="form-group">
+              <label>Nota (opcional)</label>
+              <input type="text" [(ngModel)]="nuevaIntegracion.descripcion" placeholder="Ej: consulta saldo">
+            </div>
+            <div class="form-group" style="flex: 0 0 auto; justify-content: flex-end;">
+              <button class="btn-primary" (click)="agregarIntegracion()">+ Agregar</button>
+            </div>
+          </div>
+
+          <div *ngIf="fichaEdicion?.integraciones_entrantes?.length" style="margin-top: 12px;">
+            <label class="code-label">Lo usan (declarado desde otros sub-aplicativos)</label>
+            <div *ngFor="let ig of fichaEdicion?.integraciones_entrantes" class="fila-integracion">
+              <div>
+                <strong>{{ ig.nombre_origen }}</strong>
+                <span *ngIf="ig.servidor_origen" class="text-gray"> ({{ ig.servidor_origen }})</span>
+                <span *ngIf="ig.descripcion" class="text-gray"> — {{ ig.descripcion }}</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- INTEGRACIONES CON SERVICIOS (ACE / BUS 10) -->
+        <div class="panel-integraciones">
+          <h4>⚙ Integraciones con servicios (ACE / BUS 10)</h4>
+
+          <div class="aviso-error" *ngIf="fichaEdicion && fichaEdicion.integraciones_servicios_disponible === false">
+            Falta crear la tabla de integraciones con servicios en la base de datos: pide al administrador que ejecute una sola vez el script <code>crear_tabla_integraciones_servicios_subaplicativos.sql</code>.
+          </div>
+
+          <div *ngIf="fichaEdicion?.integraciones_servicios?.length; else sinServEd">
+            <div *ngFor="let sv of fichaEdicion?.integraciones_servicios" class="fila-integracion">
+              <div>
+                <span class="badge" [ngClass]="sv.bus === 'BUS10' ? 'badge-bus10' : 'badge-ace'" style="margin-right: 8px;">{{ etiquetaBus[sv.bus] }}</span>
+                <strong><span *ngIf="sv.codigo">{{ sv.codigo }} · </span>{{ sv.nombre || 'Servicio eliminado del inventario' }}</strong>
+                <span *ngIf="sv.pod" class="text-gray"> ({{ sv.pod }})</span>
+                <span *ngIf="sv.descripcion" class="text-gray"> — {{ sv.descripcion }}</span>
+              </div>
+              <button class="btn-icon delete" (click)="quitarIntegracionServicio(sv.id)" title="Quitar integración con el servicio">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="icon-svg"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
+              </button>
+            </div>
+          </div>
+          <ng-template #sinServEd><p class="text-gray" style="font-size: 13px; margin: 0;">Sin integraciones con servicios registradas todavía.</p></ng-template>
+
+          <div class="form-row" style="margin-top: 12px;">
+            <div class="form-group">
+              <label>Bus</label>
+              <select [ngModel]="nuevaIntegracionServicio.bus" (ngModelChange)="cambiarBusServicio($event)">
+                <option value="ACE">BUS ACE 12</option>
+                <option value="BUS10">BUS 10</option>
+              </select>
+            </div>
+            <div class="form-group" style="flex: 2 1 320px;">
+              <label>Servicio</label>
+              <app-selector-buscable
+                [opciones]="opcionesServicio"
+                [valor]="nuevaIntegracionServicio.servicioId"
+                (valorChange)="nuevaIntegracionServicio.servicioId = $event"
+                placeholder="Busca por código o nombre del servicio..."
+                [textoVacio]="cargandoServicios ? 'Cargando servicios...' : (errorServicios || 'No hay servicios disponibles en este bus (o ya están todos registrados).')"
+              ></app-selector-buscable>
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label>Nota (opcional)</label>
+              <input type="text" [(ngModel)]="nuevaIntegracionServicio.descripcion" maxlength="255" placeholder="Ej: consulta de saldo">
+            </div>
+            <div class="form-group" style="flex: 0 0 auto; justify-content: flex-end;">
+              <button class="btn-primary" (click)="agregarIntegracionServicio()">+ Agregar</button>
+            </div>
+          </div>
+          <p class="ayuda">La lista sale del inventario de Servicios. Si el servicio se usa en los dos buses, agrégalo una vez por cada uno.</p>
+        </div>
+
+        <!-- CONEXIONES A BD -->
+        <div class="panel-integraciones">
+          <h4>🗄 Conexiones a base de datos</h4>
+
+          <div *ngIf="fichaEdicion?.conexiones_bd?.length; else sinBdEd">
+            <div *ngFor="let c of fichaEdicion?.conexiones_bd" class="fila-integracion">
+              <div>
+                <span class="badge badge-plataforma" style="margin-right: 8px;">{{ c.motor_bd }}</span>
+                <strong>{{ c.servidor_bd_hostname }}</strong>
+                <span class="text-gray"> ({{ c.servidor_bd_ip }})</span>
+                <span class="text-gray"> — {{ c.nombre_base_datos }}<span *ngIf="c.esquema">.{{ c.esquema }}</span><span *ngIf="c.puerto"> :{{ c.puerto }}</span></span>
+                <span *ngIf="c.usuario_servicio" class="text-gray"> · 👤 {{ c.usuario_servicio }}</span>
+              </div>
+              <button class="btn-icon delete" (click)="quitarConexionBd(c.id)" title="Quitar conexión a BD">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="icon-svg"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
+              </button>
+            </div>
+          </div>
+          <ng-template #sinBdEd><p class="text-gray" style="font-size: 13px; margin: 0;">Sin conexiones a base de datos registradas todavía.</p></ng-template>
+
+          <div class="form-row" style="margin-top: 12px;">
+            <div class="form-group">
+              <label>Servidor de base de datos *</label>
+              <app-selector-buscable
+                [opciones]="servidoresBd"
+                [valor]="nuevaConexionBd.servidor_bd_id"
+                (valorChange)="nuevaConexionBd.servidor_bd_id = $event"
+                placeholder="Busca por hostname o IP..."
+                textoVacio="Ningún servidor del inventario tiene todavía una Plataforma de motor de BD."
+              ></app-selector-buscable>
+              <p class="ayuda" *ngIf="!servidoresBd.length">
+                Ningún servidor tiene todavía una Plataforma de motor de BD (MySQL, SQL Server, Oracle, PostgreSQL o MongoDB). Márcala en el servidor correspondiente para que aparezca aquí.
+              </p>
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label>Motor *</label>
+              <select [(ngModel)]="nuevaConexionBd.motor_bd">
+                <option *ngFor="let m of motoresBd" [value]="m">{{ m }}</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label>Puerto</label>
+              <input type="number" [(ngModel)]="nuevaConexionBd.puerto" placeholder="Ej: 3306">
+            </div>
+            <div class="form-group">
+              <label>Nombre de la base de datos *</label>
+              <input type="text" [(ngModel)]="nuevaConexionBd.nombre_base_datos" placeholder="Ej: DocumentosDB">
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label>Esquema</label>
+              <input type="text" [(ngModel)]="nuevaConexionBd.esquema" placeholder="Ej: dbo">
+            </div>
+            <div class="form-group">
+              <label>Usuario de servicio</label>
+              <input type="text" [(ngModel)]="nuevaConexionBd.usuario_servicio" placeholder="Ej: svc_docmanager">
+            </div>
+            <div class="form-group" style="flex: 0 0 auto; justify-content: flex-end;">
+              <button class="btn-primary" (click)="agregarConexionBd()">+ Agregar</button>
+            </div>
+          </div>
+        </div>
+      </ng-container>
+    </div>
+
+    <div class="modal-actions">
+      <button class="btn-secondary" (click)="cerrarForm()">{{ form.id && !modoEdicion ? 'Cerrar' : (modoEdicion ? 'Cerrar' : 'Cancelar') }}</button>
+      <button class="btn-primary" [disabled]="guardando" (click)="guardar()">{{ guardando ? 'Guardando...' : (modoEdicion ? 'Guardar cambios' : 'Crear sub-aplicativo') }}</button>
+    </div>
+  </div>
+</div>
+
+<!-- VISOR DE CÓDIGO -->
+<div class="modal-overlay" *ngIf="codigoVisualizado" style="z-index: 1100;" (click)="cerrarVisorCodigo()">
+  <div class="modal-content modal-lg visor-codigo" (click)="$event.stopPropagation()">
+    <header class="detail-header">
+      <h2 style="margin: 0;">{{ codigoVisualizado.titulo }}</h2>
+      <button class="btn-close" (click)="cerrarVisorCodigo()">✕</button>
+    </header>
+    <pre class="visor-codigo-pre">{{ codigoVisualizado.contenido }}</pre>
+    <div class="modal-actions">
+      <button class="btn-secondary" (click)="copiarCodigo()">{{ copiadoOk ? '✓ Copiado' : 'Copiar' }}</button>
+      <button class="btn-primary" (click)="cerrarVisorCodigo()">Cerrar</button>
+    </div>
+  </div>
+</div>

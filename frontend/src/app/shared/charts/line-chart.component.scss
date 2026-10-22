@@ -1,0 +1,107 @@
+:host {
+  display: block;
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+}
+
+.line-chart-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.line-chart-svg {
+  width: 100%;
+  height: 220px;
+  display: block;
+  overflow: visible;
+}
+
+.grid line {
+  stroke: var(--ax-chart-grid, #e2e8f0);
+  stroke-width: 1;
+}
+
+.grid text {
+  font-size: 9px;
+  fill: var(--ax-text-muted, #94a3b8);
+  text-anchor: start;
+}
+
+.crosshair {
+  stroke: var(--ax-border-2, #cbd5e1);
+  stroke-width: 1;
+  stroke-dasharray: 3 3;
+}
+
+.serie-linea {
+  fill: none;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.serie-punto {
+  transition: r 0.1s ease;
+}
+
+.eje-x text {
+  font-size: 9px;
+  fill: var(--ax-text-muted, #94a3b8);
+  text-anchor: middle;
+
+  &.oculta {
+    display: none;
+  }
+}
+
+.tooltip-grupo {
+  pointer-events: none;
+}
+
+.tooltip-fondo {
+  fill: var(--ax-surface, #ffffff);
+  stroke: var(--ax-border, #e2e8f0);
+  stroke-width: 1;
+  filter: drop-shadow(0 4px 10px rgba(0, 0, 0, 0.12));
+}
+
+.tooltip-titulo {
+  font-size: 10px;
+  font-weight: 700;
+  fill: var(--ax-text, #1e293b);
+}
+
+.tooltip-valor {
+  font-size: 9.5px;
+  fill: var(--ax-text-muted, #64748b);
+}
+
+.line-chart-leyenda {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+  padding-left: 4px;
+}
+
+.leyenda-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ax-text-muted, #64748b);
+}
+
+.leyenda-swatch {
+  width: 10px;
+  height: 10px;
+  border-radius: 3px;
+  display: inline-block;
+}
+
+.line-chart-vacio {
+  padding: 32px 12px;
+  text-align: center;
+  font-size: 13px;
+  color: var(--ax-text-muted, #94a3b8);
+}
